@@ -451,3 +451,64 @@ v0_precheck() {
 
   return 1
 }
+
+# v0_find_dependent_operations <operation>
+# Find operations waiting for the given operation (have after=<operation>)
+# Outputs operation names, one per line
+v0_find_dependent_operations() {
+  local merged_op="$1"
+
+  [[ ! -d "${BUILD_DIR}/operations" ]] && return
+
+  for state_file in "${BUILD_DIR}"/operations/*/state.json; do
+    [[ -f "${state_file}" ]] || continue
+
+    local after
+    after=$(jq -r '.after // empty' "${state_file}")
+    if [[ "${after}" = "${merged_op}" ]]; then
+      jq -r '.name' "${state_file}"
+    fi
+  done
+}
+
+# v0_trigger_dependent_operations <branch>
+# Find and resume operations that were waiting on the given operation
+# Called after a successful merge to unblock dependent operations
+# Handles both full branch names (feature/name) and operation names (name)
+v0_trigger_dependent_operations() {
+  local branch="$1"
+  local op_name
+  op_name=$(basename "${branch}")
+  local dep_op
+  local triggered=""
+
+  for dep_op in $(v0_find_dependent_operations "${op_name}"); do
+    # Skip if already triggered (handles case where branch==op_name)
+    [[ "${triggered}" == *"|${dep_op}|"* ]] && continue
+    triggered="${triggered}|${dep_op}|"
+    local state_file="${BUILD_DIR}/operations/${dep_op}/state.json"
+
+    if [[ ! -f "${state_file}" ]]; then
+      echo "Warning: No state file for dependent operation '${dep_op}'" >&2
+      continue
+    fi
+
+    # Get the phase to resume from
+    local blocked_phase
+    blocked_phase=$(jq -r '.blocked_phase // "init"' "${state_file}")
+    if [[ "${blocked_phase}" = "null" ]] || [[ -z "${blocked_phase}" ]]; then
+      blocked_phase="init"
+    fi
+
+    # Clear after state and restore phase
+    local tmp
+    tmp=$(mktemp)
+    jq '.after = null | .phase = (.blocked_phase // "init")' "${state_file}" > "${tmp}"
+    mv "${tmp}" "${state_file}"
+
+    echo "Unblocking dependent operation: ${dep_op} (resuming from phase: ${blocked_phase})"
+
+    # Resume the operation in background
+    "${V0_DIR}/bin/v0-feature" "${dep_op}" --resume &
+  done
+}

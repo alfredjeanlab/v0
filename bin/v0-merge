@@ -552,6 +552,7 @@ RESOLVE_EOF
       cleanup
       git push
       update_operation_state
+      v0_trigger_dependent_operations "${BRANCH}"
       v0_notify "${PROJECT}: merged" "${BRANCH} (after resolution)"
       git push origin --delete "${BRANCH}" 2>/dev/null || true
     else
@@ -571,6 +572,7 @@ RESOLVE_EOF
   fi
 else
   do_merge && cleanup && git push && update_operation_state && {
+    v0_trigger_dependent_operations "${BRANCH}"
     v0_notify "${PROJECT}: merged" "${BRANCH}"
     git push origin --delete "${BRANCH}" 2>/dev/null || true
   }
