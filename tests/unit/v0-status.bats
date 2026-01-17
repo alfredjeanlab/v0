@@ -43,13 +43,19 @@ teardown() {
 # timestamp_to_epoch() tests
 # ============================================================================
 
-# Convert ISO 8601 timestamp to epoch (macOS compatible)
+# Convert ISO 8601 timestamp to epoch (cross-platform)
 # Note: Timestamps with Z suffix are UTC, so we parse in UTC timezone
 timestamp_to_epoch() {
     local ts="$1"
     local formatted
     formatted=$(echo "$ts" | sed 's/T/ /; s/Z$//; s/\.[0-9]*//')
-    TZ=UTC date -j -f "%Y-%m-%d %H:%M:%S" "$formatted" +%s 2>/dev/null
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS: use -j -f flags
+        TZ=UTC date -j -f "%Y-%m-%d %H:%M:%S" "$formatted" +%s 2>/dev/null
+    else
+        # Linux: use -d flag with ISO format
+        TZ=UTC date -d "$formatted" +%s 2>/dev/null
+    fi
 }
 
 @test "timestamp_to_epoch converts valid ISO8601" {

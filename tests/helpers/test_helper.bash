@@ -421,3 +421,27 @@ assert_test_env() {
 
     return $errors
 }
+
+# ============================================================================
+# Mock Binary Helpers
+# ============================================================================
+
+# Create mock binaries for commands not available in CI
+# Usage: setup_mock_binaries [commands...]
+# Example: setup_mock_binaries claude tmux
+# This creates simple mock scripts and adds them to PATH
+setup_mock_binaries() {
+    local mock_dir="${TEST_TEMP_DIR}/mock-bin"
+    mkdir -p "$mock_dir"
+
+    for cmd in "$@"; do
+        cat > "$mock_dir/$cmd" <<EOF
+#!/bin/bash
+echo "mock $cmd \$*"
+exit 0
+EOF
+        chmod +x "$mock_dir/$cmd"
+    done
+
+    export PATH="$mock_dir:$PATH"
+}

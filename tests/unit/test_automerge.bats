@@ -28,11 +28,11 @@ setup() {
     cd "$TEST_TEMP_DIR/project"
     export ORIGINAL_PATH="$PATH"
 
-    # Create mock bin directory
-    MOCK_BIN="$TEST_TEMP_DIR/mock-bin"
-    mkdir -p "$MOCK_BIN"
+    # Create mock binaries for CI environment (claude/tmux not installed)
+    setup_mock_binaries claude tmux
 
-    # Set V0_PLAN_EXEC to use our mock
+    # Set V0_PLAN_EXEC to use our mock (created per-test as needed)
+    MOCK_BIN="$TEST_TEMP_DIR/mock-bin"
     export V0_PLAN_EXEC="$MOCK_BIN/v0-plan-exec"
 
     # Set V0_ROOT to prevent walking up to parent .v0.rc

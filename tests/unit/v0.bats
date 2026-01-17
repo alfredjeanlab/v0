@@ -80,6 +80,8 @@ load '../helpers/test_helper'
 
 @test "v0 resume passes arguments correctly" {
     create_v0rc "testproject" "test"
+    setup_mock_binaries claude tmux
+
     # v0 resume myfeature --dry-run should become v0-feature --resume myfeature --dry-run
     # With dry-run, it will fail looking for the operation but shows it processed args
     run "${PROJECT_ROOT}/bin/v0" resume myfeature --dry-run
@@ -111,6 +113,8 @@ load '../helpers/test_helper'
 
 @test "v0 bug routes to fix" {
     create_v0rc "testproject" "test"
+    setup_mock_binaries claude tmux
+
     run "${PROJECT_ROOT}/bin/v0" bug --help
     # usage() exits 1 but shows help
     assert_failure
@@ -119,6 +123,8 @@ load '../helpers/test_helper'
 
 @test "v0 bugfix routes to fix" {
     create_v0rc "testproject" "test"
+    setup_mock_binaries claude tmux
+
     run "${PROJECT_ROOT}/bin/v0" bugfix --help
     # usage() exits 1 but shows help
     assert_failure

@@ -64,6 +64,9 @@ EOF
 # ============================================================================
 
 @test "coffee start creates PID file" {
+    # Skip on non-macOS (caffeinate is macOS-only)
+    [[ "$(uname)" == "Darwin" ]] || skip "caffeinate requires macOS"
+
     local project_dir
     project_dir=$(setup_isolated_project)
     mkdir -p "${project_dir}/.v0"
@@ -82,6 +85,9 @@ EOF
 }
 
 @test "coffee start when already running is idempotent" {
+    # Skip on non-macOS (caffeinate is macOS-only)
+    [[ "$(uname)" == "Darwin" ]] || skip "caffeinate requires macOS"
+
     local project_dir
     project_dir=$(setup_isolated_project)
     mkdir -p "${project_dir}/.v0"
@@ -104,6 +110,9 @@ EOF
 }
 
 @test "coffee stop terminates process and removes PID file" {
+    # Skip on non-macOS (caffeinate is macOS-only)
+    [[ "$(uname)" == "Darwin" ]] || skip "caffeinate requires macOS"
+
     local project_dir
     project_dir=$(setup_isolated_project)
     mkdir -p "${project_dir}/.v0"
@@ -134,6 +143,9 @@ EOF
 }
 
 @test "coffee status returns correct status when running" {
+    # Skip on non-macOS (caffeinate is macOS-only)
+    [[ "$(uname)" == "Darwin" ]] || skip "caffeinate requires macOS"
+
     local project_dir
     project_dir=$(setup_isolated_project)
     mkdir -p "${project_dir}/.v0"
@@ -211,6 +223,9 @@ EOF
 }
 
 @test "coffee_start and coffee_pid work together" {
+    # Skip on non-macOS (caffeinate is macOS-only)
+    [[ "$(uname)" == "Darwin" ]] || skip "caffeinate requires macOS"
+
     local project_dir
     project_dir=$(setup_isolated_project)
     mkdir -p "${project_dir}/.v0"
@@ -234,6 +249,9 @@ EOF
 # ============================================================================
 
 @test "coffee start respects V0_COFFEE_HOURS" {
+    # Skip on non-macOS (caffeinate is macOS-only)
+    [[ "$(uname)" == "Darwin" ]] || skip "caffeinate requires macOS"
+
     local project_dir
     project_dir=$(setup_isolated_project)
     mkdir -p "${project_dir}/.v0"
