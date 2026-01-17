@@ -19,8 +19,7 @@ tests/          # Bats unit tests
 
 ## Common Commands
 
-- `make test` - Run all unit tests (parallel if GNU parallel installed)
-- `make test JOBS=1` - Run tests sequentially
+- `make test` - Run all unit tests
 - `make test-verbose` - Run tests with verbose output and print failures
 - `make test-file FILE=tests/unit/v0-common.bats` - Run a specific test file
 - `make lint` - Run ShellCheck on scripts

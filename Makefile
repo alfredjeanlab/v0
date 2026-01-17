@@ -21,20 +21,6 @@ else
     BATS_LIB_PATH := $(MAKEFILE_DIR)tests/bats
 endif
 
-# Parallel test execution - requires GNU parallel
-# Default to parallel if available, use JOBS=1 to force sequential
-HAS_PARALLEL := $(shell command -v parallel 2>/dev/null)
-JOBS ?= $(if $(HAS_PARALLEL),4,1)
-ifeq ($(JOBS),1)
-    BATS_JOBS :=
-else
-    ifdef HAS_PARALLEL
-        BATS_JOBS := --jobs $(JOBS)
-    else
-        BATS_JOBS :=
-    endif
-endif
-
 TEST_FILES := $(wildcard tests/unit/*.bats)
 
 .PHONY: test test-unit test-verbose test-file test-init test-integration test-all lint lint-tests check help license test-profile test-fixtures
@@ -42,8 +28,7 @@ TEST_FILES := $(wildcard tests/unit/*.bats)
 # Default target
 help:
 	@echo "v0 Test Targets:"
-	@echo "  make test            Run all unit tests (parallel if GNU parallel installed)"
-	@echo "  make test JOBS=1     Run tests sequentially"
+	@echo "  make test            Run all unit tests"
 	@echo "  make test-verbose    Run tests with verbose output"
 	@echo "  make test-file FILE=tests/unit/foo.bats"
 	@echo "  make test-profile    Run tests and show per-file execution times"
@@ -77,7 +62,7 @@ test-unit: test-init
 		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
 		exit 1; \
 	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) $(BATS_JOBS) tests/unit/
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) tests/unit/
 
 # Run tests with verbose output
 test-verbose: test-init
@@ -85,7 +70,7 @@ test-verbose: test-init
 		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
 		exit 1; \
 	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) $(BATS_JOBS) --verbose-run --print-output-on-failure tests/unit/
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --verbose-run --print-output-on-failure tests/unit/
 
 # Run a specific test file
 test-file: test-init
