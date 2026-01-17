@@ -124,6 +124,22 @@ V0_BUGFIX_BRANCH="fix/{id}"
 V0_CHORE_BRANCH="chore/{id}"
 ```
 
+### Worktree Initialization Hook
+
+The `V0_WORKTREE_INIT` setting lets you run a custom command after each worktree
+is created. This is useful for copying cached dependencies or setting up
+worktree-specific resources.
+
+The command runs in the new worktree directory with these environment variables:
+- `V0_CHECKOUT_DIR` - Path to the main project checkout
+- `V0_WORKTREE_DIR` - Path to the new worktree
+
+Example in `.v0.rc`:
+```bash
+# Copy bats test framework to avoid reinstalling per-worktree
+V0_WORKTREE_INIT='cp -r "${V0_CHECKOUT_DIR}/lib/bats" "${V0_WORKTREE_DIR}/lib/"'
+```
+
 ## Development
 
 ```bash

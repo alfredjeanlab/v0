@@ -300,3 +300,67 @@ EOF
     worktree=$(echo "$output" | tail -1)
     assert [ -d "$worktree" ]
 }
+
+# ============================================================================
+# Worktree Init Hook Tests
+# ============================================================================
+
+@test "v0-tree: runs V0_WORKTREE_INIT hook after creation" {
+    # Setup: Create a marker file to verify hook execution
+    export V0_WORKTREE_INIT='touch "${V0_WORKTREE_DIR}/.init-hook-ran"'
+
+    run "$V0_TREE" "test-init"
+    assert_success
+
+    # Extract worktree path from output
+    worktree=$(echo "$output" | tail -1)
+
+    # Verify hook ran
+    assert [ -f "${worktree}/.init-hook-ran" ]
+}
+
+@test "v0-tree: continues if V0_WORKTREE_INIT hook fails" {
+    export V0_WORKTREE_INIT='exit 1'
+
+    run "$V0_TREE" "test-init-fail"
+    assert_success  # Should still succeed
+    assert_output --partial "Worktree init hook failed"
+}
+
+@test "v0-tree: hook receives correct environment variables" {
+    export V0_WORKTREE_INIT='echo "CHECKOUT=${V0_CHECKOUT_DIR}" > "${V0_WORKTREE_DIR}/.hook-env"; echo "WORKTREE=${V0_WORKTREE_DIR}" >> "${V0_WORKTREE_DIR}/.hook-env"'
+
+    run "$V0_TREE" "test-init-env"
+    assert_success
+
+    worktree=$(echo "$output" | tail -1)
+
+    # Verify V0_CHECKOUT_DIR was set correctly (should point to project root)
+    run cat "${worktree}/.hook-env"
+    assert_output --partial "CHECKOUT=$TEST_TEMP_DIR/project"
+
+    # Verify V0_WORKTREE_DIR was set correctly
+    assert_output --partial "WORKTREE=${worktree}"
+}
+
+@test "v0-tree: skips hook when V0_WORKTREE_INIT is empty" {
+    unset V0_WORKTREE_INIT
+
+    run "$V0_TREE" "test-no-hook"
+    assert_success
+    refute_output --partial "init hook"
+}
+
+@test "v0-tree: hook runs in worktree directory" {
+    # Verify the hook's working directory is the worktree
+    export V0_WORKTREE_INIT='pwd > "${V0_WORKTREE_DIR}/.hook-pwd"'
+
+    run "$V0_TREE" "test-init-cwd"
+    assert_success
+
+    worktree=$(echo "$output" | tail -1)
+
+    # Verify hook ran in the worktree directory
+    run cat "${worktree}/.hook-pwd"
+    assert_output "${worktree}"
+}

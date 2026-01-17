@@ -106,6 +106,7 @@ v0_load_config() {
   V0_FEATURE_BRANCH="feature/{name}"
   V0_BUGFIX_BRANCH="fix/{id}"
   V0_CHORE_BRANCH="chore/{id}"
+  V0_WORKTREE_INIT="${V0_WORKTREE_INIT:-}"  # Optional worktree init hook
 
   # Load project config (overrides defaults)
   source "${V0_ROOT}/.v0.rc"
@@ -137,6 +138,8 @@ v0_load_config() {
   # Export for subprocesses
   export V0_ROOT PROJECT ISSUE_PREFIX REPO_NAME V0_STATE_DIR BUILD_DIR PLANS_DIR
   export V0_BUILD_DIR V0_PLANS_DIR V0_MAIN_BRANCH V0_FEATURE_BRANCH V0_BUGFIX_BRANCH V0_CHORE_BRANCH
+  # shellcheck disable=SC2090  # V0_WORKTREE_INIT is a shell command used with eval
+  export V0_WORKTREE_INIT
 }
 
 # Generate a namespaced tmux session name

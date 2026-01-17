@@ -12,3 +12,14 @@ ISSUE_PREFIX="v0"    # Issue IDs: v0-abc123
 # V0_BUGFIX_BRANCH="fix/{id}"
 # V0_CHORE_BRANCH="chore/{id}"
 # DISABLE_NOTIFICATIONS=1       # Disable macOS notifications
+
+# Worktree initialization hook (optional)
+# Runs after 'v0 tree' creates a new worktree. Executed in the worktree directory.
+# Environment variables available:
+#   V0_CHECKOUT_DIR - Path to the main project checkout (V0_ROOT)
+#   V0_WORKTREE_DIR - Path to the new worktree directory
+# Example: Copy cached test framework to avoid reinstalling per-worktree
+# V0_WORKTREE_INIT='cp -r "${V0_CHECKOUT_DIR}/lib/bats" "${V0_WORKTREE_DIR}/lib/"'
+
+# Copy bats installation to worktrees (avoids reinstall per-worktree)
+V0_WORKTREE_INIT='[[ -d "${V0_CHECKOUT_DIR}/lib/bats" ]] && cp -r "${V0_CHECKOUT_DIR}/lib/bats" "${V0_WORKTREE_DIR}/lib/" || true'

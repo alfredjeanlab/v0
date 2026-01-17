@@ -36,6 +36,11 @@ The XDG location is preferred because it keeps .git/ clean and survives
 git clean operations. Falls back to .git/ when XDG directory cannot be
 created (permissions, disk space, restricted environment).
 
+Environment:
+  V0_WORKTREE_INIT    Optional shell command to run after worktree creation.
+                      Runs in the worktree directory with V0_CHECKOUT_DIR and
+                      V0_WORKTREE_DIR environment variables set.
+
 Example:
   read -r TREE_DIR; read -r WORKTREE < <(v0 tree my-feature)
   read -r TREE_DIR; read -r WORKTREE < <(v0 tree v0-fix-worker --branch v0/worker/fix)
@@ -156,6 +161,16 @@ fi
 if [[ -f "${V0_ROOT}/.claude/settings.json" ]]; then
   mkdir -p "${tree_dir}/.claude"
   cp -f "${V0_ROOT}/.claude/settings.json" "${tree_dir}/.claude/settings.local.json"
+fi
+
+# Run worktree init hook if configured
+if [[ -n "${V0_WORKTREE_INIT:-}" ]]; then
+  (
+    export V0_CHECKOUT_DIR="${V0_ROOT}"
+    export V0_WORKTREE_DIR="${worktree}"
+    cd "${worktree}" || exit 1
+    eval "${V0_WORKTREE_INIT}"
+  ) || echo "Warning: Worktree init hook failed (exit code: $?)" >&2
 fi
 
 # Output paths (one per line: TREE_DIR, WORKTREE)
