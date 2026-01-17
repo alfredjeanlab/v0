@@ -23,15 +23,14 @@ endif
 
 TEST_FILES := $(wildcard tests/unit/*.bats)
 
-.PHONY: test test-unit test-verbose test-file test-init test-integration test-all lint lint-tests check help license test-profile test-fixtures
+.PHONY: test test-unit test-debug test-file test-init test-integration test-all lint lint-tests check help license test-fixtures
 
 # Default target
 help:
 	@echo "v0 Test Targets:"
 	@echo "  make test            Run all unit tests"
-	@echo "  make test-verbose    Run tests with verbose output"
+	@echo "  make test-debug      Run tests with verbose output"
 	@echo "  make test-file FILE=tests/unit/foo.bats"
-	@echo "  make test-profile    Run tests and show per-file execution times"
 	@echo "  make test-fixtures   Generate test fixtures (cached git repo)"
 	@echo ""
 	@echo "Linting:"
@@ -62,15 +61,15 @@ test-unit: test-init
 		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
 		exit 1; \
 	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --print-output-on-failure tests/unit/
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing --print-output-on-failure tests/unit/
 
-# Run tests with verbose output
-test-verbose: test-init
+# Run tests with verbose output (for debugging)
+test-debug: test-init
 	@if [ ! -x "$(BATS)" ]; then \
 		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
 		exit 1; \
 	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --verbose-run --print-output-on-failure tests/unit/
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing --verbose-run --print-output-on-failure tests/unit/
 
 # Run a specific test file
 test-file: test-init
@@ -82,7 +81,7 @@ test-file: test-init
 		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
 		exit 1; \
 	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) $(FILE)
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing $(FILE)
 
 # Run integration tests
 test-integration: test-init
@@ -94,7 +93,7 @@ test-integration: test-init
 		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
 		exit 1; \
 	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) tests/integration/
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing tests/integration/
 
 # Run all tests (unit + integration)
 test-all: test-unit test-integration
@@ -134,14 +133,3 @@ test-fixtures:
 		echo "Generating test fixtures..."; \
 		bash tests/fixtures/create-git-fixture.sh; \
 	fi
-
-# Profile test execution times per file
-test-profile: test-init
-	@echo "Running test profile..."
-	@for f in tests/unit/*.bats; do \
-		start=$$(gdate +%s%N 2>/dev/null || date +%s%N); \
-		BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) "$$f" >/dev/null 2>&1 || true; \
-		end=$$(gdate +%s%N 2>/dev/null || date +%s%N); \
-		ms=$$(( (end - start) / 1000000 )); \
-		printf "%6dms %s\n" "$$ms" "$$f"; \
-	done | sort -rn

@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/alfredjeanlab/v0/workflows/CI/badge.svg)
 
-A first step into multi-agent coding.
+A tool to ease you in to multi-agent vibe coding.
 
 Start vibe coding with a team of agents, without a learning curve.  
 Ask for features, fixes, and chores and watch them be implemented and merged automatically.
