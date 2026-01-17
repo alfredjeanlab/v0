@@ -1,6 +1,6 @@
 # v0
 
-Autonomous build orchestration toolkit for AI-driven development workflows.
+A tool to ease you in to multi-agent vibe coding.
 
 Orchestrates Claude workers in tmux sessions for planning, feature development, bug fixing, and chore processing. Uses git worktrees for isolated development and a merge queue for automatic integration.
 
