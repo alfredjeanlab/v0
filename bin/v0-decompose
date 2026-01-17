@@ -27,6 +27,24 @@ if [[ ! -f "${PLAN_FILE}" ]]; then
   exit 1
 fi
 
+# Check if plan file is committed (skip check if not in a git repo or if gitignored)
+if git -C "${V0_ROOT}" rev-parse --is-inside-work-tree &>/dev/null; then
+  if ! git -C "${V0_ROOT}" check-ignore -q "${PLAN_FILE}" 2>/dev/null; then
+    # Not gitignored - verify it's committed
+    if ! git -C "${V0_ROOT}" ls-files --error-unmatch "${PLAN_FILE}" &>/dev/null; then
+      echo "Error: Plan file is not committed: ${PLAN_FILE}"
+      echo "Commit the plan first: git add ${PLAN_FILE} && git commit -m 'Add plan: ${BASENAME}'"
+      echo "Or add '${V0_PLANS_DIR}/' to .gitignore if plans should not be tracked."
+      exit 1
+    fi
+    if ! git -C "${V0_ROOT}" diff --quiet -- "${PLAN_FILE}" 2>/dev/null; then
+      echo "Error: Plan file has uncommitted changes: ${PLAN_FILE}"
+      echo "Commit the changes first: git add ${PLAN_FILE} && git commit -m 'Update plan: ${BASENAME}'"
+      exit 1
+    fi
+  fi
+fi
+
 # Create state directory and operation tracking
 STATE_DIR="${BUILD_DIR}/operations/${BASENAME}"
 STATE_FILE="${STATE_DIR}/state.json"

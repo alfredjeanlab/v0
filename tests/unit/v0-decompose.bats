@@ -40,9 +40,18 @@ ISSUE_PREFIX="test"
 EOF
 
     cd "${TEST_TEMP_DIR}/project" || return 1
+
+    # Initialize git repo for plan commit checks
+    # Use /usr/bin/git explicitly to bypass the mock git in PATH
+    /usr/bin/git init --quiet
+    /usr/bin/git config user.email "test@example.com"
+    /usr/bin/git config user.name "Test User"
+    /usr/bin/git add .v0.rc
+    /usr/bin/git commit --quiet -m "Initial commit"
+
     export ORIGINAL_PATH="${PATH}"
 
-    # Add mock-bin to PATH
+    # Add mock-bin to PATH (after git init so setup uses real git)
     export PATH="${TESTS_DIR}/helpers/mock-bin:${PATH}"
 
     # Track calls to mocked commands
@@ -117,6 +126,9 @@ teardown() {
 1. First task
 2. Second task
 EOF
+    # Commit the plan file
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/test-plan.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: test-plan"
 
     run "${V0_DECOMPOSE}" "plans/test-plan.md"
     assert_success
@@ -130,6 +142,8 @@ EOF
 # My Feature Plan
 Some content
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/my-feature.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: my-feature"
 
     run "${V0_DECOMPOSE}" "plans/my-feature.md"
     assert_success
@@ -143,6 +157,8 @@ EOF
     cat > "${TEST_TEMP_DIR}/project/test.md" <<'EOF'
 # Test
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add test.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: test"
 
     run "${V0_DECOMPOSE}" "test.md"
     assert_success
@@ -153,6 +169,8 @@ EOF
     cat > "${TEST_TEMP_DIR}/project/plans/subdir/deep-plan.md" <<'EOF'
 # Deep Plan
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/subdir/deep-plan.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: deep-plan"
 
     run "${V0_DECOMPOSE}" "plans/subdir/deep-plan.md"
     assert_success
@@ -169,6 +187,8 @@ EOF
     cat > "${TEST_TEMP_DIR}/project/plan.md" <<'EOF'
 # Plan
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plan.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan"
 
     run "${V0_DECOMPOSE}" "plan.md"
     assert_success
@@ -181,6 +201,8 @@ EOF
     cat > "${TEST_TEMP_DIR}/project/plan.md" <<'EOF'
 # Plan
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plan.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan"
 
     run "${V0_DECOMPOSE}" "plan.md"
     assert_success
@@ -193,6 +215,8 @@ EOF
     cat > "${TEST_TEMP_DIR}/project/plan.md" <<'EOF'
 # Plan
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plan.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan"
 
     export V0_SAFE=1
     run "${V0_DECOMPOSE}" "plan.md"
@@ -211,6 +235,8 @@ EOF
     cat > "${TEST_TEMP_DIR}/project/plans/auth.md" <<'EOF'
 # Authentication Plan
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/auth.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: auth"
 
     run "${V0_DECOMPOSE}" "plans/auth.md"
     assert_success
@@ -224,6 +250,8 @@ EOF
     cat > "${TEST_TEMP_DIR}/project/feature.md" <<'EOF'
 # Feature
 EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add feature.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: feature"
 
     run "${V0_DECOMPOSE}" "feature.md"
     assert_success
@@ -232,4 +260,50 @@ EOF
     run cat "${MOCK_CALLS_DIR}/claude.calls"
     assert_output --partial "plan:feature"
     refute_output --partial "plan:feature.md"
+}
+
+# ============================================================================
+# Uncommitted Plan File Check Tests
+# ============================================================================
+
+@test "v0-decompose: errors when plan file is not committed" {
+    cat > "${TEST_TEMP_DIR}/project/plans/uncommitted.md" <<'EOF'
+# Uncommitted Plan
+EOF
+    # Do NOT commit the file
+
+    run "${V0_DECOMPOSE}" "plans/uncommitted.md"
+    assert_failure
+    assert_output --partial "Error: Plan file is not committed"
+    assert_output --partial "plans/uncommitted.md"
+}
+
+@test "v0-decompose: errors when plan file has uncommitted changes" {
+    cat > "${TEST_TEMP_DIR}/project/plans/modified.md" <<'EOF'
+# Original Plan
+EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/modified.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: modified"
+
+    # Modify the file after committing
+    echo "# Modified content" >> "${TEST_TEMP_DIR}/project/plans/modified.md"
+
+    run "${V0_DECOMPOSE}" "plans/modified.md"
+    assert_failure
+    assert_output --partial "Error: Plan file has uncommitted changes"
+}
+
+@test "v0-decompose: succeeds when plans directory is gitignored" {
+    # Add plans/ to .gitignore
+    echo "plans/" >> "${TEST_TEMP_DIR}/project/.gitignore"
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add .gitignore
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Ignore plans directory"
+
+    cat > "${TEST_TEMP_DIR}/project/plans/ignored.md" <<'EOF'
+# Ignored Plan
+EOF
+    # File is NOT committed but should be allowed because gitignored
+
+    run "${V0_DECOMPOSE}" "plans/ignored.md"
+    assert_success
 }
