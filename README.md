@@ -4,8 +4,8 @@
 
 A first step into multi-agent coding.
 
-Start vibe coding with a team of agents, without a learning curve.
-Launch features, fixes, and chores that merge automatically.
+Start vibe coding with a team of agents, without a learning curve.  
+Ask for features, fixes, and chores and watch them be implemented and merged automatically.
 
 ## Installation
 
@@ -22,7 +22,7 @@ v0 init
 
 ### Requirements
 
-- [wk](https://github.com/alfredjeanlab/wk) - Issue tracking
+- [wk](https://github.com/alfredjeanlab/wok) - Issue tracking
 - [claude](https://claude.ai/claude-code) - Claude Code CLI
 - git, tmux, jq
 
