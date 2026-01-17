@@ -567,8 +567,12 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
         ;;
       completed|pending_merge)
-        display_phase="${C_GREEN}completed${C_RESET}"
-        if [[ "${merge_queued}" = "true" ]]; then
+        # Plan-type operations don't merge, so show "plan completed" without merge indicators
+        if [[ "${op_type}" = "plan" ]]; then
+          display_phase="${C_GREEN}plan completed${C_RESET}"
+          merge_icon=""
+        elif [[ "${merge_queued}" = "true" ]]; then
+          display_phase="${C_GREEN}completed${C_RESET}"
           if [[ "${merge_status}" = "merged" ]]; then
             merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
           elif [[ "${merge_status}" = "conflict" ]]; then
@@ -610,6 +614,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
             esac
           fi
         else
+          display_phase="${C_GREEN}completed${C_RESET}"
           merge_icon=" ${C_YELLOW}(== NEEDS MERGE ==)${C_RESET}"
         fi
         ;;
@@ -792,7 +797,10 @@ show_status() {
       echo "Status: completed (merged)"
       ;;
     completed|pending_merge)
-      if [[ "${merge_queued}" = "true" ]]; then
+      # Plan-type operations don't merge, so show "plan completed" without merge indicators
+      if [[ "${op_type}" = "plan" ]]; then
+        echo "Status: plan completed"
+      elif [[ "${merge_queued}" = "true" ]]; then
         if [[ "${merge_status}" = "merged" ]]; then
           echo "Status: completed (merged)"
         elif [[ "${merge_status}" = "conflict" ]]; then

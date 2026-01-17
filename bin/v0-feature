@@ -351,6 +351,18 @@ if [[ -n "${RESUME}" ]]; then
     SAFE_STATE=$(get_state safe)
     [[ "${SAFE_STATE}" = "true" ]] && SAFE=1
   fi
+
+  # Add merge_queued field if missing (for operations created by v0 plan)
+  MERGE_QUEUED_STATE=$(get_state merge_queued)
+  if [[ -z "${MERGE_QUEUED_STATE}" ]] || [[ "${MERGE_QUEUED_STATE}" = "null" ]]; then
+    if [[ -n "${NO_MERGE}" ]]; then
+      update_state "merge_queued" 'false'
+    else
+      update_state "merge_queued" 'true'
+    fi
+    emit_event "state:upgraded" "Added missing merge_queued field"
+  fi
+
   echo "Resuming '${NAME}' from phase: ${PHASE}"
 
   # Handle --attach flag for resume mode
@@ -1006,8 +1018,13 @@ if [[ "\$(jq -r '.merge_queued // false' "\${STATE_FILE}")" = "true" ]]; then
   echo "=== Merge queued, preparing for merge ==="
   tmp=\$(mktemp)
   jq '.phase = "pending_merge"' "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
-  "\${V0_DIR}/bin/v0-mergeq" --enqueue "\${OP_NAME}" 2>/dev/null || true
-  echo "Operation '\${OP_NAME}' added to merge queue"
+
+  if "\${V0_DIR}/bin/v0-mergeq" --enqueue "\${OP_NAME}"; then
+    echo "Operation '\${OP_NAME}' added to merge queue"
+  else
+    echo "Warning: Failed to enqueue for merge"
+    echo "Run manually: v0 startup mergeq"
+  fi
 fi
 WRAPPER
     chmod +x "${TREE_DIR}/.claude/on-complete.sh"
