@@ -301,6 +301,15 @@ if [[ -n "${remote_branches}" ]]; then
   done <<< "${remote_branches}"
 fi
 
+# Check if coffee is running (so we don't exit early if only coffee needs stopping)
+if coffee_is_running; then
+  found_anything=1
+  if [[ -n "${DRY_RUN}" ]]; then
+    echo ""
+    echo "Would stop coffee (system wake lock)"
+  fi
+fi
+
 if [[ -z "${found_anything}" ]]; then
   echo "No v0 sessions running for project: ${PROJECT}"
   exit 0
