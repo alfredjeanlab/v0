@@ -16,7 +16,7 @@ done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
 # Commands that need config
-CONFIG_COMMANDS="plan tree decompose merge mergeq status feature fix chore attach cancel shutdown startup"
+CONFIG_COMMANDS="plan tree decompose merge mergeq status feature resume fix chore attach cancel shutdown startup"
 
 # Commands that work without config
 NO_CONFIG_COMMANDS="init help version coffee"
@@ -37,6 +37,7 @@ Commands:
   status        Show operation status
   watch         Continuously watch status (like 'status --watch')
   feat[ure]     Full pipeline: plan -> decompose -> execute -> merge
+  resume        Resume an existing feature (alias for 'feature --resume')
   fix           Sequential bug fixing worker
   chore         Sequential chore processing worker
   attach        Attach to a running tmux session (fix, chore, mergeq, feature)
@@ -116,6 +117,9 @@ case "${CMD}" in
   # Aliases
   feat)
     exec "${V0_DIR}/bin/v0-feature" "$@"
+    ;;
+  resume)
+    exec "${V0_DIR}/bin/v0-feature" --resume "$@"
     ;;
   decomp)
     exec "${V0_DIR}/bin/v0-decompose" "$@"
