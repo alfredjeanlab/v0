@@ -10,7 +10,13 @@ Ask for features, fixes, and chores and watch them be implemented and merged aut
 ## Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alfredjeanlab/v0/main/install-remote.sh | bash
+curl -fsSL https://github.com/alfredjeanlab/v0/releases/latest/download/install.sh | bash
+```
+
+Or install a specific version:
+
+```bash
+V0_VERSION=0.1.0 curl -fsSL https://github.com/alfredjeanlab/v0/releases/latest/download/install.sh | bash
 ```
 
 Then initialize a project:
@@ -121,6 +127,9 @@ V0_CHORE_BRANCH="chore/{id}"
 ## Development
 
 ```bash
+# Install from git (for contributors)
+curl -fsSL https://raw.githubusercontent.com/alfredjeanlab/v0/main/install-remote.sh | bash
+
 make test      # Run tests (parallel if GNU parallel installed)
 make lint      # Lint scripts (requires shellcheck)
 make install   # Build and install
