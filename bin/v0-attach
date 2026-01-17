@@ -11,6 +11,7 @@ v0_load_config
 usage() {
   cat <<EOF
 Usage: v0 attach <type> [name]
+       v0 attach <feature_name>
        v0 attach --list
 
 Attach to a running v0 tmux session.
@@ -20,6 +21,7 @@ Types:
   chore            Attach to chore worker session
   mergeq           Attach to active merge resolution session
   feature <name>   Attach to feature session (auto-detects phase)
+  <feature_name>   Shorthand for 'feature <name>'
 
 Options:
   --list, -l       List all running v0 sessions
@@ -28,6 +30,7 @@ Examples:
   v0 attach fix              # Attach to fix worker
   v0 attach mergeq           # Attach to merge resolution (if active)
   v0 attach feature auth     # Attach to auth feature session
+  v0 attach auth             # Shorthand for 'v0 attach feature auth'
   v0 attach --list           # List all v0 sessions
 EOF
   exit 1
@@ -144,7 +147,32 @@ case "${1:-}" in
     usage
     ;;
   *)
-    echo "Unknown type: $1"
-    usage
+    # Check if this is a feature name (allow "v0 attach <feature_name>" shorthand)
+    NAME="$1"
+    STATE_FILE="${BUILD_DIR}/operations/${NAME}/state.json"
+
+    if [[ -f "${STATE_FILE}" ]]; then
+      # Get stored session name or derive from phase
+      SESSION=$(jq -r '.tmux_session // empty' "${STATE_FILE}")
+
+      if [[ -z "${SESSION}" ]] || [[ "${SESSION}" = "null" ]]; then
+        # Derive from phase
+        PHASE=$(jq -r '.phase // "init"' "${STATE_FILE}")
+        case "${PHASE}" in
+          init|planned) SESSION=$(v0_session_name "${NAME}" "plan") ;;
+          queued) SESSION=$(v0_session_name "${NAME}" "decompose") ;;
+          executing) SESSION=$(v0_session_name "${NAME}" "feature") ;;
+          *)
+            echo "Feature '${NAME}' is in phase: ${PHASE} (no active session)"
+            exit 0
+            ;;
+        esac
+      fi
+
+      attach_to_session "${SESSION}" "feature ${NAME}"
+    else
+      echo "Unknown type: $1"
+      usage
+    fi
     ;;
 esac

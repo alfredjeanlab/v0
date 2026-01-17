@@ -330,3 +330,63 @@ EOF
     assert_output --partial "attach"
     assert_output --partial "Attach to a running tmux session"
 }
+
+# ============================================================================
+# Feature name shorthand tests
+# ============================================================================
+
+@test "attach <feature_name> shorthand works for existing feature" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Create state file for the feature
+    mkdir -p "${project_dir}/.v0/build/operations/auth"
+    cat > "${project_dir}/.v0/build/operations/auth/state.json" <<'EOF'
+{
+  "name": "auth",
+  "phase": "executing"
+}
+EOF
+
+    # Will fail because session doesn't exist, but should try the correct session
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" auth
+    '
+    assert_failure
+    assert_output --partial "v0-myproject-auth-feature"
+}
+
+@test "attach <feature_name> shorthand detects planned phase" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Create state file with planned phase
+    mkdir -p "${project_dir}/.v0/build/operations/api"
+    cat > "${project_dir}/.v0/build/operations/api/state.json" <<'EOF'
+{
+  "name": "api",
+  "phase": "planned"
+}
+EOF
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" api
+    '
+    assert_failure
+    assert_output --partial "v0-myproject-api-plan"
+}
+
+@test "attach shows usage for shorthand with unknown feature" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # No state file exists for this feature name
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" notafeature
+    '
+    assert_failure
+    assert_output --partial "Unknown type"
+}
