@@ -11,6 +11,9 @@ v0_load_config
 # Source coffee functions for automatic wake lock management
 source "${V0_DIR}/lib/coffee-common.sh"
 
+# Source nudge functions for idle session monitoring
+source "${V0_DIR}/lib/nudge-common.sh"
+
 usage() {
   cat <<'EOF'
 Usage: v0 startup [workers...]
@@ -97,6 +100,14 @@ if [[ -z "${DRY_RUN}" ]]; then
   else
     coffee_start "${coffee_hours}" "${coffee_opts}"
     echo -e "Coffee: ${C_GREEN}started${C_RESET} (${coffee_hours}h)"
+  fi
+
+  # Start nudge worker to monitor for idle sessions
+  if nudge_running; then
+    echo -e "Nudge:  ${C_DIM}already running${C_RESET}"
+  else
+    "${V0_DIR}/bin/v0-nudge" start >/dev/null 2>&1
+    echo -e "Nudge:  ${C_GREEN}started${C_RESET}"
   fi
 
   echo ""

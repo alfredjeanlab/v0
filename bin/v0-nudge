@@ -1,0 +1,285 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-nudge - Nudge worker daemon for monitoring and terminating idle Claude sessions
+#
+# The nudge worker monitors v0 tmux sessions and automatically terminates those
+# that have finished thinking (detected via API stop reasons in Claude session logs).
+# This helps clean up sessions that fail to exit on their own.
+
+set -e
+
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${V0_DIR}/lib/nudge-common.sh"
+
+# Try to load config but don't fail if not in a project
+# Nudge daemon can run project-independently
+if [[ -f "${V0_DIR}/lib/v0-common.sh" ]]; then
+  source "${V0_DIR}/lib/v0-common.sh"
+  v0_load_config false 2>/dev/null || true
+fi
+
+# Ensure V0_STATE_DIR has a fallback
+V0_STATE_DIR="${V0_STATE_DIR:-${HOME}/.local/state/v0}"
+NUDGE_PID_FILE="${V0_STATE_DIR}/.nudge.pid"
+NUDGE_LOG_FILE="${V0_STATE_DIR}/.nudge.log"
+
+usage() {
+  cat <<'EOF'
+Usage: v0-nudge <command>
+
+Commands:
+  start     Start the nudge daemon (background)
+  stop      Stop the nudge daemon
+  status    Check if nudge daemon is running
+  check     Run one check cycle (for testing/debugging)
+
+The nudge daemon monitors v0 tmux sessions and automatically terminates
+idle sessions that have finished processing.
+
+Environment:
+  V0_NUDGE_INTERVAL  Check interval in seconds (default: 10)
+  V0_NUDGE_STALE     Seconds before considering a session stale (default: 30)
+  DISABLE_NOTIFICATIONS  Set to 1 to disable OS notifications
+
+Examples:
+  v0-nudge start          # Start the daemon
+  v0-nudge status         # Check if running
+  v0-nudge check          # Run one monitoring cycle
+EOF
+  exit 0
+}
+
+# ============================================================================
+# Logging
+# ============================================================================
+
+nudge_log() {
+  local message="$1"
+  local timestamp
+  timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+  echo "[${timestamp}] ${message}" >> "${NUDGE_LOG_FILE}"
+}
+
+# ============================================================================
+# Session Handlers
+# ============================================================================
+
+# Handle successful session completion
+# Args: $1 = session name, $2 = tree directory
+handle_session_complete() {
+  local session="$1"
+  local tree_dir="$2"
+
+  nudge_log "Session ${session} completed successfully"
+
+  # Mark done-exit flag (for polling daemon detection)
+  if [[ -n "${tree_dir}" ]] && [[ -d "${tree_dir}" ]]; then
+    touch "${tree_dir}/.done-exit"
+  fi
+
+  # Kill the tmux session gracefully
+  tmux kill-session -t "${session}" 2>/dev/null || true
+
+  # Log to v0 log if available
+  if type v0_log &>/dev/null; then
+    v0_log "nudge" "Session ${session} completed successfully"
+  fi
+}
+
+# Handle session error state
+# Args: $1 = session name, $2 = tree directory
+handle_session_error() {
+  local session="$1"
+  local tree_dir="$2"
+
+  nudge_log "Session ${session} ended with error"
+
+  # Do NOT mark .done-exit (indicates error, not clean completion)
+
+  # Kill the session
+  tmux kill-session -t "${session}" 2>/dev/null || true
+
+  # Send OS notification (macOS)
+  if [[ "$(uname)" = "Darwin" ]] && [[ "${DISABLE_NOTIFICATIONS:-}" != "1" ]] && [[ "${V0_TEST_MODE:-}" != "1" ]]; then
+    osascript -e "display notification \"Session ended with error\" with title \"v0: ${session} failed\"" 2>/dev/null || true
+  fi
+
+  # Log to v0 log if available
+  if type v0_log &>/dev/null; then
+    v0_log "nudge" "Session ${session} ended with error"
+  fi
+}
+
+# ============================================================================
+# Main Daemon Logic
+# ============================================================================
+
+# Run one check cycle across all v0 sessions
+# Returns: number of sessions terminated
+nudge_check_cycle() {
+  local check_interval="${V0_NUDGE_INTERVAL:-10}"
+  local stale_threshold="${V0_NUDGE_STALE:-30}"
+  local terminated=0
+
+  # Get all v0 tmux sessions
+  local sessions
+  sessions=$(get_v0_sessions)
+
+  [[ -z "${sessions}" ]] && return 0
+
+  while IFS= read -r session; do
+    [[ -z "${session}" ]] && continue
+
+    # Find the worktree for this session
+    local tree_dir
+    tree_dir=$(find_session_worktree "${session}") || continue
+
+    # Get Claude project directory
+    local project_dir
+    project_dir=$(get_claude_project_dir "${tree_dir}")
+    [[ ! -d "${project_dir}" ]] && continue
+
+    # Get latest session file
+    local session_file
+    session_file=$(get_latest_session_file "${project_dir}")
+    [[ -z "${session_file}" ]] && continue
+
+    # Quick check: is file recently modified?
+    if ! is_file_stale "${session_file}" "${stale_threshold}"; then
+      continue  # Recently active, skip
+    fi
+
+    # Detailed check: is session done?
+    local state_code
+    is_session_done "${session_file}"
+    state_code=$?
+
+    case ${state_code} in
+      0)  # Done successfully
+        handle_session_complete "${session}" "${tree_dir}"
+        terminated=$((terminated + 1))
+        ;;
+      2)  # Error state
+        handle_session_error "${session}" "${tree_dir}"
+        terminated=$((terminated + 1))
+        ;;
+      *)  # Still active (1) or unknown
+        continue
+        ;;
+    esac
+  done <<< "${sessions}"
+
+  return "${terminated}"
+}
+
+# Main daemon loop
+nudge_daemon() {
+  local check_interval="${V0_NUDGE_INTERVAL:-10}"
+
+  nudge_log "Nudge daemon started (interval: ${check_interval}s)"
+
+  # Set up signal handlers for graceful shutdown
+  trap 'nudge_stop_handler' SIGTERM SIGINT
+
+  while true; do
+    nudge_check_cycle || true
+    sleep "${check_interval}"
+  done
+}
+
+# Signal handler for graceful shutdown
+nudge_stop_handler() {
+  nudge_log "Nudge daemon stopping (signal received)"
+  rm -f "${NUDGE_PID_FILE}"
+  exit 0
+}
+
+# ============================================================================
+# Commands
+# ============================================================================
+
+cmd_start() {
+  mkdir -p "$(dirname "${NUDGE_PID_FILE}")"
+
+  if nudge_running; then
+    echo "Nudge worker already running"
+    return 0
+  fi
+
+  # Start daemon in background
+  nohup "$0" daemon >> "${NUDGE_LOG_FILE}" 2>&1 &
+  local pid=$!
+  echo "${pid}" > "${NUDGE_PID_FILE}"
+
+  echo "Nudge worker started (PID: ${pid})"
+  nudge_log "Nudge daemon started by user (PID: ${pid})"
+}
+
+cmd_stop() {
+  if [[ -f "${NUDGE_PID_FILE}" ]]; then
+    local pid
+    pid=$(cat "${NUDGE_PID_FILE}")
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+      kill "${pid}" 2>/dev/null || true
+      nudge_log "Nudge daemon stopped by user (PID: ${pid})"
+    fi
+    rm -f "${NUDGE_PID_FILE}"
+  fi
+
+  # Also kill any orphaned processes
+  pkill -f "v0-nudge.*daemon" 2>/dev/null || true
+
+  echo "Nudge worker stopped"
+}
+
+cmd_status() {
+  if nudge_running; then
+    if [[ -f "${NUDGE_PID_FILE}" ]]; then
+      local pid
+      pid=$(cat "${NUDGE_PID_FILE}")
+      echo "Nudge worker running (PID: ${pid})"
+    else
+      echo "Nudge worker running"
+    fi
+    return 0
+  else
+    echo "Nudge worker not running"
+    return 1
+  fi
+}
+
+cmd_check() {
+  echo "Running nudge check cycle..."
+  local terminated
+  nudge_check_cycle
+  terminated=$?
+  echo "Check complete. Sessions terminated: ${terminated}"
+}
+
+cmd_daemon() {
+  # Internal command - runs the actual daemon loop
+  # This is called via nohup from cmd_start
+  echo "$$" > "${NUDGE_PID_FILE}"
+  nudge_daemon
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+[[ $# -eq 0 ]] && usage
+
+case "$1" in
+  start)   cmd_start ;;
+  stop)    cmd_stop ;;
+  status)  cmd_status ;;
+  check)   cmd_check ;;
+  daemon)  cmd_daemon ;;
+  -h|--help) usage ;;
+  *)
+    echo "Unknown command: $1" >&2
+    echo "Run 'v0-nudge --help' for usage" >&2
+    exit 1
+    ;;
+esac

@@ -11,6 +11,9 @@ v0_load_config
 # Source coffee functions for automatic wake lock management
 source "${V0_DIR}/lib/coffee-common.sh"
 
+# Source nudge functions for idle session monitoring
+source "${V0_DIR}/lib/nudge-common.sh"
+
 usage() {
   cat <<'EOF'
 Usage: v0 shutdown [options]
@@ -304,6 +307,13 @@ if [[ -z "${found_anything}" ]]; then
 fi
 
 if [[ -z "${DRY_RUN}" ]]; then
+  # Stop nudge worker
+  if nudge_running; then
+    "${V0_DIR}/bin/v0-nudge" stop >/dev/null 2>&1
+    echo ""
+    echo "Stopped nudge worker"
+  fi
+
   # Stop coffee (system wake lock)
   if coffee_is_running; then
     coffee_stop
