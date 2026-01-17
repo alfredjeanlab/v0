@@ -526,8 +526,13 @@ v0_trigger_dependent_operations() {
 
     echo "Unblocking dependent operation: ${dep_op} (resuming from phase: ${blocked_phase})"
 
-    # Resume the operation in background
-    "${V0_DIR}/bin/v0-feature" "${dep_op}" --resume &
+    # Only resume if not held - respect existing holds
+    if v0_is_held "${dep_op}"; then
+      echo "Operation '${dep_op}' remains on hold (use 'v0 resume ${dep_op}' to start)"
+    else
+      # Resume the operation in background
+      "${V0_DIR}/bin/v0-feature" "${dep_op}" --resume &
+    fi
   done
 }
 
