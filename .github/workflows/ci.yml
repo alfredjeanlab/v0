@@ -15,8 +15,8 @@ jobs:
 
       - name: Install ShellCheck
         run: |
-          wget -qO- "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.x86_64.tar.xz" | tar -xJf -
-          sudo cp shellcheck-v0.10.0/shellcheck /usr/local/bin/
+          wget -qO- "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz" | tar -xJf -
+          sudo cp shellcheck-v0.11.0/shellcheck /usr/local/bin/
 
       - name: Run ShellCheck on scripts
         run: make lint
