@@ -8,39 +8,39 @@ load '../helpers/test_helper'
 # ============================================================================
 
 @test "v0_find_project_root finds .v0.rc in current directory" {
-    touch "$TEST_TEMP_DIR/project/.v0.rc"
-    cd "$TEST_TEMP_DIR/project"
+    touch "${TEST_TEMP_DIR}/project/.v0.rc"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     run v0_find_project_root
     assert_success
-    assert_output "$TEST_TEMP_DIR/project"
+    assert_output "${TEST_TEMP_DIR}/project"
 }
 
 @test "v0_find_project_root finds .v0.rc in parent directory" {
-    touch "$TEST_TEMP_DIR/project/.v0.rc"
-    mkdir -p "$TEST_TEMP_DIR/project/src/deep/nested"
-    cd "$TEST_TEMP_DIR/project/src/deep/nested"
+    touch "${TEST_TEMP_DIR}/project/.v0.rc"
+    mkdir -p "${TEST_TEMP_DIR}/project/src/deep/nested"
+    cd "${TEST_TEMP_DIR}/project/src/deep/nested" || return 1
     source_lib "v0-common.sh"
 
     run v0_find_project_root
     assert_success
-    assert_output "$TEST_TEMP_DIR/project"
+    assert_output "${TEST_TEMP_DIR}/project"
 }
 
 @test "v0_find_project_root finds .v0.rc from arbitrary nested path" {
-    touch "$TEST_TEMP_DIR/project/.v0.rc"
-    mkdir -p "$TEST_TEMP_DIR/project/a/b/c/d/e"
-    cd "$TEST_TEMP_DIR/project/a/b/c/d/e"
+    touch "${TEST_TEMP_DIR}/project/.v0.rc"
+    mkdir -p "${TEST_TEMP_DIR}/project/a/b/c/d/e"
+    cd "${TEST_TEMP_DIR}/project/a/b/c/d/e" || return 1
     source_lib "v0-common.sh"
 
     run v0_find_project_root
     assert_success
-    assert_output "$TEST_TEMP_DIR/project"
+    assert_output "${TEST_TEMP_DIR}/project"
 }
 
 @test "v0_find_project_root fails without .v0.rc" {
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     run v0_find_project_root
@@ -48,13 +48,13 @@ load '../helpers/test_helper'
 }
 
 @test "v0_find_project_root accepts start directory argument" {
-    touch "$TEST_TEMP_DIR/project/.v0.rc"
-    mkdir -p "$TEST_TEMP_DIR/project/subdir"
+    touch "${TEST_TEMP_DIR}/project/.v0.rc"
+    mkdir -p "${TEST_TEMP_DIR}/project/subdir"
     source_lib "v0-common.sh"
 
-    run v0_find_project_root "$TEST_TEMP_DIR/project/subdir"
+    run v0_find_project_root "${TEST_TEMP_DIR}/project/subdir"
     assert_success
-    assert_output "$TEST_TEMP_DIR/project"
+    assert_output "${TEST_TEMP_DIR}/project"
 }
 
 # ============================================================================
@@ -62,57 +62,57 @@ load '../helpers/test_helper'
 # ============================================================================
 
 @test "v0_find_main_repo returns same directory for main repo" {
-    init_mock_git_repo "$TEST_TEMP_DIR/project"
-    cd "$TEST_TEMP_DIR/project"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
-    run v0_find_main_repo "$TEST_TEMP_DIR/project"
+    run v0_find_main_repo "${TEST_TEMP_DIR}/project"
     assert_success
-    assert_output "$TEST_TEMP_DIR/project"
+    assert_output "${TEST_TEMP_DIR}/project"
 }
 
 @test "v0_find_main_repo returns main repo from worktree" {
-    init_mock_git_repo "$TEST_TEMP_DIR/project"
-    cd "$TEST_TEMP_DIR/project"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
 
     # Get the default branch name (main or master depending on git version)
     local default_branch
     default_branch=$(git rev-parse --abbrev-ref HEAD)
 
     # Create a worktree on a new branch
-    mkdir -p "$TEST_TEMP_DIR/worktrees"
-    git worktree add -b feature-branch "$TEST_TEMP_DIR/worktrees/feature"
+    mkdir -p "${TEST_TEMP_DIR}/worktrees"
+    git worktree add -b feature-branch "${TEST_TEMP_DIR}/worktrees/feature"
 
     source_lib "v0-common.sh"
 
     # From worktree, should return main repo
     # Note: resolve symlinks in expected path (macOS /var -> /private/var)
     local expected_path
-    expected_path=$(cd "$TEST_TEMP_DIR/project" && pwd -P)
+    expected_path=$(cd "${TEST_TEMP_DIR}/project" && pwd -P)
 
-    run v0_find_main_repo "$TEST_TEMP_DIR/worktrees/feature"
+    run v0_find_main_repo "${TEST_TEMP_DIR}/worktrees/feature"
     assert_success
-    assert_output "$expected_path"
+    assert_output "${expected_path}"
 }
 
 @test "v0_find_main_repo returns input directory for non-git directory" {
-    mkdir -p "$TEST_TEMP_DIR/not-a-repo"
+    mkdir -p "${TEST_TEMP_DIR}/not-a-repo"
     source_lib "v0-common.sh"
 
-    run v0_find_main_repo "$TEST_TEMP_DIR/not-a-repo"
+    run v0_find_main_repo "${TEST_TEMP_DIR}/not-a-repo"
     assert_success
-    assert_output "$TEST_TEMP_DIR/not-a-repo"
+    assert_output "${TEST_TEMP_DIR}/not-a-repo"
 }
 
 @test "v0_find_main_repo uses V0_ROOT when no argument given" {
-    init_mock_git_repo "$TEST_TEMP_DIR/project"
-    cd "$TEST_TEMP_DIR/project"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
-    export V0_ROOT="$TEST_TEMP_DIR/project"
+    export V0_ROOT="${TEST_TEMP_DIR}/project"
 
     run v0_find_main_repo
     assert_success
-    assert_output "$TEST_TEMP_DIR/project"
+    assert_output "${TEST_TEMP_DIR}/project"
 }
 
 # ============================================================================
@@ -121,130 +121,130 @@ load '../helpers/test_helper'
 
 @test "v0_load_config loads valid configuration" {
     create_v0rc "testproject" "testp"
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
-    assert_equal "$PROJECT" "testproject"
-    assert_equal "$ISSUE_PREFIX" "testp"
+    assert_equal "${PROJECT}" "testproject"
+    assert_equal "${ISSUE_PREFIX}" "testp"
 }
 
 @test "v0_load_config sets V0_ROOT correctly" {
     create_v0rc
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
-    assert_equal "$V0_ROOT" "$TEST_TEMP_DIR/project"
+    assert_equal "${V0_ROOT}" "${TEST_TEMP_DIR}/project"
 }
 
 @test "v0_load_config ignores inherited V0_ROOT from environment" {
     # Create two separate projects
-    mkdir -p "$TEST_TEMP_DIR/project-a"
-    mkdir -p "$TEST_TEMP_DIR/project-b"
+    mkdir -p "${TEST_TEMP_DIR}/project-a"
+    mkdir -p "${TEST_TEMP_DIR}/project-b"
 
     # Set up project-a with its own .v0.rc
-    cat > "$TEST_TEMP_DIR/project-a/.v0.rc" <<'EOF'
+    cat > "${TEST_TEMP_DIR}/project-a/.v0.rc" <<'EOF'
 PROJECT="project-a"
 ISSUE_PREFIX="pa"
 EOF
 
     # Set up project-b with its own .v0.rc
-    cat > "$TEST_TEMP_DIR/project-b/.v0.rc" <<'EOF'
+    cat > "${TEST_TEMP_DIR}/project-b/.v0.rc" <<'EOF'
 PROJECT="project-b"
 ISSUE_PREFIX="pb"
 EOF
 
     # Set V0_ROOT to point to project-b (simulating inherited environment)
-    export V0_ROOT="$TEST_TEMP_DIR/project-b"
-    export BUILD_DIR="$TEST_TEMP_DIR/project-b/.v0/build"
+    export V0_ROOT="${TEST_TEMP_DIR}/project-b"
+    export BUILD_DIR="${TEST_TEMP_DIR}/project-b/.v0/build"
     export PROJECT="project-b"
 
     # cd to project-a and load config
-    cd "$TEST_TEMP_DIR/project-a"
+    cd "${TEST_TEMP_DIR}/project-a" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
     # Verify that we're using project-a, NOT the inherited project-b values
-    assert_equal "$V0_ROOT" "$TEST_TEMP_DIR/project-a"
-    assert_equal "$PROJECT" "project-a"
-    assert_equal "$ISSUE_PREFIX" "pa"
-    assert_equal "$BUILD_DIR" "$TEST_TEMP_DIR/project-a/.v0/build"
+    assert_equal "${V0_ROOT}" "${TEST_TEMP_DIR}/project-a"
+    assert_equal "${PROJECT}" "project-a"
+    assert_equal "${ISSUE_PREFIX}" "pa"
+    assert_equal "${BUILD_DIR}" "${TEST_TEMP_DIR}/project-a/.v0/build"
 }
 
 @test "v0_load_config sets derived values" {
     create_v0rc "myproj" "mp"
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
-    assert_equal "$REPO_NAME" "project"
-    assert_equal "$BUILD_DIR" "$TEST_TEMP_DIR/project/.v0/build"
-    assert_equal "$PLANS_DIR" "$TEST_TEMP_DIR/project/plans"
+    assert_equal "${REPO_NAME}" "project"
+    assert_equal "${BUILD_DIR}" "${TEST_TEMP_DIR}/project/.v0/build"
+    assert_equal "${PLANS_DIR}" "${TEST_TEMP_DIR}/project/plans"
 }
 
 @test "v0_load_config fails without PROJECT" {
     # Create isolated temp directory structure that doesn't traverse to real .v0.rc
-    local isolated_dir="$TEST_TEMP_DIR/isolated"
-    mkdir -p "$isolated_dir/project"
-    echo 'ISSUE_PREFIX="test"' > "$isolated_dir/project/.v0.rc"
+    local isolated_dir="${TEST_TEMP_DIR}/isolated"
+    mkdir -p "${isolated_dir}/project"
+    echo 'ISSUE_PREFIX="test"' > "${isolated_dir}/project/.v0.rc"
 
     # v0_load_config calls exit 1 on error, so we need to run it in a subshell
     # Unset PROJECT and ISSUE_PREFIX to test validation (they may be inherited from parent env)
-    run env -u PROJECT -u ISSUE_PREFIX bash -c 'cd "'"$isolated_dir/project"'" && source "'"$PROJECT_ROOT"'/lib/v0-common.sh" && v0_load_config'
+    run env -u PROJECT -u ISSUE_PREFIX bash -c 'cd "'"${isolated_dir}/project"'" && source "'"${PROJECT_ROOT}"'/lib/v0-common.sh" && v0_load_config'
     assert_failure
     assert_output --partial "PROJECT"
 }
 
 @test "v0_load_config fails without ISSUE_PREFIX" {
     # Create isolated temp directory structure that doesn't traverse to real .v0.rc
-    local isolated_dir="$TEST_TEMP_DIR/isolated"
-    mkdir -p "$isolated_dir/project"
-    echo 'PROJECT="testproject"' > "$isolated_dir/project/.v0.rc"
+    local isolated_dir="${TEST_TEMP_DIR}/isolated"
+    mkdir -p "${isolated_dir}/project"
+    echo 'PROJECT="testproject"' > "${isolated_dir}/project/.v0.rc"
 
     # v0_load_config calls exit 1 on error, so we need to run it in a subshell
     # Unset PROJECT and ISSUE_PREFIX to test validation (they may be inherited from parent env)
-    run env -u PROJECT -u ISSUE_PREFIX bash -c 'cd "'"$isolated_dir/project"'" && source "'"$PROJECT_ROOT"'/lib/v0-common.sh" && v0_load_config'
+    run env -u PROJECT -u ISSUE_PREFIX bash -c 'cd "'"${isolated_dir}/project"'" && source "'"${PROJECT_ROOT}"'/lib/v0-common.sh" && v0_load_config'
     assert_failure
     assert_output --partial "ISSUE_PREFIX"
 }
 
 @test "v0_load_config sets default values" {
     create_v0rc
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
-    assert_equal "$V0_BUILD_DIR" ".v0/build"
-    assert_equal "$V0_PLANS_DIR" "plans"
-    assert_equal "$V0_FEATURE_BRANCH" "feature/{name}"
+    assert_equal "${V0_BUILD_DIR}" ".v0/build"
+    assert_equal "${V0_PLANS_DIR}" "plans"
+    assert_equal "${V0_FEATURE_BRANCH}" "feature/{name}"
 }
 
 @test "v0_load_config allows custom overrides" {
-    cat > "$TEST_TEMP_DIR/project/.v0.rc" <<'EOF'
+    cat > "${TEST_TEMP_DIR}/project/.v0.rc" <<'EOF'
 PROJECT="customproj"
 ISSUE_PREFIX="cust"
 V0_BUILD_DIR=".build"
 V0_PLANS_DIR="docs/plans"
 EOF
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
-    assert_equal "$V0_BUILD_DIR" ".build"
-    assert_equal "$V0_PLANS_DIR" "docs/plans"
-    assert_equal "$BUILD_DIR" "$TEST_TEMP_DIR/project/.build"
-    assert_equal "$PLANS_DIR" "$TEST_TEMP_DIR/project/docs/plans"
+    assert_equal "${V0_BUILD_DIR}" ".build"
+    assert_equal "${V0_PLANS_DIR}" "docs/plans"
+    assert_equal "${BUILD_DIR}" "${TEST_TEMP_DIR}/project/.build"
+    assert_equal "${PLANS_DIR}" "${TEST_TEMP_DIR}/project/docs/plans"
 }
 
 @test "v0_load_config with require_config=false returns 1 without .v0.rc" {
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     run v0_load_config false
@@ -279,11 +279,12 @@ EOF
     source_lib "v0-common.sh"
     export ISSUE_PREFIX="proj"
 
+    local pattern
     pattern=$(v0_issue_pattern)
 
     # Test that pattern matches valid issue IDs
-    echo "proj-abc123" | grep -qE "$pattern"
-    echo "proj-a1b2c3" | grep -qE "$pattern"
+    echo "proj-abc123" | grep -qE "${pattern}"
+    echo "proj-a1b2c3" | grep -qE "${pattern}"
 }
 
 # ============================================================================
@@ -342,52 +343,52 @@ EOF
 
 @test "v0_log creates log directory if needed" {
     create_v0rc
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
     v0_log "test_event" "test message"
 
-    assert_dir_exists "$BUILD_DIR/logs"
+    assert_dir_exists "${BUILD_DIR}/logs"
 }
 
 @test "v0_log writes to log file" {
     create_v0rc
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
     v0_log "test_event" "test message"
 
-    assert_file_exists "$BUILD_DIR/logs/v0.log"
-    run cat "$BUILD_DIR/logs/v0.log"
+    assert_file_exists "${BUILD_DIR}/logs/v0.log"
+    run cat "${BUILD_DIR}/logs/v0.log"
     assert_output --partial "test_event"
     assert_output --partial "test message"
 }
 
 @test "v0_log includes timestamp" {
     create_v0rc
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
     v0_log "event" "msg"
 
-    run cat "$BUILD_DIR/logs/v0.log"
+    run cat "${BUILD_DIR}/logs/v0.log"
     # Timestamp format: [YYYY-MM-DDTHH:MM:SSZ]
     assert_output --regexp '\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\]'
 }
 
 @test "v0_log appends to existing log" {
     create_v0rc
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
     v0_log "event1" "message1"
     v0_log "event2" "message2"
 
-    run cat "$BUILD_DIR/logs/v0.log"
+    run cat "${BUILD_DIR}/logs/v0.log"
     assert_output --partial "event1"
     assert_output --partial "event2"
 }
@@ -435,13 +436,13 @@ EOF
 
 @test "v0_ensure_state_dir creates state directory" {
     create_v0rc "testproj" "tp"
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
     v0_ensure_state_dir
 
-    assert_dir_exists "$V0_STATE_DIR"
+    assert_dir_exists "${V0_STATE_DIR}"
 }
 
 # ============================================================================
@@ -450,13 +451,13 @@ EOF
 
 @test "v0_ensure_build_dir creates build directory" {
     create_v0rc
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
     v0_ensure_build_dir
 
-    assert_dir_exists "$BUILD_DIR"
+    assert_dir_exists "${BUILD_DIR}"
 }
 
 # ============================================================================
@@ -466,9 +467,9 @@ EOF
 @test "V0_INSTALL_DIR is set correctly" {
     source_lib "v0-common.sh"
 
-    assert [ -n "$V0_INSTALL_DIR" ]
-    assert [ -d "$V0_INSTALL_DIR" ]
-    assert [ -d "$V0_INSTALL_DIR/lib" ]
+    assert [ -n "${V0_INSTALL_DIR}" ]
+    assert [ -d "${V0_INSTALL_DIR}" ]
+    assert [ -d "${V0_INSTALL_DIR}/lib" ]
 }
 
 # ============================================================================
@@ -477,12 +478,13 @@ EOF
 
 @test "v0_session_name generates namespaced names" {
     create_v0rc "myapp" "ma"
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
+    local result
     result=$(v0_session_name "worker" "fix")
-    assert_equal "$result" "v0-myapp-worker-fix"
+    assert_equal "${result}" "v0-myapp-worker-fix"
 }
 
 @test "v0_session_name fails without PROJECT" {
@@ -496,7 +498,7 @@ EOF
 
 @test "v0_session_name with different suffixes and types" {
     create_v0rc "testproj" "tp"
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
@@ -520,7 +522,7 @@ EOF
 
 @test "v0_session_name handles hyphenated suffixes" {
     create_v0rc "proj" "p"
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
@@ -534,53 +536,53 @@ EOF
 # ============================================================================
 
 @test "v0_init_config creates .v0.rc file" {
-    local test_dir="$TEST_TEMP_DIR/new-project"
-    mkdir -p "$test_dir"
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
     source_lib_with_mocks "v0-common.sh"
 
-    run v0_init_config "$test_dir"
+    run v0_init_config "${test_dir}"
     assert_success
-    assert_file_exists "$test_dir/.v0.rc"
+    assert_file_exists "${test_dir}/.v0.rc"
 }
 
 @test "v0_init_config adds .v0/ to gitignore" {
-    local test_dir="$TEST_TEMP_DIR/new-project"
-    mkdir -p "$test_dir"
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
     source_lib_with_mocks "v0-common.sh"
 
-    v0_init_config "$test_dir"
+    v0_init_config "${test_dir}"
 
-    assert_file_exists "$test_dir/.gitignore"
-    run grep "^\.v0/" "$test_dir/.gitignore"
+    assert_file_exists "${test_dir}/.gitignore"
+    run grep "^\.v0/" "${test_dir}/.gitignore"
     assert_success
 }
 
 @test "v0_init_config adds .v0/ to existing gitignore" {
-    local test_dir="$TEST_TEMP_DIR/new-project"
-    mkdir -p "$test_dir"
-    echo "node_modules/" > "$test_dir/.gitignore"
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
+    echo "node_modules/" > "${test_dir}/.gitignore"
     source_lib_with_mocks "v0-common.sh"
 
-    v0_init_config "$test_dir"
+    v0_init_config "${test_dir}"
 
-    run grep "node_modules/" "$test_dir/.gitignore"
+    run grep "node_modules/" "${test_dir}/.gitignore"
     assert_success
-    run grep "^\.v0/" "$test_dir/.gitignore"
+    run grep "^\.v0/" "${test_dir}/.gitignore"
     assert_success
 }
 
 @test "v0_init_config does not duplicate .v0/ in gitignore" {
-    local test_dir="$TEST_TEMP_DIR/new-project"
-    mkdir -p "$test_dir"
-    echo ".v0/" > "$test_dir/.gitignore"
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
+    echo ".v0/" > "${test_dir}/.gitignore"
     source_lib_with_mocks "v0-common.sh"
 
-    v0_init_config "$test_dir"
+    v0_init_config "${test_dir}"
 
     # Count occurrences of .v0/ - should be exactly 1
     local count
-    count=$(grep -c "^\.v0/" "$test_dir/.gitignore")
-    assert_equal "$count" "1"
+    count=$(grep -c "^\.v0/" "${test_dir}/.gitignore")
+    assert_equal "${count}" "1"
 }
 
 # ============================================================================
@@ -589,18 +591,18 @@ EOF
 
 @test "v0_git_worktree_clean returns 0 for clean repo" {
     source_lib "v0-common.sh"
-    init_mock_git_repo "$TEST_TEMP_DIR/project"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
 
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     run v0_git_worktree_clean .
     assert_success
 }
 
 @test "v0_git_worktree_clean returns 1 for repo with staged changes" {
     source_lib "v0-common.sh"
-    init_mock_git_repo "$TEST_TEMP_DIR/project"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
 
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     echo "new content" > newfile.txt
     git add newfile.txt
 
@@ -610,9 +612,9 @@ EOF
 
 @test "v0_git_worktree_clean returns 1 for repo with unstaged changes" {
     source_lib "v0-common.sh"
-    init_mock_git_repo "$TEST_TEMP_DIR/project"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
 
-    cd "$TEST_TEMP_DIR/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
     echo "modified" >> README.md
 
     run v0_git_worktree_clean .
@@ -621,17 +623,17 @@ EOF
 
 @test "v0_git_worktree_clean accepts directory argument" {
     source_lib "v0-common.sh"
-    init_mock_git_repo "$TEST_TEMP_DIR/project"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
 
-    run v0_git_worktree_clean "$TEST_TEMP_DIR/project"
+    run v0_git_worktree_clean "${TEST_TEMP_DIR}/project"
     assert_success
 }
 
 @test "v0_git_worktree_clean returns 1 for non-git directory" {
     source_lib "v0-common.sh"
-    mkdir -p "$TEST_TEMP_DIR/not-a-repo"
+    mkdir -p "${TEST_TEMP_DIR}/not-a-repo"
 
     # Should return 1 (dirty/cannot verify) for non-git directories
-    run v0_git_worktree_clean "$TEST_TEMP_DIR/not-a-repo"
+    run v0_git_worktree_clean "${TEST_TEMP_DIR}/not-a-repo"
     assert_failure
 }

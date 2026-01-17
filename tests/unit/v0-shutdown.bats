@@ -4,13 +4,13 @@ load '../helpers/test_helper'
 
 # Helper to create an isolated project directory
 setup_isolated_project() {
-    local isolated_dir="$TEST_TEMP_DIR/isolated"
-    mkdir -p "$isolated_dir/project/.v0/build/operations"
-    cat > "$isolated_dir/project/.v0.rc" <<EOF
+    local isolated_dir="${TEST_TEMP_DIR}/isolated"
+    mkdir -p "${isolated_dir}/project/.v0/build/operations"
+    cat > "${isolated_dir}/project/.v0.rc" <<EOF
 PROJECT="testshutdown"
 ISSUE_PREFIX="ts"
 EOF
-    echo "$isolated_dir/project"
+    echo "${isolated_dir}/project"
 }
 
 # ============================================================================
@@ -22,8 +22,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" --help
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --help
     '
     assert_success  # help exits with 0
     assert_output --partial "Usage: v0 shutdown"
@@ -35,8 +35,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" -h
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" -h
     '
     assert_success
     assert_output --partial "Usage: v0 shutdown"
@@ -52,8 +52,8 @@ EOF
 
     # Run shutdown - should report no sessions for testshutdown project
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown"
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown"
     '
     assert_success
     assert_output --partial "No v0 sessions running for project: testshutdown"
@@ -70,8 +70,8 @@ EOF
     # Create a mock session name file to track what would be killed
     # Note: In real usage, this would require a real tmux session
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" --dry-run
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --dry-run
     '
     assert_success
     # With no sessions, dry-run should still report nothing to do
@@ -87,15 +87,15 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0" shutdown --help
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0" shutdown --help
     '
     assert_success
     assert_output --partial "Usage: v0 shutdown"
 }
 
 @test "v0 --help shows shutdown command" {
-    run "$PROJECT_ROOT/bin/v0" --help
+    run "${PROJECT_ROOT}/bin/v0" --help
     assert_success
     assert_output --partial "shutdown"
     assert_output --partial "Stop all v0 processes"
@@ -110,8 +110,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" --invalid 2>&1
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --invalid 2>&1
     '
     assert_failure
     assert_output --partial "Unknown option: --invalid"
@@ -128,8 +128,8 @@ EOF
     # This test verifies the session pattern is correctly constructed
     # The output should reference testshutdown, not any other project
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown"
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown"
     '
     assert_success
     assert_output --partial "testshutdown"
@@ -141,18 +141,18 @@ EOF
 
 # Helper to create git repo with branches for testing unmerged protection
 setup_git_project_with_branches() {
-    local project_dir="$TEST_TEMP_DIR/gitproject"
-    mkdir -p "$project_dir/.v0/build/operations"
+    local project_dir="${TEST_TEMP_DIR}/gitproject"
+    mkdir -p "${project_dir}/.v0/build/operations"
 
     # Create .v0.rc
-    cat > "$project_dir/.v0.rc" <<EOF
+    cat > "${project_dir}/.v0.rc" <<EOF
 PROJECT="testshutdown"
 ISSUE_PREFIX="ts"
 EOF
 
     # Initialize git repo with explicit main branch
     (
-        cd "$project_dir"
+        cd "${project_dir}" || return 1
         git init --quiet --initial-branch=main
         git config user.email "test@example.com"
         git config user.name "Test User"
@@ -161,7 +161,7 @@ EOF
         git commit --quiet -m "Initial commit"
     )
 
-    echo "$project_dir"
+    echo "${project_dir}"
 }
 
 @test "shutdown warns about unmerged v0/worker/chore branch" {
@@ -170,7 +170,7 @@ EOF
 
     # Create v0/worker/chore branch with unmerged commits
     (
-        cd "$project_dir"
+        cd "${project_dir}" || return 1
         git checkout -b v0/worker/chore --quiet
         echo "chore work" > chore.txt
         git add chore.txt
@@ -179,8 +179,8 @@ EOF
     )
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" 2>&1
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" 2>&1
     '
     assert_success
     assert_output --partial "Warning: v0/worker/chore has commits not in main, skipping"
@@ -193,7 +193,7 @@ EOF
 
     # Create v0/worker/fix branch with unmerged commits
     (
-        cd "$project_dir"
+        cd "${project_dir}" || return 1
         git checkout -b v0/worker/fix --quiet
         echo "fix work" > fix.txt
         git add fix.txt
@@ -202,8 +202,8 @@ EOF
     )
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" 2>&1
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" 2>&1
     '
     assert_success
     assert_output --partial "Warning: v0/worker/fix has commits not in main, skipping"
@@ -216,7 +216,7 @@ EOF
 
     # Create v0/worker/chore branch and merge it to main
     (
-        cd "$project_dir"
+        cd "${project_dir}" || return 1
         git checkout -b v0/worker/chore --quiet
         echo "chore work" > chore.txt
         git add chore.txt
@@ -226,8 +226,8 @@ EOF
     )
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" 2>&1
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" 2>&1
     '
     assert_success
     assert_output --partial "Deleting local branch: v0/worker/chore"
@@ -241,7 +241,7 @@ EOF
 
     # Create v0/worker/chore branch with unmerged commits
     (
-        cd "$project_dir"
+        cd "${project_dir}" || return 1
         git checkout -b v0/worker/chore --quiet
         echo "chore work" > chore.txt
         git add chore.txt
@@ -250,8 +250,8 @@ EOF
     )
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" --force 2>&1
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --force 2>&1
     '
     assert_success
     assert_output --partial "Warning: v0/worker/chore has commits not in main, deleting anyway (--force)"
@@ -265,7 +265,7 @@ EOF
 
     # Create v0/worker/feature branch with unmerged commits (should be deleted without warning)
     (
-        cd "$project_dir"
+        cd "${project_dir}" || return 1
         git checkout -b v0/worker/feature --quiet
         echo "feature work" > feature.txt
         git add feature.txt
@@ -274,8 +274,8 @@ EOF
     )
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-shutdown" 2>&1
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" 2>&1
     '
     assert_success
     assert_output --partial "Deleting local branch: v0/worker/feature"

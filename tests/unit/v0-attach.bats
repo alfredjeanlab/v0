@@ -5,13 +5,13 @@ load '../helpers/test_helper'
 # Helper to create an isolated project directory
 # This prevents test from finding real .v0.rc files in parent directories
 setup_isolated_project() {
-    local isolated_dir="$TEST_TEMP_DIR/isolated"
-    mkdir -p "$isolated_dir/project/.v0/build/operations"
-    cat > "$isolated_dir/project/.v0.rc" <<EOF
+    local isolated_dir="${TEST_TEMP_DIR}/isolated"
+    mkdir -p "${isolated_dir}/project/.v0/build/operations"
+    cat > "${isolated_dir}/project/.v0.rc" <<EOF
 PROJECT="myproject"
 ISSUE_PREFIX="mp"
 EOF
-    echo "$isolated_dir/project"
+    echo "${isolated_dir}/project"
 }
 
 # ============================================================================
@@ -23,8 +23,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        source "'"$PROJECT_ROOT"'/lib/v0-common.sh"
+        cd "'"${project_dir}"'" || exit 1
+        source "'"${PROJECT_ROOT}"'/lib/v0-common.sh"
         v0_load_config
         v0_session_name "worker" "fix"
     '
@@ -37,8 +37,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        source "'"$PROJECT_ROOT"'/lib/v0-common.sh"
+        cd "'"${project_dir}"'" || exit 1
+        source "'"${PROJECT_ROOT}"'/lib/v0-common.sh"
         v0_load_config
         v0_session_name "worker" "chore"
     '
@@ -51,8 +51,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        source "'"$PROJECT_ROOT"'/lib/v0-common.sh"
+        cd "'"${project_dir}"'" || exit 1
+        source "'"${PROJECT_ROOT}"'/lib/v0-common.sh"
         v0_load_config
         v0_session_name "auth" "plan"
     '
@@ -69,8 +69,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach"
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach"
     '
     assert_failure
     assert_output --partial "Usage: v0 attach"
@@ -81,8 +81,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" --help
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" --help
     '
     assert_failure  # usage exits with 1
     assert_output --partial "Usage: v0 attach"
@@ -93,8 +93,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" feature
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" feature
     '
     assert_failure
     assert_output --partial "feature name required"
@@ -109,8 +109,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" fix
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" fix
     '
     assert_failure
     assert_output --partial "No active fix session"
@@ -122,8 +122,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" chore
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" chore
     '
     assert_failure
     assert_output --partial "No active chore session"
@@ -134,8 +134,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" mergeq
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" mergeq
     '
     assert_failure
     assert_output --partial "No active merge resolution session found"
@@ -146,8 +146,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" feature nonexistent
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" feature nonexistent
     '
     assert_failure
     assert_output --partial "No state found for feature"
@@ -158,8 +158,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" invalid
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" invalid
     '
     assert_failure
     assert_output --partial "Unknown type"
@@ -174,8 +174,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" --list
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" --list
     '
     assert_success
     # Either shows "No active v0 sessions" or lists sessions (if any v0-myproject-* exist)
@@ -187,8 +187,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" -l
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" -l
     '
     assert_success
     assert_output --regexp "(No active v0 sessions|Active v0 sessions)"
@@ -203,8 +203,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     # Create state file with executing phase
-    mkdir -p "$project_dir/.v0/build/operations/auth"
-    cat > "$project_dir/.v0/build/operations/auth/state.json" <<'EOF'
+    mkdir -p "${project_dir}/.v0/build/operations/auth"
+    cat > "${project_dir}/.v0/build/operations/auth/state.json" <<'EOF'
 {
   "name": "auth",
   "phase": "executing",
@@ -214,8 +214,8 @@ EOF
 
     # Will fail because session doesn't exist, but should try correct session
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" feature auth
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" feature auth
     '
     assert_failure
     assert_output --partial "v0-myproject-auth-feature"
@@ -226,8 +226,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     # Create state file with planned phase (no tmux_session field)
-    mkdir -p "$project_dir/.v0/build/operations/auth"
-    cat > "$project_dir/.v0/build/operations/auth/state.json" <<'EOF'
+    mkdir -p "${project_dir}/.v0/build/operations/auth"
+    cat > "${project_dir}/.v0/build/operations/auth/state.json" <<'EOF'
 {
   "name": "auth",
   "phase": "planned"
@@ -236,8 +236,8 @@ EOF
 
     # Will fail because session doesn't exist, but should derive correct session
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" feature auth
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" feature auth
     '
     assert_failure
     assert_output --partial "v0-myproject-auth-plan"
@@ -248,8 +248,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     # Create state file with queued phase
-    mkdir -p "$project_dir/.v0/build/operations/api"
-    cat > "$project_dir/.v0/build/operations/api/state.json" <<'EOF'
+    mkdir -p "${project_dir}/.v0/build/operations/api"
+    cat > "${project_dir}/.v0/build/operations/api/state.json" <<'EOF'
 {
   "name": "api",
   "phase": "queued"
@@ -257,8 +257,8 @@ EOF
 EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" feature api
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" feature api
     '
     assert_failure
     assert_output --partial "v0-myproject-api-decompose"
@@ -269,8 +269,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     # Create state file with merged phase
-    mkdir -p "$project_dir/.v0/build/operations/done"
-    cat > "$project_dir/.v0/build/operations/done/state.json" <<'EOF'
+    mkdir -p "${project_dir}/.v0/build/operations/done"
+    cat > "${project_dir}/.v0/build/operations/done/state.json" <<'EOF'
 {
   "name": "done",
   "phase": "merged"
@@ -278,8 +278,8 @@ EOF
 EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" feature done
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" feature done
     '
     assert_success
     assert_output --partial "merged"
@@ -291,8 +291,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     # Create state file with explicit tmux_session
-    mkdir -p "$project_dir/.v0/build/operations/custom"
-    cat > "$project_dir/.v0/build/operations/custom/state.json" <<'EOF'
+    mkdir -p "${project_dir}/.v0/build/operations/custom"
+    cat > "${project_dir}/.v0/build/operations/custom/state.json" <<'EOF'
 {
   "name": "custom",
   "phase": "executing",
@@ -301,8 +301,8 @@ EOF
 EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-attach" feature custom
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-attach" feature custom
     '
     assert_failure
     assert_output --partial "v0-myproject-custom-feature"
@@ -317,15 +317,15 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0" attach --help
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0" attach --help
     '
     assert_failure  # usage exits with 1
     assert_output --partial "Usage: v0 attach"
 }
 
 @test "v0 --help shows attach command" {
-    run "$PROJECT_ROOT/bin/v0" --help
+    run "${PROJECT_ROOT}/bin/v0" --help
     assert_success
     assert_output --partial "attach"
     assert_output --partial "Attach to a running tmux session"

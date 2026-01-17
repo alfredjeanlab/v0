@@ -4,14 +4,14 @@ load '../helpers/test_helper'
 
 # Helper to create an isolated project directory
 setup_isolated_project() {
-    local isolated_dir="$TEST_TEMP_DIR/isolated"
-    mkdir -p "$isolated_dir/project/.v0/build/operations"
-    mkdir -p "$isolated_dir/project/.v0/build/mergeq"
-    cat > "$isolated_dir/project/.v0.rc" <<EOF
+    local isolated_dir="${TEST_TEMP_DIR}/isolated"
+    mkdir -p "${isolated_dir}/project/.v0/build/operations"
+    mkdir -p "${isolated_dir}/project/.v0/build/mergeq"
+    cat > "${isolated_dir}/project/.v0.rc" <<EOF
 PROJECT="testmonitor"
 ISSUE_PREFIX="tm"
 EOF
-    echo "$isolated_dir/project"
+    echo "${isolated_dir}/project"
 }
 
 # ============================================================================
@@ -23,8 +23,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-monitor" --help
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-monitor" --help
     '
     assert_success
     assert_output --partial "Usage: v0 monitor"
@@ -36,8 +36,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-monitor" -h
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-monitor" -h
     '
     assert_success
     assert_output --partial "Usage: v0 monitor"
@@ -48,8 +48,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-monitor"
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-monitor"
     '
     assert_success
     assert_output --partial "Usage: v0 monitor"
@@ -64,9 +64,9 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        export V0_STATE_DIR="'"$project_dir"'/.v0"
-        "'"$PROJECT_ROOT"'/bin/v0-monitor" --status
+        cd "'"${project_dir}"'" || exit 1
+        export V0_STATE_DIR="'"${project_dir}"'/.v0"
+        "'"${PROJECT_ROOT}"'/bin/v0-monitor" --status
     '
     assert_failure
     assert_output --partial "Monitor is not running"
@@ -81,9 +81,9 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        export V0_STATE_DIR="'"$project_dir"'/.v0"
-        "'"$PROJECT_ROOT"'/bin/v0-monitor" --stop
+        cd "'"${project_dir}"'" || exit 1
+        export V0_STATE_DIR="'"${project_dir}"'/.v0"
+        "'"${PROJECT_ROOT}"'/bin/v0-monitor" --stop
     '
     assert_success
     assert_output --partial "Monitor is not running"
@@ -98,15 +98,15 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0" monitor --help
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0" monitor --help
     '
     assert_success
     assert_output --partial "Usage: v0 monitor"
 }
 
 @test "v0 --help shows monitor command" {
-    run "$PROJECT_ROOT/bin/v0" --help
+    run "${PROJECT_ROOT}/bin/v0" --help
     assert_success
     assert_output --partial "monitor"
 }
@@ -120,8 +120,8 @@ EOF
     project_dir=$(setup_isolated_project)
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-monitor" --invalid 2>&1
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-monitor" --invalid 2>&1
     '
     assert_success  # Shows usage instead of failing
     assert_output --partial "Unknown option: --invalid"
