@@ -12,9 +12,7 @@ setup() {
     TEST_TEMP_DIR="${temp_dir}"
     export TEST_TEMP_DIR
 
-    mkdir -p "${TEST_TEMP_DIR}/project"
-    mkdir -p "${TEST_TEMP_DIR}/project/.v0/build/operations"
-    mkdir -p "${TEST_TEMP_DIR}/state"
+    mkdir -p "${TEST_TEMP_DIR}/project/.v0/build/operations" "${TEST_TEMP_DIR}/state"
 
     export REAL_HOME="${HOME}"
     export HOME="${TEST_TEMP_DIR}/home"

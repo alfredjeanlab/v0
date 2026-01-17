@@ -46,8 +46,13 @@ teardown() {
     unset V0_PLAN_EXEC
     unset V0_ROOT
 
-    # Kill any test tmux sessions (with timeout to prevent hangs)
-    # Use timeout command and avoid pipeline that can hang on while read
+    if [ -n "${TEST_TEMP_DIR}" ] && [ -d "${TEST_TEMP_DIR}" ]; then
+        rm -rf "${TEST_TEMP_DIR}"
+    fi
+}
+
+# Clean up tmux sessions once at end of file (not per-test)
+teardown_file() {
     local sessions
     if sessions=$(timeout 2 tmux list-sessions -F '#{session_name}' 2>/dev/null); then
         for session in $sessions; do
@@ -55,10 +60,6 @@ teardown() {
                 timeout 1 tmux kill-session -t "$session" 2>/dev/null || true
             fi
         done
-    fi
-
-    if [ -n "${TEST_TEMP_DIR}" ] && [ -d "${TEST_TEMP_DIR}" ]; then
-        rm -rf "${TEST_TEMP_DIR}"
     fi
 }
 

@@ -34,8 +34,7 @@ load "${_BATS_LIB}/bats-assert/load.bash"
 # ============================================================================
 # Set a default timeout for all tests to prevent hangs
 # Individual tests can override by setting BATS_TEST_TIMEOUT in setup_file() or the test
-# Typical test files complete in <8s total, so 10s per test is generous headroom
-: "${BATS_TEST_TIMEOUT:=10}"
+: "${BATS_TEST_TIMEOUT:=5}"
 export BATS_TEST_TIMEOUT
 
 # ============================================================================
