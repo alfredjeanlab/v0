@@ -10,6 +10,7 @@ source "${SCRIPT_DIR}/../lib/v0-common.sh"
 REFRESH_INTERVAL=6
 FILTER_ARGS=()
 OPERATION_NAME=""
+MAX_ITERATIONS=""  # For testing: limit number of watch iterations
 
 usage() {
   cat <<EOF
@@ -26,6 +27,7 @@ Options:
   --fix                 Watch fix worker status only
   --chore               Watch chore worker status only
   --merge               Watch merge queue status only
+  --max-iterations N    Exit after N iterations (for testing)
   -h, --help            Show this help message
 
 Press Ctrl+C to exit.
@@ -46,6 +48,10 @@ while [[ $# -gt 0 ]]; do
     --fix|--chore|--merge)
       FILTER_ARGS+=("$1")
       shift
+      ;;
+    --max-iterations)
+      MAX_ITERATIONS="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -82,6 +88,7 @@ show_header() {
 # Main watch loop
 trap 'echo; exit 0' INT TERM
 
+iteration=0
 while true; do
   clear
   show_header
@@ -90,5 +97,12 @@ while true; do
   else
     "${SCRIPT_DIR}/v0-status" ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
   fi
+
+  # Check iteration limit (for testing)
+  ((iteration++)) || true
+  if [[ -n "${MAX_ITERATIONS}" && "${iteration}" -ge "${MAX_ITERATIONS}" ]]; then
+    break
+  fi
+
   sleep "${REFRESH_INTERVAL}"
 done

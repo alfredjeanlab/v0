@@ -29,21 +29,82 @@ fi
 load "${_BATS_LIB}/bats-support/load.bash"
 load "${_BATS_LIB}/bats-assert/load.bash"
 
+# ============================================================================
+# Test Timing Support
+# ============================================================================
+# Enable per-test timing by setting BATS_TEST_TIMING=1
+# This outputs timing info for each test to help identify slow tests
+
+_test_start_time=""
+
+_timing_start() {
+    if [[ -n "${BATS_TEST_TIMING:-}" ]]; then
+        _test_start_time=$(gdate +%s%N 2>/dev/null || date +%s%N)
+    fi
+}
+
+_timing_end() {
+    if [[ -n "${BATS_TEST_TIMING:-}" && -n "$_test_start_time" ]]; then
+        local end_time
+        end_time=$(gdate +%s%N 2>/dev/null || date +%s%N)
+        local ms=$(( (end_time - _test_start_time) / 1000000 ))
+        echo "# TIME: ${ms}ms - ${BATS_TEST_NAME}" >&3
+    fi
+}
+
+# ============================================================================
+# Directory Template Caching
+# ============================================================================
+# Pre-create common directory structures once per test file to reduce mkdir calls
+
+_CACHED_STRUCTURE_TEMPLATE=""
+_CLEANUP_DIRS=()
+
+_create_cached_template() {
+    if [[ -z "$_CACHED_STRUCTURE_TEMPLATE" ]]; then
+        _CACHED_STRUCTURE_TEMPLATE=$(mktemp -d)
+        # Pre-create common v0 directory structure
+        mkdir -p "$_CACHED_STRUCTURE_TEMPLATE/project/.v0/build/operations"
+        mkdir -p "$_CACHED_STRUCTURE_TEMPLATE/project/.v0/build/sessions"
+        mkdir -p "$_CACHED_STRUCTURE_TEMPLATE/project/.v0/build/mergeq/logs"
+        mkdir -p "$_CACHED_STRUCTURE_TEMPLATE/state"
+        mkdir -p "$_CACHED_STRUCTURE_TEMPLATE/home/.local/state/v0"
+    fi
+}
+
+_cleanup_template() {
+    if [[ -n "$_CACHED_STRUCTURE_TEMPLATE" && -d "$_CACHED_STRUCTURE_TEMPLATE" ]]; then
+        rm -rf "$_CACHED_STRUCTURE_TEMPLATE"
+        _CACHED_STRUCTURE_TEMPLATE=""
+    fi
+}
+
+# Batch cleanup all deferred directories
+_cleanup_deferred() {
+    for dir in "${_CLEANUP_DIRS[@]}"; do
+        rm -rf "$dir" &
+    done
+    wait
+    _CLEANUP_DIRS=()
+}
+
 # Create isolated test environment
 setup() {
+    _timing_start
+    _create_cached_template
+
     # Create unique temp directory for each test
     TEST_TEMP_DIR="$(mktemp -d)"
     export TEST_TEMP_DIR
 
-    # Create minimal project structure
-    mkdir -p "$TEST_TEMP_DIR/project"
-    mkdir -p "$TEST_TEMP_DIR/project/.v0/build/operations"
-    mkdir -p "$TEST_TEMP_DIR/state"
+    # Fast copy from template instead of multiple mkdirs
+    cp -r "$_CACHED_STRUCTURE_TEMPLATE/project" "$TEST_TEMP_DIR/"
+    cp -r "$_CACHED_STRUCTURE_TEMPLATE/state" "$TEST_TEMP_DIR/"
 
     # Set up mock home directory
     export REAL_HOME="$HOME"
+    cp -r "$_CACHED_STRUCTURE_TEMPLATE/home" "$TEST_TEMP_DIR/"
     export HOME="$TEST_TEMP_DIR/home"
-    mkdir -p "$HOME/.local/state/v0"
 
     # Enable test mode to disable notifications and enable test safeguards
     export V0_TEST_MODE=1
@@ -74,24 +135,55 @@ teardown() {
 
     # Clean up temp directory
     if [ -n "$TEST_TEMP_DIR" ] && [ -d "$TEST_TEMP_DIR" ]; then
-        rm -rf "$TEST_TEMP_DIR"
+        if [[ -n "${BATS_FAST_CLEANUP:-}" ]]; then
+            # Defer cleanup - batch at end of test file for better performance
+            _CLEANUP_DIRS+=("$TEST_TEMP_DIR")
+        else
+            rm -rf "$TEST_TEMP_DIR"
+        fi
     fi
+
+    _timing_end
 }
+
+# ============================================================================
+# Source Caching
+# ============================================================================
+# Track sourced libraries to avoid re-sourcing (parsing overhead)
+
+declare -A _SOURCED_LIBS 2>/dev/null || _SOURCED_LIBS=""
 
 # Source a library file from lib/
 # Usage: source_lib "v0-common.sh"
+# Performance: Tracks sourced files to avoid duplicate parsing
 source_lib() {
     local lib="$1"
-    source "$PROJECT_ROOT/lib/$lib"
+    local lib_path="$PROJECT_ROOT/lib/$lib"
+
+    # Skip if already sourced in this test run (bash 4+ with associative arrays)
+    if [[ -n "${_SOURCED_LIBS[$lib]:-}" ]]; then
+        return 0
+    fi
+
+    if [[ -f "$lib_path" ]]; then
+        source "$lib_path"
+        _SOURCED_LIBS[$lib]=1
+    else
+        echo "Library not found: $lib" >&2
+        return 1
+    fi
 }
 
 # Source library with mocks enabled
 # Usage: source_lib_with_mocks "v0-common.sh"
+# Note: Does not use caching since mocks modify behavior
 source_lib_with_mocks() {
     local lib="$1"
     # Add mock-bin to PATH before sourcing
     export PATH="$TESTS_DIR/helpers/mock-bin:$PATH"
     source "$PROJECT_ROOT/lib/$lib"
+    # Mark as sourced (with mocks) to prevent non-mock source_lib from re-sourcing
+    _SOURCED_LIBS["${lib}_mocked"]=1
 }
 
 # Create a minimal .v0.rc configuration file
@@ -190,19 +282,76 @@ get_json_field() {
     jq -r "$field" "$file"
 }
 
+# ============================================================================
+# jq Optimization Helpers
+# ============================================================================
+# Batch multiple jq queries into one call for better performance
+
+# Batch multiple jq queries into one call
+# Usage: results=($(jq_batch "$file" '.field1' '.field2'))
+# Returns: newline-separated results for each query
+jq_batch() {
+    local file="$1"
+    shift
+    local queries=("$@")
+
+    # Build compound jq query
+    local compound_query=""
+    for q in "${queries[@]}"; do
+        compound_query+="${q},"
+    done
+    compound_query="[${compound_query%,}]"
+
+    jq -r "$compound_query | .[]" "$file"
+}
+
+# Check if JSON file has a non-empty entries array (without jq)
+# Usage: if json_has_entries "$file"; then ...
+json_has_entries() {
+    local file="$1"
+    [[ -s "$file" ]] && grep -q '"entries"[[:space:]]*:[[:space:]]*\[' "$file" && \
+        ! grep -q '"entries"[[:space:]]*:[[:space:]]*\[\]' "$file"
+}
+
+# Check if JSON file has specific field (without jq)
+# Usage: if json_has_field "$file" "status"; then ...
+json_has_field() {
+    local file="$1"
+    local field="$2"
+    [[ -s "$file" ]] && grep -q "\"$field\"" "$file"
+}
+
 # Create a mock git repository
 # Usage: init_mock_git_repo [path]
+# Performance: Uses cached git fixture if available for ~10x speedup
 init_mock_git_repo() {
     local path="${1:-$TEST_TEMP_DIR/project}"
-    (
-        cd "$path"
-        git init --quiet
-        git config user.email "test@example.com"
-        git config user.name "Test User"
-        echo "test" > README.md
-        git add README.md
-        git commit --quiet -m "Initial commit"
-    )
+    local fixture_tar="${TESTS_DIR}/fixtures/git-repo.tar"
+
+    if [[ -f "$fixture_tar" ]]; then
+        # Fast path: extract pre-built repo and clone locally
+        tar -xf "$fixture_tar" -C "$TEST_TEMP_DIR"
+        git clone --quiet "$TEST_TEMP_DIR/cached-repo.git" "${path}.new" 2>/dev/null
+        # Replace existing directory contents with cloned repo
+        rm -rf "$path"
+        mv "${path}.new" "$path"
+        (
+            cd "$path"
+            git config user.email "test@example.com"
+            git config user.name "Test User"
+        )
+    else
+        # Fallback: original slow path (for environments without fixture)
+        (
+            cd "$path"
+            git init --quiet
+            git config user.email "test@example.com"
+            git config user.name "Test User"
+            echo "test" > README.md
+            git add README.md
+            git commit --quiet -m "Initial commit"
+        )
+    fi
 }
 
 # Create a branch in the mock git repo

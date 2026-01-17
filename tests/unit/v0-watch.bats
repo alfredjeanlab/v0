@@ -129,10 +129,10 @@ EOF
     local project_dir
     project_dir=$(setup_isolated_project)
 
-    # Use timeout to prevent infinite loop, check it starts successfully
+    # Use --max-iterations to prevent infinite loop, check it starts successfully
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"$project_dir"'"
-        timeout 1 "'"$PROJECT_ROOT"'/bin/v0-watch" --fix --interval 1 2>&1 || true
+        "'"$PROJECT_ROOT"'/bin/v0-watch" --fix --max-iterations 1 2>&1 || true
     '
     # Should not show usage error for valid options
     refute_output --partial "Unknown option"
@@ -144,7 +144,7 @@ EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"$project_dir"'"
-        timeout 1 "'"$PROJECT_ROOT"'/bin/v0-watch" --chore --interval 1 2>&1 || true
+        "'"$PROJECT_ROOT"'/bin/v0-watch" --chore --max-iterations 1 2>&1 || true
     '
     refute_output --partial "Unknown option"
 }
@@ -155,7 +155,7 @@ EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"$project_dir"'"
-        timeout 1 "'"$PROJECT_ROOT"'/bin/v0-watch" --merge --interval 1 2>&1 || true
+        "'"$PROJECT_ROOT"'/bin/v0-watch" --merge --max-iterations 1 2>&1 || true
     '
     refute_output --partial "Unknown option"
 }
@@ -166,7 +166,7 @@ EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"$project_dir"'"
-        timeout 1 "'"$PROJECT_ROOT"'/bin/v0-watch" -n 2 2>&1 || true
+        "'"$PROJECT_ROOT"'/bin/v0-watch" -n 2 --max-iterations 1 2>&1 || true
     '
     refute_output --partial "positive integer"
     refute_output --partial "Unknown option"
@@ -178,7 +178,7 @@ EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"$project_dir"'"
-        timeout 1 "'"$PROJECT_ROOT"'/bin/v0-watch" my-feature --interval 1 2>&1 || true
+        "'"$PROJECT_ROOT"'/bin/v0-watch" my-feature --max-iterations 1 2>&1 || true
     '
     refute_output --partial "Unknown option"
 }
@@ -189,7 +189,7 @@ EOF
 
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"$project_dir"'"
-        timeout 1 "'"$PROJECT_ROOT"'/bin/v0-watch" -o my-feature --interval 1 2>&1 || true
+        "'"$PROJECT_ROOT"'/bin/v0-watch" -o my-feature --max-iterations 1 2>&1 || true
     '
     refute_output --partial "Unknown option"
 }

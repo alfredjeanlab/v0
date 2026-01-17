@@ -37,7 +37,7 @@ endif
 
 TEST_FILES := $(wildcard tests/unit/*.bats)
 
-.PHONY: test test-unit test-verbose test-file test-init test-integration test-all lint lint-tests check help license
+.PHONY: test test-unit test-verbose test-file test-init test-integration test-all lint lint-tests check help license test-profile test-fixtures
 
 # Default target
 help:
@@ -46,6 +46,8 @@ help:
 	@echo "  make test JOBS=1     Run tests sequentially"
 	@echo "  make test-verbose    Run tests with verbose output"
 	@echo "  make test-file FILE=tests/unit/foo.bats"
+	@echo "  make test-profile    Run tests and show per-file execution times"
+	@echo "  make test-fixtures   Generate test fixtures (cached git repo)"
 	@echo ""
 	@echo "Linting:"
 	@echo "  make lint            Run ShellCheck on scripts"
@@ -140,3 +142,21 @@ check: lint test-all
 # Add license headers to source files
 license:
 	@scripts/license
+
+# Generate test fixtures (cached git repo, etc.)
+test-fixtures:
+	@if [ ! -f "tests/fixtures/git-repo.tar" ]; then \
+		echo "Generating test fixtures..."; \
+		bash tests/fixtures/create-git-fixture.sh; \
+	fi
+
+# Profile test execution times per file
+test-profile: test-init
+	@echo "Running test profile..."
+	@for f in tests/unit/*.bats; do \
+		start=$$(gdate +%s%N 2>/dev/null || date +%s%N); \
+		BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) "$$f" >/dev/null 2>&1 || true; \
+		end=$$(gdate +%s%N 2>/dev/null || date +%s%N); \
+		ms=$$(( (end - start) / 1000000 )); \
+		printf "%6dms %s\n" "$$ms" "$$f"; \
+	done | sort -rn
