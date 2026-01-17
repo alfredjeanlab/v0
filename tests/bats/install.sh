@@ -6,7 +6,7 @@ set -euo pipefail
 BATS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Versions to install
-BATS_CORE_VERSION="v1.11.0"
+BATS_CORE_VERSION="v1.13.0"
 BATS_SUPPORT_VERSION="v0.3.0"
 BATS_ASSERT_VERSION="v2.1.0"
 

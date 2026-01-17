@@ -3,23 +3,9 @@
 # Get the directory where this Makefile is located (works even if make is run from elsewhere)
 MAKEFILE_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 
-# BATS detection - prefer system install, fall back to local
-SYSTEM_BATS := $(shell command -v bats 2>/dev/null)
-LOCAL_BATS := $(MAKEFILE_DIR)tests/bats/bats-core/bin/bats
-
-ifdef SYSTEM_BATS
-    BATS := $(SYSTEM_BATS)
-    SYSTEM_LIB_PATH := $(shell dirname $(shell dirname $(SYSTEM_BATS)))/lib
-    # Use system libraries if available, otherwise fall back to local
-    ifneq ($(wildcard $(SYSTEM_LIB_PATH)/bats-support/load.bash),)
-        BATS_LIB_PATH := $(SYSTEM_LIB_PATH)
-    else
-        BATS_LIB_PATH := $(MAKEFILE_DIR)tests/bats
-    endif
-else
-    BATS := $(LOCAL_BATS)
-    BATS_LIB_PATH := $(MAKEFILE_DIR)tests/bats
-endif
+# Always use local bats for consistent behavior across environments
+BATS := $(MAKEFILE_DIR)tests/bats/bats-core/bin/bats
+BATS_LIB_PATH := $(MAKEFILE_DIR)tests/bats
 
 TEST_FILES := $(wildcard tests/unit/*.bats)
 
