@@ -164,7 +164,7 @@ is_session_done() {
 
   local state stop_reason has_tool_use
 
-  state=$(get_session_state "${session_file}")
+  state=$(get_session_state "${session_file}") || state=""
   [[ -z "${state}" ]] && return 1  # No state found, assume still active
 
   stop_reason=$(echo "${state}" | jq -r '.stop_reason // empty')

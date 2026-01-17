@@ -141,7 +141,7 @@ nudge_check_cycle() {
 
     # Get latest session file
     local session_file
-    session_file=$(get_latest_session_file "${project_dir}")
+    session_file=$(get_latest_session_file "${project_dir}") || session_file=""
     [[ -z "${session_file}" ]] && continue
 
     # Quick check: is file recently modified?
