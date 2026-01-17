@@ -8,6 +8,10 @@
 #   WORKER_SESSION - tmux session name (e.g., "v0-fix-worker")
 #   POLLING_LOG - polling daemon log file path
 
+# Source nudge-common for session monitoring
+V0_DIR="${V0_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "${V0_DIR}/lib/nudge-common.sh"
+
 # Check if worker tmux session is running
 worker_running() {
   tmux has-session -t "${WORKER_SESSION}" 2>/dev/null
@@ -224,6 +228,12 @@ create_polling_loop() {
   local tree_dir="$1"
   local item_type="$2"
   local polling_log="$3"
+
+  # Ensure nudge worker is running to monitor for idle sessions
+  ensure_nudge_running
+
+  # Write session marker for nudge worker to find this session
+  write_session_marker "${tree_dir}" "${WORKER_SESSION}"
 
   nohup bash -c "
     cd \"${tree_dir}\" || exit 1

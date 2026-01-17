@@ -7,6 +7,9 @@ V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/lib/v0-common.sh"
 v0_load_config
 
+# Source nudge functions for idle session monitoring
+source "${V0_DIR}/lib/nudge-common.sh"
+
 usage() {
   cat <<EOF
 Usage: v0 feature <name> <prompt> [options]
@@ -1028,6 +1031,10 @@ if [[ "\$(jq -r '.merge_queued // false' "\${STATE_FILE}")" = "true" ]]; then
 fi
 WRAPPER
     chmod +x "${TREE_DIR}/.claude/on-complete.sh"
+
+    # Ensure nudge worker is running and write session marker
+    ensure_nudge_running
+    write_session_marker "${TREE_DIR}" "${SESSION}"
 
     tmux new-session -d -s "${SESSION}" -c "${TREE_DIR}" \
       "V0_OP='${NAME}' V0_PLAN_LABEL='plan:${NAME}' V0_WORKTREE='${TREE_DIR}/${REPO_NAME}' V0_ROOT='${V0_ROOT}' claude ${CLAUDE_ARGS} 'Implement the plan. See CLAUDE.md and PLAN.md for details.'; \
