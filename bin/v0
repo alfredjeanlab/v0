@@ -49,6 +49,7 @@ Commands:
   talk          Open claude with haiku model for quick conversations
   coffee        Keep computer awake
   monitor       Monitor worker queues for auto-shutdown
+  self debug    Generate debug report for failed operations
   issue         Alias for 'wk' issue tracker (see 'wk --help')
 
 Options:
@@ -114,6 +115,20 @@ shift
 case "${CMD}" in
   plan|tree|decompose|merge|mergeq|status|watch|feature|fix|chore|attach|cancel|shutdown|startup|talk|coffee|prune|monitor|hold)
     exec "${V0_DIR}/bin/v0-${CMD}" "$@"
+    ;;
+  self-debug)
+    exec "${V0_DIR}/bin/v0-self-debug" "$@"
+    ;;
+  self)
+    # Handle 'v0 self debug ...' -> 'v0-self-debug ...'
+    if [[ "${1:-}" = "debug" ]]; then
+      shift
+      exec "${V0_DIR}/bin/v0-self-debug" "$@"
+    else
+      echo "Unknown self command: ${1:-}" >&2
+      echo "Available: v0 self debug" >&2
+      exit 1
+    fi
     ;;
   # Aliases
   feat)

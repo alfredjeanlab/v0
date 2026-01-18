@@ -1,0 +1,861 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-self-debug - Generate comprehensive debug reports for v0 operations
+#
+# Usage:
+#   v0 self debug <operation-name>   # Debug specific operation
+#   v0 self debug plan               # Debug most recent plan operation
+#   v0 self debug decompose          # Debug most recent decompose failure
+#   v0 self debug fix                # Debug fix worker issues
+#   v0 self debug chore              # Debug chore worker issues
+#   v0 self debug mergeq             # Debug merge queue (includes 'merge')
+#   v0 self debug nudge              # Debug nudge daemon
+#
+# Options:
+#   --output <path>    Custom output path (default: .v0/build/debug/)
+#   --stdout           Print to stdout instead of file
+#   --verbose          Include more verbose logs
+#   --help, -h         Show this help
+
+set -e
+
+# Find v0 installation directory
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "${SOURCE}" ]]; do
+    DIR="$(cd -P "$(dirname "${SOURCE}")" && pwd)"
+    SOURCE="$(readlink "${SOURCE}")"
+    [[ ${SOURCE} != /* ]] && SOURCE="${DIR}/${SOURCE}"
+done
+V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
+
+# Load common libraries
+source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/lib/debug-common.sh"
+
+# ============================================================================
+# Help
+# ============================================================================
+
+show_help() {
+    cat <<'EOF'
+v0 self debug - Generate comprehensive debug reports for v0 operations
+
+Usage:
+  v0 self debug <operation-name>   Debug specific operation by name
+  v0 self debug plan               Debug most recent plan operation
+  v0 self debug decompose          Debug most recent decompose failure
+  v0 self debug fix                Debug fix worker issues
+  v0 self debug chore              Debug chore worker issues
+  v0 self debug mergeq             Debug merge queue daemon
+  v0 self debug merge              Alias for mergeq
+  v0 self debug nudge              Debug nudge daemon
+
+Options:
+  --output <path>    Write report to custom path (default: .v0/build/debug/)
+  --stdout           Print report to stdout instead of file
+  --verbose          Include more verbose logs
+  --help, -h         Show this help
+
+Examples:
+  v0 self debug my-feature         # Debug a specific feature operation
+  v0 self debug fix --stdout       # Print fix worker debug to stdout
+  v0 self debug plan --verbose     # Verbose debug of recent plan
+
+The debug report includes:
+  - Operation state (state.json)
+  - Operation logs (feature.log, events.log)
+  - Git state (main repo and worktree)
+  - Merge queue state (if relevant)
+  - Related/dependent operations
+EOF
+}
+
+# ============================================================================
+# Argument Parsing
+# ============================================================================
+
+OUTPUT_PATH=""
+STDOUT_MODE=false
+VERBOSE=false
+TARGET=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --output)
+            OUTPUT_PATH="$2"
+            shift 2
+            ;;
+        --stdout)
+            STDOUT_MODE=true
+            shift
+            ;;
+        --verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            echo "Run 'v0 self debug --help' for usage" >&2
+            exit 1
+            ;;
+        *)
+            if [[ -z "${TARGET}" ]]; then
+                TARGET="$1"
+            else
+                echo "Unexpected argument: $1" >&2
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Require a target
+if [[ -z "${TARGET}" ]]; then
+    echo "Error: No operation specified" >&2
+    echo "" >&2
+    echo "Usage: v0 self debug <operation-name|type>" >&2
+    echo "Run 'v0 self debug --help' for more options" >&2
+    exit 1
+fi
+
+# Load project configuration
+v0_load_config
+
+# ============================================================================
+# Target Resolution
+# ============================================================================
+
+# Resolve special targets to actual operation names
+resolve_target() {
+    local target="$1"
+
+    case "${target}" in
+        plan)
+            # Find most recent plan-type operation
+            # Use || true to prevent set -e from exiting on failure
+            find_most_recent_by_type "plan" || true
+            ;;
+        decompose)
+            # Find most recent operation in decomposing phase
+            find_most_recent_by_phase "decomposing" || true
+            ;;
+        merge)
+            # Alias for mergeq
+            echo "mergeq"
+            ;;
+        fix|chore|mergeq|nudge)
+            # Worker/daemon types - return as-is
+            echo "${target}"
+            ;;
+        *)
+            # Assume it's an operation name
+            echo "${target}"
+            ;;
+    esac
+}
+
+RESOLVED_TARGET=$(resolve_target "${TARGET}")
+
+if [[ -z "${RESOLVED_TARGET}" ]]; then
+    echo "Error: Could not find operation for '${TARGET}'" >&2
+    echo "" >&2
+    echo "No matching operations found. Use 'v0 status' to list operations." >&2
+    exit 1
+fi
+
+# ============================================================================
+# Debug Report Generation
+# ============================================================================
+
+# Generate debug report for a named operation
+generate_operation_report() {
+    local op_name="$1"
+    local op_dir="${BUILD_DIR}/operations/${op_name}"
+    local state_file="${op_dir}/state.json"
+
+    # Check operation exists
+    if [[ ! -d "${op_dir}" ]]; then
+        echo "Error: Operation not found: ${op_name}" >&2
+        echo "" >&2
+        echo "No operation directory at: ${op_dir}" >&2
+        echo "Use 'v0 status' to list available operations." >&2
+        return 1
+    fi
+
+    # Extract state info
+    local type="unknown" phase="unknown" status="unknown"
+    if [[ -f "${state_file}" ]]; then
+        type=$(jq -r '.type // "unknown"' "${state_file}")
+        phase=$(jq -r '.phase // "unknown"' "${state_file}")
+        status=$(jq -r '.status // "unknown"' "${state_file}")
+    fi
+
+    # Find worktree if exists
+    local worktree_dir
+    worktree_dir=$(find_worktree_path "${op_name}")
+
+    # Generate report
+    generate_frontmatter "${op_name}" "${type}" "${phase}" "${status}"
+    echo ""
+    generate_summary "${op_name}" "${state_file}"
+    echo ""
+    echo "---"
+    echo "<!-- section: operation-state -->"
+    generate_operation_state "${state_file}"
+    echo ""
+    echo "---"
+    echo "<!-- section: operation-logs -->"
+    generate_operation_logs "${op_dir}" "${VERBOSE}"
+    echo ""
+    echo "---"
+    echo "<!-- section: git-state -->"
+    generate_git_state "${V0_ROOT}" "${worktree_dir}"
+
+    # Conditional sections
+    if should_include_merge_context "${op_name}"; then
+        echo ""
+        echo "---"
+        echo "<!-- section: merge-queue -->"
+        generate_merge_queue_state
+    fi
+
+    if has_dependencies "${op_name}"; then
+        echo ""
+        echo "---"
+        echo "<!-- section: related-operations -->"
+        generate_dependency_context "${op_name}"
+    fi
+
+    # v0.log entries filtered to this operation
+    echo ""
+    echo "---"
+    echo "<!-- section: v0-log -->"
+    generate_v0_log_context "${op_name}"
+
+    # Claude session log if operation has an active tmux session
+    local worktree_session_log
+    worktree_session_log=$(find_operation_session_log "${op_name}")
+    if [[ -n "${worktree_session_log}" ]]; then
+        echo ""
+        echo "---"
+        echo "<!-- section: session-log -->"
+        echo "## Claude Session Log"
+        echo ""
+        include_log_file "${worktree_session_log}" 100 "Claude session log"
+    fi
+
+    if [[ "${VERBOSE}" = "true" ]]; then
+        echo ""
+        echo "---"
+        echo "<!-- section: verbose-logs -->"
+        generate_verbose_logs
+    fi
+}
+
+# Generate debug report for fix worker
+generate_fix_worker_report() {
+    generate_frontmatter "fix-worker" "worker" "polling" "active"
+    echo ""
+    echo "# Debug Report: Fix Worker"
+    echo ""
+    echo "## Summary"
+    echo ""
+    echo "Debug information for the \`fix\` worker process."
+    echo ""
+    echo "---"
+    echo "<!-- section: worker-state -->"
+    echo "## Fix Worker State"
+    echo ""
+    generate_worker_state "fix"
+    echo ""
+    echo "---"
+    echo "<!-- section: git-state -->"
+    generate_git_state "${V0_ROOT}"
+}
+
+# Generate debug report for chore worker
+generate_chore_worker_report() {
+    generate_frontmatter "chore-worker" "worker" "polling" "active"
+    echo ""
+    echo "# Debug Report: Chore Worker"
+    echo ""
+    echo "## Summary"
+    echo ""
+    echo "Debug information for the \`chore\` worker process."
+    echo ""
+    echo "---"
+    echo "<!-- section: worker-state -->"
+    echo "## Chore Worker State"
+    echo ""
+    generate_worker_state "chore"
+    echo ""
+    echo "---"
+    echo "<!-- section: git-state -->"
+    generate_git_state "${V0_ROOT}"
+}
+
+# Generate debug report for merge queue daemon
+generate_mergeq_report() {
+    generate_frontmatter "mergeq-daemon" "daemon" "running" "active"
+    echo ""
+    echo "# Debug Report: Merge Queue"
+    echo ""
+    echo "## Summary"
+    echo ""
+    echo "Debug information for the \`mergeq\` daemon."
+    echo ""
+    echo "---"
+    echo "<!-- section: merge-queue -->"
+    generate_merge_queue_state
+    echo ""
+    echo "---"
+    echo "<!-- section: operations-in-merge -->"
+    generate_merge_phase_operations
+    echo ""
+    echo "---"
+    echo "<!-- section: daemon-logs -->"
+    echo "## Daemon Logs"
+    echo ""
+    local daemon_log="${BUILD_DIR}/mergeq/logs/daemon.log"
+    include_log_file "${daemon_log}" 100 "daemon log"
+    echo ""
+    echo "---"
+    echo "<!-- section: git-state -->"
+    generate_git_state "${V0_ROOT}"
+    echo ""
+    echo "---"
+    echo "<!-- section: merge-branches -->"
+    generate_merge_branch_state
+}
+
+# Generate debug report for nudge daemon
+generate_nudge_report() {
+    generate_frontmatter "nudge-daemon" "daemon" "running" "active"
+    echo ""
+    echo "# Debug Report: Nudge Daemon"
+    echo ""
+    echo "## Summary"
+    echo ""
+    echo "Debug information for the \`nudge\` daemon."
+    echo ""
+    echo "---"
+    echo "<!-- section: daemon-state -->"
+    echo "## Nudge Daemon State"
+    echo ""
+    generate_nudge_state
+    echo ""
+    echo "---"
+    echo "<!-- section: git-state -->"
+    generate_git_state "${V0_ROOT}"
+}
+
+# Generate worker state section
+# Usage: generate_worker_state <type>
+generate_worker_state() {
+    local type="$1"
+    local worker_dir="${V0_STATE_DIR}/tree/v0-${type}-worker"
+    local polling_log="/tmp/v0-${PROJECT}-${type}-polling.log"
+
+    echo "### Process Info"
+    echo ""
+    echo '```'
+
+    # Check for worker PID
+    local pid_file="${worker_dir}/.worker-pid"
+    if [[ -f "${pid_file}" ]]; then
+        local pid
+        pid=$(cat "${pid_file}")
+        echo "PID file: ${pid_file}"
+        echo "PID: ${pid}"
+        if kill -0 "${pid}" 2>/dev/null; then
+            echo "Status: running"
+        else
+            echo "Status: not running (stale PID)"
+        fi
+    else
+        echo "PID file: not found"
+        echo "Status: unknown"
+    fi
+
+    echo '```'
+    echo ""
+
+    # Backoff state from control files
+    echo "### Backoff State"
+    echo ""
+    echo '```'
+    if [[ -f "${worker_dir}/.worker-error" ]]; then
+        echo "Error flag: SET (worker will enter backoff on next poll)"
+    else
+        echo "Error flag: not set"
+    fi
+    if [[ -f "${worker_dir}/.worker-crash-alert" ]]; then
+        echo "Crash alert: SET (worker crashed without progress)"
+    else
+        echo "Crash alert: not set"
+    fi
+    if [[ -f "${worker_dir}/.done-exit" ]]; then
+        echo "Done exit: SET (clean shutdown requested)"
+    else
+        echo "Done exit: not set"
+    fi
+    # Parse backoff from polling log (look for most recent backoff line)
+    if [[ -f "${polling_log}" ]]; then
+        local backoff_line
+        backoff_line=$(grep -E "Backing off for [0-9]+s" "${polling_log}" 2>/dev/null | tail -1)
+        if [[ -n "${backoff_line}" ]]; then
+            echo "Last backoff: ${backoff_line}"
+        else
+            echo "Backoff: none (normal operation)"
+        fi
+    fi
+    echo '```'
+    echo ""
+
+    # Worker directory state
+    if [[ -d "${worker_dir}" ]]; then
+        echo "### Worker Directory"
+        echo ""
+        echo '```'
+        echo "Path: ${worker_dir}"
+        ls -la "${worker_dir}" 2>/dev/null || echo "(directory listing failed)"
+        echo '```'
+        echo ""
+
+        # Git branch info
+        if [[ -f "${worker_dir}/.worker-branch" ]]; then
+            echo "### Worker Branch"
+            echo ""
+            echo '```'
+            echo "Branch: $(cat "${worker_dir}/.worker-branch")"
+            if [[ -f "${worker_dir}/.worker-git-dir" ]]; then
+                echo "Git dir: $(cat "${worker_dir}/.worker-git-dir")"
+            fi
+            echo '```'
+            echo ""
+        fi
+    fi
+
+    # Polling log
+    echo "### Polling Log"
+    echo ""
+    include_log_file "${polling_log}" 50 "polling log"
+    echo ""
+
+    # Worker's claude-worker.log if exists
+    local claude_log="${worker_dir}/claude-worker.log"
+    if [[ -f "${claude_log}" ]]; then
+        echo "### Claude Worker Log"
+        echo ""
+        include_log_file "${claude_log}" 100 "claude worker log"
+        echo ""
+    fi
+
+    # Worker's claude-worker.log.error if exists
+    local error_log="${worker_dir}/claude-worker.log.error"
+    if [[ -f "${error_log}" ]] && [[ -s "${error_log}" ]]; then
+        echo "### Claude Worker Error Log"
+        echo ""
+        include_log_file "${error_log}" 50 "error log"
+        echo ""
+    fi
+
+    # wk list output
+    echo "### Issue Queue (wk list)"
+    echo ""
+    echo '```'
+    if command -v wk &>/dev/null && [[ -d "${V0_ROOT}/.wok" ]]; then
+        (cd "${V0_ROOT}" && wk list --label "${type}" 2>/dev/null) || echo "(wk list failed)"
+    else
+        echo "(wk not available or not initialized)"
+    fi
+    echo '```'
+}
+
+# Generate section showing operations in merge phase
+generate_merge_phase_operations() {
+    echo "## Operations in Merge Phase"
+    echo ""
+
+    local ops_dir="${BUILD_DIR}/operations"
+    if [[ ! -d "${ops_dir}" ]]; then
+        echo "*No operations directory found*"
+        return
+    fi
+
+    local found_any=false
+    for state_file in "${ops_dir}"/*/state.json; do
+        [[ -f "${state_file}" ]] || continue
+
+        local phase
+        phase=$(jq -r '.phase // ""' "${state_file}")
+
+        # Check if in merge-related phase
+        if [[ "${phase}" = "merging" ]] || [[ "${phase}" = "merge" ]] || [[ "${phase}" = "merge_queued" ]]; then
+            found_any=true
+            local op_name status
+            op_name=$(jq -r '.name' "${state_file}")
+            status=$(jq -r '.status // "unknown"' "${state_file}")
+
+            echo "### ${op_name}"
+            echo ""
+            echo "- Phase: \`${phase}\`"
+            echo "- Status: \`${status}\`"
+            echo ""
+            echo '```json'
+            jq '.' "${state_file}" 2>/dev/null || cat "${state_file}"
+            echo '```'
+            echo ""
+        fi
+    done
+
+    if [[ "${found_any}" = "false" ]]; then
+        echo "*No operations currently in merge phase*"
+    fi
+}
+
+# Generate git state for branches being merged
+generate_merge_branch_state() {
+    echo "## Merge Branch State"
+    echo ""
+
+    local queue_file="${BUILD_DIR}/mergeq/queue.json"
+    if [[ ! -f "${queue_file}" ]]; then
+        echo "*No queue.json - cannot determine branches*"
+        return
+    fi
+
+    # Get branches from queue entries
+    local branches
+    branches=$(jq -r '.entries[]? | .branch // empty' "${queue_file}" 2>/dev/null)
+
+    if [[ -z "${branches}" ]]; then
+        echo "*No branches in queue*"
+        return
+    fi
+
+    echo '```'
+    while IFS= read -r branch; do
+        [[ -z "${branch}" ]] && continue
+        echo "# Branch: ${branch}"
+
+        # Check if branch exists
+        if git -C "${V0_ROOT}" rev-parse --verify "${branch}" &>/dev/null; then
+            echo "# git log --oneline -3 ${branch}"
+            git -C "${V0_ROOT}" log --oneline -3 "${branch}" 2>/dev/null || echo "(git log failed)"
+            echo ""
+            echo "# Diff from main to ${branch}:"
+            local diff_stat
+            diff_stat=$(git -C "${V0_ROOT}" diff --stat "main...${branch}" 2>/dev/null | tail -5)
+            echo "${diff_stat:-"(no differences or error)"}"
+        else
+            echo "(branch not found locally)"
+        fi
+        echo ""
+    done <<< "${branches}"
+    echo '```'
+}
+
+# Generate merge queue state section
+generate_merge_queue_state() {
+    local queue_file="${BUILD_DIR}/mergeq/queue.json"
+
+    echo "## Merge Queue State"
+    echo ""
+
+    if [[ -f "${queue_file}" ]]; then
+        echo "### queue.json"
+        echo ""
+        echo '```json'
+        jq '.' "${queue_file}" 2>/dev/null || cat "${queue_file}"
+        echo '```'
+    else
+        echo "*No queue.json found*"
+    fi
+
+    # Daemon PID
+    local pid_file="${BUILD_DIR}/mergeq/daemon.pid"
+    echo ""
+    echo "### Daemon Process"
+    echo ""
+    echo '```'
+    if [[ -f "${pid_file}" ]]; then
+        local pid
+        pid=$(cat "${pid_file}")
+        echo "PID file: ${pid_file}"
+        echo "PID: ${pid}"
+        if kill -0 "${pid}" 2>/dev/null; then
+            echo "Status: running"
+        else
+            echo "Status: not running (stale PID)"
+        fi
+    else
+        echo "PID file: not found"
+        echo "Status: unknown"
+    fi
+    echo '```'
+}
+
+# Generate nudge daemon state
+generate_nudge_state() {
+    local nudge_log="${V0_ROOT}/.nudge.log"
+
+    echo "### Nudge Log"
+    echo ""
+    include_log_file "${nudge_log}" 100 "nudge log"
+    echo ""
+
+    echo "### Active Tmux Sessions"
+    echo ""
+    echo '```'
+    local sessions=""
+    if command -v tmux &>/dev/null; then
+        sessions=$(tmux list-sessions 2>/dev/null | grep -E "^v0-${PROJECT}" || true)
+        if [[ -n "${sessions}" ]]; then
+            echo "${sessions}"
+        else
+            echo "(no v0 sessions found)"
+        fi
+    else
+        echo "(tmux not available)"
+    fi
+    echo '```'
+    echo ""
+
+    # Claude session logs from worktrees
+    echo "### Claude Session Logs"
+    echo ""
+
+    local tree_dir="${V0_STATE_DIR}/tree"
+    if [[ -d "${tree_dir}" ]]; then
+        local found_any=false
+        for session_dir in "${tree_dir}"/*; do
+            [[ -d "${session_dir}" ]] || continue
+
+            # Look for .tmux-session marker
+            if [[ -f "${session_dir}/.tmux-session" ]]; then
+                local session_name
+                session_name=$(cat "${session_dir}/.tmux-session")
+
+                # Check for claude logs
+                local claude_log="${session_dir}/claude-worker.log"
+                if [[ -f "${claude_log}" ]]; then
+                    found_any=true
+                    echo "#### ${session_name}"
+                    echo ""
+                    echo "Path: \`${session_dir}\`"
+                    echo ""
+                    include_log_file "${claude_log}" 30 "session log"
+                    echo ""
+                fi
+            fi
+        done
+
+        # Also check feature subdirectory
+        for session_dir in "${tree_dir}"/feature/*; do
+            [[ -d "${session_dir}" ]] || continue
+
+            if [[ -f "${session_dir}/.tmux-session" ]]; then
+                local session_name
+                session_name=$(cat "${session_dir}/.tmux-session")
+
+                local claude_log="${session_dir}/claude-worker.log"
+                if [[ -f "${claude_log}" ]]; then
+                    found_any=true
+                    echo "#### ${session_name}"
+                    echo ""
+                    echo "Path: \`${session_dir}\`"
+                    echo ""
+                    include_log_file "${claude_log}" 30 "session log"
+                    echo ""
+                fi
+            fi
+        done
+
+        if [[ "${found_any}" = "false" ]]; then
+            echo "*No Claude session logs found*"
+        fi
+    else
+        echo "*No tree directory found*"
+    fi
+}
+
+# Generate dependency context section
+generate_dependency_context() {
+    local op_name="$1"
+    local dep_name
+    dep_name=$(get_dependency "${op_name}")
+
+    echo "## Related Operations"
+    echo ""
+
+    if [[ -z "${dep_name}" ]]; then
+        echo "*No dependencies found*"
+        return
+    fi
+
+    echo "This operation depends on: **${dep_name}**"
+    echo ""
+
+    local dep_state="${BUILD_DIR}/operations/${dep_name}/state.json"
+    if [[ -f "${dep_state}" ]]; then
+        echo "### Dependency State: ${dep_name}"
+        echo ""
+        echo '```json'
+        jq '.' "${dep_state}" 2>/dev/null || cat "${dep_state}"
+        echo '```'
+    else
+        echo "*Dependency state not found*"
+    fi
+}
+
+# Generate v0.log entries filtered to a specific operation
+# Usage: generate_v0_log_context <op_name>
+generate_v0_log_context() {
+    local op_name="$1"
+    local v0_log="${BUILD_DIR}/logs/v0.log"
+
+    echo "## v0.log Context"
+    echo ""
+
+    if [[ ! -f "${v0_log}" ]]; then
+        echo "*No v0.log found*"
+        return
+    fi
+
+    # Filter log entries mentioning this operation
+    local filtered
+    filtered=$(grep -E "(^|\s)${op_name}(\s|$|:)" "${v0_log}" 2>/dev/null | tail -50)
+
+    if [[ -n "${filtered}" ]]; then
+        echo "Log entries mentioning \`${op_name}\` (last 50):"
+        echo ""
+        echo '```'
+        echo "${filtered}"
+        echo '```'
+    else
+        echo "*No log entries found mentioning \`${op_name}\`*"
+        echo ""
+        echo "Recent v0.log entries (last 20):"
+        echo ""
+        include_log_file "${v0_log}" 20 "v0.log"
+    fi
+}
+
+# Find Claude session log for an operation
+# Usage: find_operation_session_log <op_name>
+# Returns path to claude-worker.log if found, empty otherwise
+find_operation_session_log() {
+    local op_name="$1"
+
+    # Check if operation has a worktree
+    local worktree_dir
+    worktree_dir=$(find_worktree_path "${op_name}")
+
+    if [[ -z "${worktree_dir}" ]]; then
+        return
+    fi
+
+    # Look for claude-worker.log or similar session logs
+    local session_log="${worktree_dir}/claude-worker.log"
+    if [[ -f "${session_log}" ]]; then
+        echo "${session_log}"
+        return
+    fi
+
+    # Check for operation-specific log in the worktree
+    local op_log="${worktree_dir}/logs/claude.log"
+    if [[ -f "${op_log}" ]]; then
+        echo "${op_log}"
+        return
+    fi
+
+    # Check in state directory
+    local state_dir="${V0_STATE_DIR}/tree/feature/${op_name}"
+    if [[ -f "${state_dir}/claude-worker.log" ]]; then
+        echo "${state_dir}/claude-worker.log"
+        return
+    fi
+}
+
+# Generate verbose logs section
+generate_verbose_logs() {
+    echo "## Verbose Logs"
+    echo ""
+
+    # v0.log entries
+    local v0_log="${BUILD_DIR}/logs/v0.log"
+    if [[ -f "${v0_log}" ]]; then
+        echo "### v0.log (last 50 lines)"
+        echo ""
+        include_log_file "${v0_log}" 50 "v0.log"
+        echo ""
+    fi
+
+    # trace.log if exists
+    local trace_log="${BUILD_DIR}/logs/trace.log"
+    if [[ -f "${trace_log}" ]]; then
+        echo "### trace.log (last 100 lines)"
+        echo ""
+        include_log_file "${trace_log}" 100 "trace.log"
+        echo ""
+    fi
+}
+
+# ============================================================================
+# Main Report Generation
+# ============================================================================
+
+generate_report() {
+    local target="$1"
+
+    case "${target}" in
+        fix)
+            generate_fix_worker_report
+            ;;
+        chore)
+            generate_chore_worker_report
+            ;;
+        mergeq)
+            generate_mergeq_report
+            ;;
+        nudge)
+            generate_nudge_report
+            ;;
+        *)
+            generate_operation_report "${target}"
+            ;;
+    esac
+}
+
+# ============================================================================
+# Output Handling
+# ============================================================================
+
+if [[ "${STDOUT_MODE}" = "true" ]]; then
+    # Print to stdout
+    generate_report "${RESOLVED_TARGET}"
+else
+    # Write to file
+    if [[ -z "${OUTPUT_PATH}" ]]; then
+        # Default output path
+        debug_dir="${BUILD_DIR}/debug"
+        mkdir -p "${debug_dir}"
+        timestamp=$(date '+%Y%m%d-%H%M%S')
+        OUTPUT_PATH="${debug_dir}/${timestamp}-${RESOLVED_TARGET}.md"
+    fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "${OUTPUT_PATH}")"
+
+    # Generate report
+    generate_report "${RESOLVED_TARGET}" > "${OUTPUT_PATH}"
+
+    echo "Debug report generated: ${OUTPUT_PATH}"
+fi
