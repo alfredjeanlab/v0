@@ -36,7 +36,10 @@ nudge_running() {
   fi
 
   # Fallback to pgrep
-  pgrep -f "v0-nudge.*daemon" > /dev/null 2>&1
+  if pgrep -f "v0-nudge.*daemon" > /dev/null 2>&1; then
+    return 0
+  fi
+  return 1
 }
 
 # Start nudge worker if not running
