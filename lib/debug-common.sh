@@ -501,3 +501,27 @@ get_dependency() {
 
     jq -r '.after // empty' "${state_file}"
 }
+
+# ============================================================================
+# Status Output Functions
+# ============================================================================
+
+# Generate v0 status output section
+# This should be included in all debug reports for a quick overview
+# Usage: generate_v0_status_output
+generate_v0_status_output() {
+    echo "## v0 Status"
+    echo ""
+    echo '```'
+    if command -v v0 &>/dev/null; then
+        v0 status 2>&1 || echo "(v0 status failed)"
+    else
+        # Try calling v0 from V0_INSTALL_DIR if not in PATH
+        if [[ -n "${V0_INSTALL_DIR:-}" ]] && [[ -x "${V0_INSTALL_DIR}/bin/v0" ]]; then
+            "${V0_INSTALL_DIR}/bin/v0" status 2>&1 || echo "(v0 status failed)"
+        else
+            echo "(v0 command not available)"
+        fi
+    fi
+    echo '```'
+}
