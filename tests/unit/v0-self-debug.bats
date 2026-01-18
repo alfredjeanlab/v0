@@ -324,11 +324,11 @@ update_operation_state() {
     refute_output --partial "Debug report generated:"
 }
 
-@test "v0-self-debug: --verbose includes more logs" {
+@test "v0-self-debug: verbose logs always included" {
     create_mock_operation "test-feature" "feature" "init" "running"
     echo "[$(date)] test-feature: test entry" > "${TEST_TEMP_DIR}/project/.v0/build/logs/v0.log"
 
-    run "${V0_SELF_DEBUG}" test-feature --verbose --stdout
+    run "${V0_SELF_DEBUG}" test-feature --stdout
     assert_success
     assert_output --partial "## Verbose Logs"
 }

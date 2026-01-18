@@ -15,7 +15,6 @@
 # Options:
 #   --output <path>    Custom output path (default: .v0/build/debug/)
 #   --stdout           Print to stdout instead of file
-#   --verbose          Include more verbose logs
 #   --help, -h         Show this help
 
 set -e
@@ -54,13 +53,12 @@ Usage:
 Options:
   --output <path>    Write report to custom path (default: .v0/build/debug/)
   --stdout           Print report to stdout instead of file
-  --verbose          Include more verbose logs
   --help, -h         Show this help
 
 Examples:
   v0 self debug my-feature         # Debug a specific feature operation
   v0 self debug fix --stdout       # Print fix worker debug to stdout
-  v0 self debug plan --verbose     # Verbose debug of recent plan
+  v0 self debug plan               # Debug most recent plan operation
 
 The debug report includes:
   - Operation state (state.json)
@@ -77,7 +75,7 @@ EOF
 
 OUTPUT_PATH=""
 STDOUT_MODE=false
-VERBOSE=false
+VERBOSE=true
 TARGET=""
 
 while [[ $# -gt 0 ]]; do
@@ -92,10 +90,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --stdout)
             STDOUT_MODE=true
-            shift
-            ;;
-        --verbose)
-            VERBOSE=true
             shift
             ;;
         -*)
