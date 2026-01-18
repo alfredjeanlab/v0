@@ -542,12 +542,12 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
 
     found_any=1
 
-    # Check if session is running (if local) - uses batched all_sessions
+    # Check if session is running - uses batched all_sessions
+    # Note: all_sessions only contains LOCAL tmux sessions, so if we find a match,
+    # it's definitely running locally regardless of the machine field in state.json
     status_icon=""
-    if [[ -n "${session}" ]]; then
-      if [[ "${machine}" = "${local_machine}" ]] && [[ "${all_sessions}" == *"${session}"* ]]; then
-        status_icon=" ${C_CYAN}[active]${C_RESET}"
-      fi
+    if [[ -n "${session}" ]] && [[ "${all_sessions}" == *"${session}"* ]]; then
+      status_icon=" ${C_CYAN}[active]${C_RESET}"
     fi
     # Check if background worker is running
     if [[ -z "${status_icon}" ]] && [[ -n "${worker_pid}" ]] && [[ "${worker_pid}" != "null" ]]; then
