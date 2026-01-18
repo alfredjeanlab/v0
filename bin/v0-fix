@@ -649,6 +649,10 @@ case "${1:-}" in
     # Handle 'v0 fix attach' as alias for 'v0 attach fix'
     exec "${SCRIPT_DIR}/v0-attach" fix
     ;;
+  status)
+    # Auto-correct 'v0 fix status' to 'v0 fix --status'
+    show_status
+    ;;
   *)
     report_bug "$@"
     ;;

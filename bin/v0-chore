@@ -597,6 +597,10 @@ case "${1:-}" in
     # Handle 'v0 chore attach' as alias for 'v0 attach chore'
     exec "${SCRIPT_DIR}/v0-attach" chore
     ;;
+  status)
+    # Auto-correct 'v0 chore status' to 'v0 chore --status'
+    show_status
+    ;;
   *)
     report_chore "$@"
     ;;
