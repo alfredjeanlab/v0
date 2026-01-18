@@ -124,5 +124,5 @@ v0 feature {name} --resume
 
 ## Source Files
 
-- `bin/v0-feature:617-1043` — Phase execution
+- `bin/v0-feature:646-1095` — Phase execution
 - `lib/hooks/stop-feature.sh` — Completion validation

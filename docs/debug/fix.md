@@ -129,5 +129,5 @@ wk done {id}
 
 ## Source Files
 
-- `bin/v0-fix:230-329` — new-branch, fixed scripts
-- `lib/worker-common.sh:223-384` — Polling loop
+- `bin/v0-fix:164-339` — new-branch, fixed scripts
+- `lib/worker-common.sh:227-394` — Polling loop

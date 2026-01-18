@@ -30,7 +30,7 @@ wk new chore "desc"            v0 chore --start
                   │ [FAIL: Chore incomplete → stop hook blocks]
                   ▼
            ┌──────────────┐
-           │  done called │  Claude calls: done {id}
+           │ fixed called │  Claude calls: fixed {id}
            └──────┬───────┘
                   │
      ┌────────────┼────────────┐
@@ -129,5 +129,5 @@ wk done {id}
 
 ## Source Files
 
-- `bin/v0-chore` — Chore workflow (mirrors fix structure)
-- `lib/worker-common.sh:223-384` — Polling loop
+- `bin/v0-chore:164-287` — new-branch, fixed scripts
+- `lib/worker-common.sh:227-394` — Polling loop

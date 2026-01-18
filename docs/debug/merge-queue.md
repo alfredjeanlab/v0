@@ -26,7 +26,6 @@ ENTRY STATES:
                      │   - worktree exists
                      │   - tmux session exited
                      │   - all issues closed
-                     │   - no uncommitted changes
                      ▼
                 processing
                      │
@@ -182,6 +181,6 @@ rm BUILD_DIR/.merge.lock
 
 ## Source Files
 
-- `bin/v0-mergeq:752-898` — Merge processing
-- `bin/v0-mergeq:462-513` — Readiness checks (is_merge_ready)
-- `bin/v0-mergeq:942-1080` — Daemon loop
+- `bin/v0-mergeq:804-946` — Merge processing
+- `bin/v0-mergeq:475-523` — Readiness checks (is_merge_ready)
+- `bin/v0-mergeq:991-1129` — Daemon loop
