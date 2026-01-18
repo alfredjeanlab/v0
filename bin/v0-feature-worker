@@ -281,6 +281,19 @@ EOF
     emit_event "plan:copied" "Copied from ${PLAN_FOUND} to main repo"
   fi
 
+  # Auto-commit the plan file (unless already committed or worktree is dirty with other changes)
+  if git -C "${V0_ROOT}" diff --quiet -- "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null && \
+     git -C "${V0_ROOT}" ls-files --error-unmatch "${V0_PLANS_DIR}/${NAME}.md" &>/dev/null; then
+    emit_event "plan:commit" "Already committed"
+  elif git -C "${V0_ROOT}" check-ignore -q "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+    emit_event "plan:commit" "Skipped (gitignored)"
+  elif git -C "${V0_ROOT}" add "${V0_PLANS_DIR}/${NAME}.md" && \
+       git -C "${V0_ROOT}" commit -m "Add plan: ${NAME}" -m "Auto-committed by v0 feature"; then
+    emit_event "plan:commit" "Committed ${V0_PLANS_DIR}/${NAME}.md"
+  else
+    emit_event "plan:commit" "Failed to commit (worktree may have other changes)"
+  fi
+
   rm -f "${STATE_DIR}/done"
 
   update_state "plan_file" "\"${V0_PLANS_DIR}/${NAME}.md\""
