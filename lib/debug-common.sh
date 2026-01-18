@@ -76,6 +76,7 @@ generate_operation_state() {
 }
 
 # Include a log file safely (with truncation for large files)
+# Filters out debug report frontmatter to avoid recursive inclusion of tmux captures
 # Usage: include_log_file <log_file> [max_lines] [label]
 include_log_file() {
     local log_file="$1"
@@ -93,11 +94,17 @@ include_log_file() {
     echo '```'
     if (( line_count > max_lines )); then
         echo "# [Truncated: showing last ${max_lines} of ${line_count} lines]"
-        tail -n "${max_lines}" "${log_file}"
+        tail -n "${max_lines}" "${log_file}" | filter_debug_frontmatter
     else
-        cat "${log_file}"
+        filter_debug_frontmatter < "${log_file}"
     fi
     echo '```'
+}
+
+# Filter out debug report YAML frontmatter from log content
+# This prevents tmux captures containing debug output from being included in logs
+filter_debug_frontmatter() {
+    grep -v -E '^(---|v0-debug-report:|operation:|type:|phase:|status:|machine:|generated_at:)' 2>/dev/null || cat
 }
 
 # Generate operation logs section

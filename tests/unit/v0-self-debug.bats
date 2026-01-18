@@ -425,3 +425,60 @@ update_operation_state() {
     assert_output --partial "<!-- section: operation-logs -->"
     assert_output --partial "<!-- section: git-state -->"
 }
+
+# ============================================================================
+# Log Filtering Tests
+# ============================================================================
+
+@test "v0-self-debug: filters debug report frontmatter from logs" {
+    create_mock_operation "test-op" "feature" "building" "running"
+    local logs_dir="${TEST_TEMP_DIR}/project/.v0/build/operations/test-op/logs"
+
+    # Create a log that contains debug report frontmatter (simulating tmux capture)
+    cat > "${logs_dir}/feature.log" <<'EOF'
+Normal log line 1
+---
+v0-debug-report: true
+operation: old-debug
+type: unknown
+phase: unknown
+status: unknown
+machine: test-machine
+generated_at: 2026-01-18T00:00:00Z
+---
+Normal log line 2
+EOF
+
+    run "${V0_SELF_DEBUG}" test-op --stdout
+    assert_success
+    # Should contain normal log lines
+    assert_output --partial "Normal log line 1"
+    assert_output --partial "Normal log line 2"
+    # Should NOT contain debug report frontmatter from the log
+    refute_output --partial "v0-debug-report: true"$'\n'"operation: old-debug"
+}
+
+@test "v0-self-debug: filter_debug_frontmatter removes frontmatter lines" {
+    source "${PROJECT_ROOT}/lib/v0-common.sh"
+    source "${PROJECT_ROOT}/lib/debug-common.sh"
+
+    local input="Normal line
+---
+v0-debug-report: true
+operation: test
+type: feature
+phase: building
+status: running
+machine: localhost
+generated_at: 2026-01-18T00:00:00Z
+---
+Another normal line"
+
+    local filtered
+    filtered=$(echo "${input}" | filter_debug_frontmatter)
+
+    [[ "${filtered}" == *"Normal line"* ]]
+    [[ "${filtered}" == *"Another normal line"* ]]
+    [[ "${filtered}" != *"v0-debug-report:"* ]]
+    [[ "${filtered}" != *"operation: test"* ]]
+}
