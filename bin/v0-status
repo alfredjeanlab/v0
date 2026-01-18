@@ -584,41 +584,42 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
           merge_icon=""
         elif [[ "${merge_queued}" = "true" ]]; then
           display_phase="${C_GREEN}completed${C_RESET}"
-          if [[ "${merge_status}" = "merged" ]]; then
-            merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
-          elif [[ "${merge_status}" = "conflict" ]]; then
-            merge_icon=" ${C_RED}${C_BOLD}(== CONFLICT ==)${C_RESET}"
-          elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
-            # merged_at timestamp exists, so merge succeeded even if merge_status wasn't set
-            merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
-          else
-            queue_file="${BUILD_DIR}/mergeq/queue.json"
-            queue_entry_status=""
-            if [[ -f "${queue_file}" ]]; then
-              queue_entry_status=$(jq -r ".entries[] | select(.operation == \"${name}\") | .status" "${queue_file}" 2>/dev/null || true)
-            fi
-            case "${queue_entry_status}" in
-              pending|processing)
-                merge_icon=" ${C_CYAN}(merging...)${C_RESET}"
-                ;;
-              completed)
-                merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
-                ;;
-              failed)
-                merge_icon=" ${C_RED}${C_BOLD}(== MERGE FAILED ==)${C_RESET}"
-                ;;
-              conflict)
-                merge_icon=" ${C_RED}${C_BOLD}(== CONFLICT ==)${C_RESET}"
-                ;;
-              resumed)
-                merge_icon=" ${C_CYAN}(resumed)${C_RESET}"
-                ;;
-              *)
-                # No queue entry - show pending status without network call
-                merge_icon=" ${C_YELLOW}(merge pending)${C_RESET}"
-                ;;
-            esac
+          # Always check queue status first - it's more authoritative than state.json
+          # The queue reflects actual merge attempts, while state.json may be stale
+          queue_file="${BUILD_DIR}/mergeq/queue.json"
+          queue_entry_status=""
+          if [[ -f "${queue_file}" ]]; then
+            queue_entry_status=$(jq -r ".entries[] | select(.operation == \"${name}\") | .status" "${queue_file}" 2>/dev/null || true)
           fi
+          case "${queue_entry_status}" in
+            pending|processing)
+              merge_icon=" ${C_CYAN}(merging...)${C_RESET}"
+              ;;
+            completed)
+              merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
+              ;;
+            failed)
+              merge_icon=" ${C_RED}${C_BOLD}(== MERGE FAILED ==)${C_RESET}"
+              ;;
+            conflict)
+              merge_icon=" ${C_RED}${C_BOLD}(== CONFLICT ==)${C_RESET}"
+              ;;
+            resumed)
+              merge_icon=" ${C_CYAN}(resumed)${C_RESET}"
+              ;;
+            *)
+              # No queue entry - fall back to state.json indicators
+              if [[ "${merge_status}" = "merged" ]]; then
+                merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
+              elif [[ "${merge_status}" = "conflict" ]]; then
+                merge_icon=" ${C_RED}${C_BOLD}(== CONFLICT ==)${C_RESET}"
+              elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
+                merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
+              else
+                merge_icon=" ${C_YELLOW}(merge pending)${C_RESET}"
+              fi
+              ;;
+          esac
         else
           display_phase="${C_GREEN}completed${C_RESET}"
           merge_icon=" ${C_YELLOW}(== NEEDS MERGE ==)${C_RESET}"
@@ -849,41 +850,42 @@ show_status() {
       if [[ "${op_type}" = "plan" ]]; then
         echo "Status: plan completed"
       elif [[ "${merge_queued}" = "true" ]]; then
-        if [[ "${merge_status}" = "merged" ]]; then
-          echo "Status: completed (merged)"
-        elif [[ "${merge_status}" = "conflict" ]]; then
-          echo "Status: completed (== CONFLICT ==)"
-        elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
-          # merged_at timestamp exists, so merge succeeded even if merge_status wasn't set
-          echo "Status: completed (merged)"
-        else
-          local queue_file="${BUILD_DIR}/mergeq/queue.json"
-          local queue_entry_status=""
-          if [[ -f "${queue_file}" ]]; then
-            queue_entry_status=$(jq -r ".entries[] | select(.operation == \"${NAME}\") | .status" "${queue_file}" 2>/dev/null || true)
-          fi
-          case "${queue_entry_status}" in
-            pending|processing)
-              echo "Status: completed (merging...)"
-              ;;
-            completed)
-              echo "Status: completed (merged)"
-              ;;
-            failed)
-              echo "Status: completed (== MERGE FAILED ==)"
-              ;;
-            conflict)
-              echo "Status: completed (== CONFLICT ==)"
-              ;;
-            resumed)
-              echo "Status: completed (resumed)"
-              ;;
-            *)
-              # No queue entry - show pending status without network call
-              echo "Status: completed (merge pending)"
-              ;;
-          esac
+        # Always check queue status first - it's more authoritative than state.json
+        # The queue reflects actual merge attempts, while state.json may be stale
+        local queue_file="${BUILD_DIR}/mergeq/queue.json"
+        local queue_entry_status=""
+        if [[ -f "${queue_file}" ]]; then
+          queue_entry_status=$(jq -r ".entries[] | select(.operation == \"${NAME}\") | .status" "${queue_file}" 2>/dev/null || true)
         fi
+        case "${queue_entry_status}" in
+          pending|processing)
+            echo "Status: completed (merging...)"
+            ;;
+          completed)
+            echo "Status: completed (merged)"
+            ;;
+          failed)
+            echo "Status: completed (== MERGE FAILED ==)"
+            ;;
+          conflict)
+            echo "Status: completed (== CONFLICT ==)"
+            ;;
+          resumed)
+            echo "Status: completed (resumed)"
+            ;;
+          *)
+            # No queue entry - fall back to state.json indicators
+            if [[ "${merge_status}" = "merged" ]]; then
+              echo "Status: completed (merged)"
+            elif [[ "${merge_status}" = "conflict" ]]; then
+              echo "Status: completed (== CONFLICT ==)"
+            elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
+              echo "Status: completed (merged)"
+            else
+              echo "Status: completed (merge pending)"
+            fi
+            ;;
+        esac
       else
         echo "Status: completed (== NEEDS MERGE ==)"
         local worktree branch
