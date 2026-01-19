@@ -170,7 +170,7 @@ if [[ -n "${V0_WORKTREE_INIT:-}" ]]; then
     export V0_CHECKOUT_DIR="${V0_ROOT}"
     export V0_WORKTREE_DIR="${worktree}"
     cd "${worktree}" || exit 1
-    eval "${V0_WORKTREE_INIT}"
+    eval "${V0_WORKTREE_INIT}" >&2
   ) || init_exit_code=$?
   if [[ "${init_exit_code}" -ne 0 ]]; then
     # Color for stderr (different from v0-common.sh which checks stdout)
