@@ -7,6 +7,10 @@
 # Find v0 installation directory
 V0_INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Source state machine library for centralized state management
+# shellcheck source=lib/state-machine.sh
+source "${V0_INSTALL_DIR}/lib/state-machine.sh"
+
 # Color support (only when stdout is a TTY)
 if [[ -t 1 ]]; then
     C_RESET='\033[0m'
@@ -473,99 +477,39 @@ v0_precheck() {
 # v0_find_dependent_operations <operation>
 # Find operations waiting for the given operation (have after=<operation>)
 # Outputs operation names, one per line
+# DEPRECATED: Use sm_find_dependents from state-machine.sh instead
 v0_find_dependent_operations() {
-  local merged_op="$1"
-
-  [[ ! -d "${BUILD_DIR}/operations" ]] && return
-
-  for state_file in "${BUILD_DIR}"/operations/*/state.json; do
-    [[ -f "${state_file}" ]] || continue
-
-    local after
-    after=$(jq -r '.after // empty' "${state_file}")
-    if [[ "${after}" = "${merged_op}" ]]; then
-      jq -r '.name' "${state_file}"
-    fi
-  done
+  sm_find_dependents "$@"
 }
 
 # v0_trigger_dependent_operations <branch>
 # Find and resume operations that were waiting on the given operation
 # Called after a successful merge to unblock dependent operations
 # Handles both full branch names (feature/name) and operation names (name)
+# DEPRECATED: Use sm_trigger_dependents from state-machine.sh instead
 v0_trigger_dependent_operations() {
   local branch="$1"
   local op_name
   op_name=$(basename "${branch}")
-  local dep_op
-  local triggered=""
 
-  for dep_op in $(v0_find_dependent_operations "${op_name}"); do
-    # Skip if already triggered (handles case where branch==op_name)
-    [[ "${triggered}" == *"|${dep_op}|"* ]] && continue
-    triggered="${triggered}|${dep_op}|"
-    local state_file="${BUILD_DIR}/operations/${dep_op}/state.json"
-
-    if [[ ! -f "${state_file}" ]]; then
-      echo "Warning: No state file for dependent operation '${dep_op}'" >&2
-      continue
-    fi
-
-    # Get the phase to resume from
-    local blocked_phase
-    blocked_phase=$(jq -r '.blocked_phase // "init"' "${state_file}")
-    if [[ "${blocked_phase}" = "null" ]] || [[ -z "${blocked_phase}" ]]; then
-      blocked_phase="init"
-    fi
-
-    # Clear after state and restore phase
-    local tmp
-    tmp=$(mktemp)
-    jq '.after = null | .phase = (.blocked_phase // "init")' "${state_file}" > "${tmp}"
-    mv "${tmp}" "${state_file}"
-
-    echo "Unblocking dependent operation: ${dep_op} (resuming from phase: ${blocked_phase})"
-
-    # Only resume if not held - respect existing holds
-    if v0_is_held "${dep_op}"; then
-      echo "Operation '${dep_op}' remains on hold (use 'v0 resume ${dep_op}' to start)"
-    else
-      # Resume the operation in background
-      "${V0_DIR}/bin/v0-feature" "${dep_op}" --resume &
-    fi
-  done
+  # Delegate to state machine library
+  sm_trigger_dependents "${op_name}"
 }
 
 # v0_is_held <name>
 # Check if operation is held
 # Returns 0 if held, 1 if not held
+# DEPRECATED: Use sm_is_held from state-machine.sh instead
 v0_is_held() {
-  local name="$1"
-  local state_file="${BUILD_DIR}/operations/${name}/state.json"
-  [[ ! -f "${state_file}" ]] && return 1
-  local held
-  held=$(jq -r '.held // false' "${state_file}")
-  [[ "${held}" = "true" ]]
+  sm_is_held "$@"
 }
 
 # v0_exit_if_held <name> <command>
 # Print hold notice and exit if operation is held
 # Usage: v0_exit_if_held <name> <command>
+# DEPRECATED: Use sm_exit_if_held from state-machine.sh instead
 v0_exit_if_held() {
-  local name="$1"
-  local command="$2"
-  if v0_is_held "${name}"; then
-    echo "Operation '${name}' is on hold."
-    echo ""
-    echo "The operation will not proceed until the hold is released."
-    echo ""
-    echo "Release hold with:"
-    echo "  v0 resume ${name}"
-    echo ""
-    echo "Or cancel the operation:"
-    echo "  v0 cancel ${name}"
-    exit 0
-  fi
+  sm_exit_if_held "$@"
 }
 
 # ============================================================================

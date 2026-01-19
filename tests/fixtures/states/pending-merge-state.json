@@ -1,0 +1,11 @@
+{
+  "name": "test-feature",
+  "phase": "pending_merge",
+  "created_at": "2026-01-15T10:00:00Z",
+  "completed_at": "2026-01-15T12:00:00Z",
+  "prompt": "Build the test feature",
+  "plan_file": "plans/test-feature.md",
+  "epic_id": "testp-abc123",
+  "worktree": "/path/to/worktree",
+  "merge_queued": true
+}
