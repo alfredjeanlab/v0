@@ -1,0 +1,231 @@
+# Operations State Machine
+
+This document describes the core state machine used by v0 operations (features, fixes, and chores).
+
+## Overview
+
+Operations are work units tracked by v0. Each operation has a lifecycle managed by a state machine stored in `${BUILD_DIR}/operations/${name}/state.json`.
+
+## State Diagram (ASCII)
+
+```
+                                    ┌─────────────┐
+                                    │   (start)   │
+                                    └──────┬──────┘
+                                           │
+                                           ▼
+                              ┌────────────────────────┐
+                              │          init          │
+                              │  (planning not started)│
+                              └───────────┬────────────┘
+                                          │
+              ┌───────────────────────────┼───────────────────────────┐
+              │                           │                           │
+              │ --after (no --eager)      │ normal                    │ --after --eager
+              │                           │                           │
+              ▼                           ▼                           │
+    ┌─────────────────┐         ┌─────────────────┐                   │
+    │     blocked     │◄────────│     planned     │◄──────────────────┘
+    │ (waiting for op)│         │ (plan created)  │
+    └────────┬────────┘         └────────┬────────┘
+             │                           │
+             │ after op merged           │ decompose
+             │                           │
+             └──────────┬────────────────┘
+                        ▼
+              ┌─────────────────┐
+              │     queued      │
+              │ (issues created)│
+              └────────┬────────┘
+                       │
+                       │ --eager blocks here
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+        │ --enqueue    │              │ error
+        │              │              │
+        ▼              ▼              ▼
+   (stops here)  ┌───────────┐  ┌──────────┐
+                 │ executing │  │  failed  │
+                 │(agent runs)│  └──────────┘
+                 └─────┬─────┘
+                       │
+                       │ agent completes
+                       ▼
+              ┌─────────────────┐
+              │    completed    │
+              │(work finished)  │
+              └────────┬────────┘
+                       │
+       ┌───────────────┼───────────────┐
+       │               │               │
+       │ --no-merge    │ merge_queued  │ error
+       │               │               │
+       ▼               ▼               ▼
+  (stops here)  ┌──────────────┐  ┌──────────┐
+                │pending_merge │  │  failed  │
+                │(queued for   │  └──────────┘
+                │ merge)       │
+                └──────┬───────┘
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+        │ merge ok     │ conflict     │ merge error
+        │              │              │
+        ▼              ▼              ▼
+   ┌─────────┐  ┌──────────┐   ┌──────────┐
+   │ merged  │  │ conflict │   │  failed  │
+   │(success)│  │(needs fix)│  │          │
+   └─────────┘  └──────────┘   └──────────┘
+```
+
+## State Definitions
+
+### Core States
+
+| State | Description |
+|-------|-------------|
+| `init` | Initial state. Planning has not started yet. |
+| `planned` | Plan file created at `plans/<name>.md`. Ready for decomposition. |
+| `queued` | Issues created from plan. Ready for execution (or stopped if `--enqueue`). |
+| `blocked` | Waiting for another operation to complete (`--after` flag). |
+| `executing` | Claude agent is running in a tmux session. |
+| `completed` | Agent finished work. May be pending merge. |
+| `pending_merge` | Added to merge queue, waiting to be merged. |
+| `merged` | Successfully merged to main branch. Terminal state. |
+
+### Error States
+
+| State | Description |
+|-------|-------------|
+| `failed` | Error during any phase. Can be resumed with `--resume`. |
+| `conflict` | Merge conflict detected. Needs manual resolution or retry. |
+| `interrupted` | User interrupted the operation. Can be resumed. |
+| `cancelled` | Operation cancelled by user via `v0 cancel`. |
+
+## State Transitions
+
+### Planning Phase (`init` → `planned`)
+
+- Claude agent creates an implementation plan
+- Plan saved to `plans/<name>.md`
+- Plan auto-committed to git
+
+### Decomposition Phase (`planned` → `queued`)
+
+- Plan decomposed into individual issues using `wk`
+- Issues labeled with `plan:<name>`
+- Epic issue created to track the feature
+
+### Execution Phase (`queued` → `executing` → `completed`)
+
+- Claude agent launched in tmux session
+- Works through issues sequentially
+- Marks issues as done via `wk done`
+- On completion, transitions to `completed`
+
+### Merge Phase (`completed` → `pending_merge` → `merged`)
+
+- If `merge_queued=true`, operation added to merge queue
+- Merge queue daemon processes merges sequentially
+- On conflict, attempts automatic resolution with Claude
+- On success, branch merged to main and deleted
+
+## Blocking and Dependencies
+
+Operations can depend on other operations using the `--after` flag:
+
+```bash
+v0 feature api "Build API" --after auth
+```
+
+**Default behavior** (no `--eager`):
+- Operation blocks immediately at `init`
+- Waits for the dependency to reach `merged` state
+- Then proceeds with planning
+
+**Eager mode** (`--eager`):
+- Planning and decomposition run first
+- Operation blocks at `queued` before execution
+- Useful when you want to review the plan while waiting
+
+## Hold Mechanism
+
+Operations can be put on hold to prevent phase transitions:
+
+```bash
+v0 hold <name>      # Put on hold
+v0 resume <name>    # Release hold
+```
+
+When held:
+- `state.held = true`
+- Phase transitions are blocked
+- Agent exits gracefully after current work
+
+## State File Schema
+
+```json
+{
+  "name": "auth",
+  "machine": "hostname",
+  "prompt": "Add JWT authentication",
+  "phase": "executing",
+  "created_at": "2026-01-19T00:00:00Z",
+  "labels": [],
+  "plan_file": "plans/auth.md",
+  "epic_id": "proj-abc123",
+  "tmux_session": "v0-proj-auth-feature",
+  "worktree": "/path/to/worktree/repo",
+  "current_issue": "proj-def456",
+  "completed": ["proj-ghi789"],
+  "merge_queued": true,
+  "merge_status": null,
+  "merged_at": null,
+  "merge_error": null,
+  "after": null,
+  "eager": false,
+  "safe": false,
+  "blocked_phase": null,
+  "held": false,
+  "held_at": null,
+  "worker_pid": 12345,
+  "worker_log": "/path/to/logs/worker.log",
+  "worker_started_at": "2026-01-19T00:00:00Z"
+}
+```
+
+## Merge Queue States
+
+The merge queue has its own state machine for entries:
+
+```
+pending → processing → completed
+                    ↘ failed
+                    ↘ conflict
+```
+
+| State | Description |
+|-------|-------------|
+| `pending` | Waiting to be processed |
+| `processing` | Currently being merged |
+| `completed` | Successfully merged |
+| `failed` | Merge failed (fetch, push, etc.) |
+| `conflict` | Merge conflict, resolution failed |
+
+## Recovery from Error States
+
+When an operation is in `failed`, `interrupted`, or `cancelled` state:
+
+1. Resume determines last good state from existing data:
+   - If `epic_id` exists → resume from `queued`
+   - If `plan_file` exists → resume from `planned`
+   - Otherwise → restart from `init`
+2. Error state cleared
+3. Operation continues from determined phase
+
+```bash
+v0 feature <name> --resume           # Resume from current phase
+v0 feature <name> --resume init      # Force restart from planning
+v0 feature <name> --resume queued    # Force restart from execution
+```
