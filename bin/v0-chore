@@ -440,7 +440,7 @@ report_chore() {
     exit 1
   fi
 
-  echo "Created chore: ${id}"
+  echo -e "${C_GREEN}Created chore:${C_RESET} ${C_CYAN}${id}${C_RESET}"
   echo "  Title:"
   echo "${title}" | fmt -w 76 | sed 's/^/    /'
 

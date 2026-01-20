@@ -492,7 +492,7 @@ report_bug() {
     exit 1
   fi
 
-  echo "Created bug: ${id}"
+  echo -e "${C_GREEN}Created bug:${C_RESET} ${C_CYAN}${id}${C_RESET}"
   echo "  Title:"
   echo "${title}" | fmt -w 76 | sed 's/^/    /'
 
