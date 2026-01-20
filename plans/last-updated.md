@@ -1,5 +1,7 @@
 # Implementation Plan: Last-Updated Timestamps in v0 Status
 
+**Root Feature:** `v0-407c`
+
 ## Overview
 
 Update the `v0 status` command to display the timestamp of when an operation's state was last updated, rather than when it was created. This provides users with more meaningful timing information—for example, showing when an operation was merged rather than when it was started. Operations will continue to be sorted by creation time to maintain a stable, chronological list.
