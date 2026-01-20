@@ -843,7 +843,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     else
       nudge_status="${C_DIM}Stopped${C_RESET}"
     fi
-    echo -e "Coffee: ${coffee_status}, Nudge: ${nudge_status}"
+    echo -e "Coffee: ${coffee_status}"
+    echo -e "Nudge: ${nudge_status}"
 
     # Show recently completed items (opt-in to avoid N+1 queries)
     if [[ -n "${RECENT}" ]]; then
