@@ -536,20 +536,33 @@ fi
 
 # List all operations (default behavior)
 if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
-  if [[ -n "${BLOCKED}" ]]; then
-    echo "Blocked Operations:"
-  else
-    echo "Operations:"
+  # Pre-check if operations directory exists and has state files
+  has_operations=false
+  if [[ -d "${BUILD_DIR}/operations" ]]; then
+    for f in "${BUILD_DIR}"/operations/*/state.json; do
+      [[ -f "${f}" ]] && has_operations=true && break
+    done
   fi
-  echo ""
+
+  # If no operations, show compact "None" format like other sections
+  if [[ "${has_operations}" = false ]]; then
+    if [[ -n "${BLOCKED}" ]]; then
+      echo -e "Blocked Operations: ${C_DIM}None${C_RESET}"
+    else
+      echo -e "Operations: ${C_DIM}None${C_RESET}"
+    fi
+  else
+    # Operations exist - show full format with header and details
+    if [[ -n "${BLOCKED}" ]]; then
+      echo "Blocked Operations:"
+    else
+      echo "Operations:"
+    fi
+    echo ""
 
   # Batch tmux session check - single call to list all sessions (used by operations loop and workers)
   all_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null || true)
   local_machine=$(hostname -s)
-
-  if [[ ! -d "${BUILD_DIR}/operations" ]]; then
-    echo -e "  ${C_DIM}(no operations found)${C_RESET}"
-  else
 
   # Collect all state files (bash 3.2 compatible)
   state_files=()
@@ -718,14 +731,11 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     ] | @tsv' "${state_files[@]}")
   fi
 
-  if [[ -z "${found_any}" ]]; then
-    if [[ -n "${BLOCKED}" ]]; then
-      echo -e "  ${C_DIM}(no waiting operations)${C_RESET}"
-    else
-      echo -e "  ${C_DIM}(no operations found)${C_RESET}"
-    fi
+  # For --blocked filter: show message if operations exist but none are blocked
+  if [[ -z "${found_any}" ]] && [[ -n "${BLOCKED}" ]]; then
+    echo -e "  ${C_DIM}(no waiting operations)${C_RESET}"
   fi
-  fi
+  fi  # end: has_operations = true
 
   # Show fix, chore, and merge worker status in default list (not blocked view)
   if [[ -z "${BLOCKED}" ]]; then
