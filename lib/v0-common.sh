@@ -668,6 +668,92 @@ v0_prune_logs() {
   fi
 }
 
+# ============================================================================
+# Merge Verification Functions
+# ============================================================================
+
+# v0_verify_commit_on_branch <commit> <branch> [require_remote]
+# Verify that a specific commit exists on a branch
+# Returns 0 if commit is on branch, 1 if not
+#
+# This is the primary verification function - works for all merge workflows
+# because it checks a specific commit hash, not a branch name.
+#
+# Args:
+#   commit         - Commit hash to verify
+#   branch         - Branch to check (e.g., "main", "origin/main")
+#   require_remote - If "true", also verify on origin/${branch} (default: false)
+v0_verify_commit_on_branch() {
+  local commit="$1"
+  local branch="$2"
+  local require_remote="${3:-false}"
+
+  # Validate commit exists
+  if ! git cat-file -e "${commit}^{commit}" 2>/dev/null; then
+    return 1  # Commit doesn't exist
+  fi
+
+  # Check if commit is ancestor of local branch
+  if ! git merge-base --is-ancestor "${commit}" "${branch}" 2>/dev/null; then
+    return 1
+  fi
+
+  # Optionally check remote
+  if [[ "${require_remote}" = "true" ]]; then
+    git fetch origin "${branch}" --quiet 2>/dev/null || true
+    if ! git merge-base --is-ancestor "${commit}" "origin/${branch}" 2>/dev/null; then
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+# v0_verify_merge_by_op <operation> [require_remote]
+# Verify merge using operation's recorded merge commit
+# This is the ONLY reliable way to verify after merge completion.
+#
+# Works for all merge workflows because v0-merge records HEAD after do_merge():
+# - Direct FF: records the branch tip (same hash)
+# - Rebase+FF: records the rebased commit (new hash that's on main)
+# - Merge commit: records the merge commit
+#
+# Args:
+#   operation      - Operation name
+#   require_remote - If "true", verify on origin/main (default: false)
+v0_verify_merge_by_op() {
+  local op="$1"
+  local require_remote="${2:-false}"
+  local merge_commit
+  merge_commit=$(sm_read_state "${op}" "merge_commit")
+
+  if [[ -z "${merge_commit}" ]] || [[ "${merge_commit}" = "null" ]]; then
+    return 1  # No recorded merge commit
+  fi
+
+  v0_verify_commit_on_branch "${merge_commit}" "main" "${require_remote}"
+}
+
+# DEPRECATED: v0_verify_merge <branch> [require_remote]
+# DO NOT USE for post-merge verification - fails for rebase workflows.
+#
+# This function checks if a branch's current tip is on main. It fails when:
+# 1. Rebase+FF merge: original commits have different hashes than rebased commits
+# 2. Post-cleanup: branch is deleted, git rev-parse fails
+#
+# Only valid use case: checking if a branch COULD be fast-forwarded (pre-merge).
+v0_verify_merge() {
+  local branch="$1"
+  local require_remote="${2:-false}"
+
+  echo "Warning: v0_verify_merge is deprecated, use v0_verify_merge_by_op" >&2
+
+  local branch_commit
+  branch_commit=$(git rev-parse "${branch}" 2>/dev/null) || return 1
+
+  v0_verify_commit_on_branch "${branch_commit}" "main" "${require_remote}"
+}
+
 # v0_prune_mergeq [--dry-run]
 # Prune completed mergeq entries older than 6 hours
 # Removes entries with terminal status (completed, failed, conflict) whose

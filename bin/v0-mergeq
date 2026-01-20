@@ -436,13 +436,34 @@ is_stale() {
 
   # Check for build operation state
   if [[ -f "${state_file}" ]]; then
-    # Already merged = stale
+    # Check for merged_at - indicates operation claims to be merged
     local merged_at
     merged_at=$(jq -r '.merged_at // empty' "${state_file}")
     if [[ -n "${merged_at}" ]]; then
-      echo "already merged at ${merged_at}"
-      return 0
+      # Verify the merge is real using merge_commit
+      if v0_verify_merge_by_op "${op}"; then
+        echo "already merged at ${merged_at}"
+        return 0
+      else
+        # Claims merged but verification failed - still stale, needs attention
+        echo "claims merged but verification failed"
+        return 0
+      fi
     fi
+
+    # Check if operation was recreated (queue entry older than state)
+    # This catches stale queue entries from previously merged operations with same name
+    local queue_time state_time
+    queue_time=$(jq -r ".entries[] | select(.operation == \"${op}\") | .enqueued_at // empty" "${QUEUE_FILE}" 2>/dev/null)
+    state_time=$(jq -r '.created_at // empty' "${state_file}")
+    if [[ -n "${queue_time}" ]] && [[ -n "${state_time}" ]]; then
+      # String comparison works for ISO 8601 timestamps
+      if [[ "${state_time}" > "${queue_time}" ]]; then
+        echo "stale queue entry (operation recreated)"
+        return 0
+      fi
+    fi
+
     return 1
   fi
 
@@ -813,9 +834,10 @@ process_merge() {
   update_operation_state "${op}" "merge_status" '"merging"'
 
   # Try to merge using v0 merge - capture exit code correctly
+  # Set V0_MERGEQ_CALLER to prevent duplicate queue updates
   set +e
   local merge_output
-  merge_output=$("${V0_DIR}/bin/v0-merge" "${worktree}" 2>&1)
+  merge_output=$(V0_MERGEQ_CALLER=1 "${V0_DIR}/bin/v0-merge" "${worktree}" 2>&1)
   local merge_exit=$?
   set -e
 
@@ -823,13 +845,38 @@ process_merge() {
   echo "${merge_output}" | tee -a "${MERGEQ_DIR}/logs/merges.log"
 
   if [[ ${merge_exit} -eq 0 ]]; then
-    # Success
+    # v0-merge exited 0 - verify the merge actually happened
+    # Give state file a moment to be written
+    sleep 1
+
+    if ! v0_verify_merge_by_op "${op}" "true"; then
+      # Check WHY verification failed for better error messages
+      local merge_commit
+      merge_commit=$(sm_read_state "${op}" "merge_commit")
+
+      if [[ -z "${merge_commit}" ]] || [[ "${merge_commit}" = "null" ]]; then
+        echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but no merge_commit recorded"
+        update_operation_state "${op}" "merge_error" '"No merge_commit in state - possible v0-merge bug"'
+      else
+        echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but commit ${merge_commit:0:8} not on origin/main"
+        update_operation_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on origin/main\""
+      fi
+
+      update_operation_state "${op}" "merge_status" '"verification_failed"'
+      update_entry "${op}" "failed"
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:verification_failed: ${op}" >> "${MERGEQ_DIR}/logs/merges.log"
+      emit_event "merge:verification_failed" "${op}"
+      return 1
+    fi
+
+    # Verified - now mark as merged
+    # Update state.json FIRST, then queue (to prevent race conditions)
     local merged_at
     merged_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    update_entry "${op}" "completed"
     update_operation_state "${op}" "merge_status" '"merged"'
     update_operation_state "${op}" "merged_at" "\"${merged_at}\""
     update_operation_state "${op}" "phase" '"merged"'
+    update_entry "${op}" "completed"  # Queue last
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:completed: ${op}" >> "${MERGEQ_DIR}/logs/merges.log"
     emit_event "merge:completed" "${op}"
     echo "[$(date +%H:%M:%S)] Merge completed: ${op}"
@@ -864,22 +911,46 @@ process_merge() {
     update_operation_state "${op}" "merge_status" '"resolving"'
 
     # Try automatic resolution with v0 merge --resolve
+    # Set V0_MERGEQ_CALLER to prevent duplicate queue updates
     set +e
     local resolve_output
-    resolve_output=$("${V0_DIR}/bin/v0-merge" "${worktree}" --resolve 2>&1)
+    resolve_output=$(V0_MERGEQ_CALLER=1 "${V0_DIR}/bin/v0-merge" "${worktree}" --resolve 2>&1)
     local resolve_exit=$?
     set -e
 
     echo "${resolve_output}" | tee -a "${MERGEQ_DIR}/logs/merges.log"
 
     if [[ ${resolve_exit} -eq 0 ]]; then
-      # Resolution succeeded
+      # v0-merge exited 0 - verify the merge actually happened
+      sleep 1
+
+      if ! v0_verify_merge_by_op "${op}" "true"; then
+        local merge_commit
+        merge_commit=$(sm_read_state "${op}" "merge_commit")
+
+        if [[ -z "${merge_commit}" ]] || [[ "${merge_commit}" = "null" ]]; then
+          echo "[$(date +%H:%M:%S)] Warning: Resolution succeeded but no merge_commit recorded"
+          update_operation_state "${op}" "merge_error" '"No merge_commit in state after resolution"'
+        else
+          echo "[$(date +%H:%M:%S)] Warning: Resolution succeeded but commit ${merge_commit:0:8} not on origin/main"
+          update_operation_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on origin/main after resolution\""
+        fi
+
+        update_operation_state "${op}" "merge_status" '"verification_failed"'
+        update_entry "${op}" "failed"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:verification_failed: ${op} (after resolution)" >> "${MERGEQ_DIR}/logs/merges.log"
+        emit_event "merge:verification_failed" "${op}"
+        return 1
+      fi
+
+      # Verified - now mark as merged
+      # Update state.json FIRST, then queue (to prevent race conditions)
       local merged_at
       merged_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-      update_entry "${op}" "completed"
       update_operation_state "${op}" "merge_status" '"merged"'
       update_operation_state "${op}" "merged_at" "\"${merged_at}\""
       update_operation_state "${op}" "phase" '"merged"'
+      update_entry "${op}" "completed"  # Queue last
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:completed: ${op} (after resolution)" >> "${MERGEQ_DIR}/logs/merges.log"
       emit_event "merge:completed" "${op}"
       echo "[$(date +%H:%M:%S)] Merge completed (after automatic resolution): ${op}"

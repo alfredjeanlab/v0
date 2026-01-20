@@ -1028,9 +1028,26 @@ show_status() {
   echo "Type: ${op_type}"
 
   # Show user-friendly status
+  # Helper to verify merged status using recorded merge_commit
+  local merge_verified=""
+  local merge_commit
+  merge_commit=$(sm_read_state "${NAME}" "merge_commit")
+  if [[ -n "${merge_commit}" ]] && [[ "${merge_commit}" != "null" ]]; then
+    if v0_verify_merge_by_op "${NAME}"; then
+      merge_verified="yes"
+    else
+      merge_verified="no"
+    fi
+  fi
+
   case "${phase}" in
     merged)
-      echo "Status: completed (merged)"
+      # Verify merged claims if merge_commit is recorded
+      if [[ "${merge_verified}" = "no" ]]; then
+        echo "Status: completed (== VERIFY FAILED ==)"
+      else
+        echo "Status: completed (merged)"
+      fi
       ;;
     completed|pending_merge)
       # Plan-type operations don't merge, so show "plan completed" without merge indicators
@@ -1049,7 +1066,12 @@ show_status() {
             echo "Status: completed (merging...)"
             ;;
           completed)
-            echo "Status: completed (merged)"
+            # Verify the merge if merge_commit is recorded
+            if [[ "${merge_verified}" = "no" ]]; then
+              echo "Status: completed (== VERIFY FAILED ==)"
+            else
+              echo "Status: completed (merged)"
+            fi
             ;;
           failed)
             echo "Status: completed (== MERGE FAILED ==)"
@@ -1063,11 +1085,21 @@ show_status() {
           *)
             # No queue entry - fall back to state.json indicators
             if [[ "${merge_status}" = "merged" ]]; then
-              echo "Status: completed (merged)"
+              # Verify the merge if merge_commit is recorded
+              if [[ "${merge_verified}" = "no" ]]; then
+                echo "Status: completed (== VERIFY FAILED ==)"
+              else
+                echo "Status: completed (merged)"
+              fi
             elif [[ "${merge_status}" = "conflict" ]]; then
               echo "Status: completed (== CONFLICT ==)"
             elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
-              echo "Status: completed (merged)"
+              # Verify the merge if merge_commit is recorded
+              if [[ "${merge_verified}" = "no" ]]; then
+                echo "Status: completed (== VERIFY FAILED ==)"
+              else
+                echo "Status: completed (merged)"
+              fi
             else
               echo "Status: completed (merge pending)"
             fi

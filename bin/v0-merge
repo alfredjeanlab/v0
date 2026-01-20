@@ -554,10 +554,37 @@ RESOLVE_EOF
     fi
 
     # After successful resolution, merge using do_merge which handles rebase retry
-    do_merge && rm -f "${RESOLVE_LOG}" && cleanup && git push && update_operation_state && update_merge_queue_entry && {
-      sm_trigger_dependents "$(basename "${BRANCH}")"
-      v0_notify "${PROJECT}: merged" "${BRANCH} (after resolution)"
-      git push origin --delete "${BRANCH}" 2>/dev/null || true
+    do_merge && {
+      # Record the merge commit hash BEFORE cleanup deletes the branch
+      merge_commit=$(git rev-parse HEAD)
+
+      rm -f "${RESOLVE_LOG}" && cleanup && git push && {
+        # Verify push succeeded by checking remote
+        git fetch origin main --quiet
+        if v0_verify_commit_on_branch "${merge_commit}" "origin/main"; then
+          # Record merge commit in state, then update status
+          op_to_update="${OP_NAME:-}"
+          if [[ -z "${op_to_update}" ]]; then
+            op_to_update=$(basename "${BRANCH}")
+          fi
+          if sm_state_exists "${op_to_update}"; then
+            sm_update_state "${op_to_update}" "merge_commit" "\"${merge_commit}\""
+          fi
+
+          # Update operation state and queue entry (unless called by mergeq)
+          update_operation_state
+          if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
+            update_merge_queue_entry
+          fi
+
+          sm_trigger_dependents "$(basename "${BRANCH}")"
+          v0_notify "${PROJECT}: merged" "${BRANCH} (after resolution)"
+          git push origin --delete "${BRANCH}" 2>/dev/null || true
+        else
+          echo "Error: Push succeeded but commit not found on origin/main" >&2
+          exit 1
+        fi
+      }
     }
   else
     echo
@@ -566,9 +593,37 @@ RESOLVE_EOF
     exit 1
   fi
 else
-  do_merge && cleanup && git push && update_operation_state && update_merge_queue_entry && {
-    sm_trigger_dependents "$(basename "${BRANCH}")"
-    v0_notify "${PROJECT}: merged" "${BRANCH}"
-    git push origin --delete "${BRANCH}" 2>/dev/null || true
+  do_merge && {
+    # Record the merge commit hash BEFORE cleanup deletes the branch
+    merge_commit=$(git rev-parse HEAD)
+
+    cleanup && git push && {
+      # Verify push succeeded by checking remote
+      git fetch origin main --quiet
+      if v0_verify_commit_on_branch "${merge_commit}" "origin/main"; then
+        # Record merge commit in state, then update status
+        # Try operation name first (if available), then basename of branch
+        op_to_update="${OP_NAME:-}"
+        if [[ -z "${op_to_update}" ]]; then
+          op_to_update=$(basename "${BRANCH}")
+        fi
+        if sm_state_exists "${op_to_update}"; then
+          sm_update_state "${op_to_update}" "merge_commit" "\"${merge_commit}\""
+        fi
+
+        # Update operation state and queue entry (unless called by mergeq)
+        update_operation_state
+        if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
+          update_merge_queue_entry
+        fi
+
+        sm_trigger_dependents "$(basename "${BRANCH}")"
+        v0_notify "${PROJECT}: merged" "${BRANCH}"
+        git push origin --delete "${BRANCH}" 2>/dev/null || true
+      else
+        echo "Error: Push succeeded but commit not found on origin/main" >&2
+        exit 1
+      fi
+    }
   }
 fi
