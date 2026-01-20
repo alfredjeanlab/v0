@@ -181,16 +181,36 @@ nudge_daemon() {
   # Set up signal handlers for graceful shutdown
   trap 'nudge_stop_handler' SIGTERM SIGINT
 
+  # Log unexpected exits (but not signal-triggered ones)
+  trap 'nudge_exit_handler $?' EXIT
+
   while true; do
-    nudge_check_cycle || true
+    if ! nudge_check_cycle; then
+      # Log non-zero return codes (session termination counts)
+      local terminated=$?
+      if [[ ${terminated} -gt 0 ]]; then
+        nudge_log "Check cycle: terminated ${terminated} session(s)"
+      fi
+    fi
     sleep "${check_interval}"
   done
+}
+
+# Handler for unexpected daemon exit
+nudge_exit_handler() {
+  local exit_code="$1"
+  # Only log if this wasn't a clean signal-triggered exit
+  # (nudge_stop_handler calls exit 0 after logging)
+  if [[ "${exit_code}" -ne 0 ]]; then
+    nudge_log "Nudge daemon exited unexpectedly (exit code: ${exit_code})"
+  fi
+  rm -f "$(nudge_pid_file)"
 }
 
 # Signal handler for graceful shutdown
 nudge_stop_handler() {
   nudge_log "Nudge daemon stopping (signal received)"
-  rm -f "$(nudge_pid_file)"
+  # PID file will be cleaned up by nudge_exit_handler
   exit 0
 }
 

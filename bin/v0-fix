@@ -11,6 +11,7 @@ WORKER_BRANCH="v0/worker/fix"
 # Source shared utilities
 source "${V0_DIR}/lib/v0-common.sh"
 source "${V0_DIR}/lib/worker-common.sh"
+source "${V0_DIR}/lib/nudge-common.sh"
 
 # Load project config (exits if not found)
 v0_load_config
@@ -351,6 +352,9 @@ FIXED_SCRIPT
   echo -e "Worktree: ${C_CYAN}${tree_dir}${C_RESET}"
 
   local wrapper_script="${tree_dir}/claude-worker.sh"
+
+  # Ensure nudge worker is running to monitor the session
+  ensure_nudge_running
 
   # Start the polling loop
   create_polling_loop "${tree_dir}" bug "${POLLING_LOG}"

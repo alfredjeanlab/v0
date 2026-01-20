@@ -5,6 +5,7 @@ set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/lib/nudge-common.sh"
 v0_load_config
 
 if [[ -z "$1" ]]; then
@@ -83,6 +84,9 @@ $(cat "${PLAN_FILE}")
 ---
 
 The plan basename is: ${BASENAME}. Label all issues with plan:${BASENAME}"
+
+# Ensure nudge worker is running to monitor the session
+ensure_nudge_running
 
 # Default: skip permissions; V0_SAFE=1: require permission prompts
 # (respects .claude/settings.json allow list when in safe mode)

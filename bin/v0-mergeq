@@ -5,6 +5,7 @@ set -eo pipefail
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/lib/nudge-common.sh"
 v0_load_config
 
 # Merge queue state must always be in the main repo's build directory, not
@@ -274,6 +275,9 @@ enqueue_merge() {
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] enqueue: ${operation} (priority: ${priority}, type: ${merge_type})" >> "${MERGEQ_DIR}/logs/merges.log"
   emit_event "merge:queued" "${operation}"
   echo "Enqueued: ${operation}"
+
+  # Ensure nudge worker is running to monitor sessions
+  ensure_nudge_running
 
   # Auto-start daemon if not running
   ensure_daemon_running
