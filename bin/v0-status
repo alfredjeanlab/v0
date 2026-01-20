@@ -671,82 +671,174 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     # Batch pgrep for all polling daemons - single call
     all_polling=$(pgrep -af "while true.*v0-${PROJECT}" 2>/dev/null || true)
 
-    echo ""
-    echo "Bugfix Worker:"
-    fix_worker_running=false
-    fix_polling_pid=""
-    # Check via string matching (no process spawning)
-    [[ "${all_sessions}" == *"${fix_session}"* ]] && fix_worker_running=true
-    [[ -f "${fix_polling_log}" ]] && fix_polling_pid=$(echo "${all_polling}" | grep "worker-fix" | awk '{print $1}')
-    if [[ "${fix_worker_running}" = true ]]; then
-      echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${fix_session}]${C_RESET}"
-    elif [[ -n "${fix_polling_pid}" ]]; then
-      echo -e "  Status: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${fix_polling_pid}]${C_RESET}"
-    else
-      echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
-    fi
-    show_bugs_indented 3
-
-    echo ""
-    echo "Chore Worker:"
-    chore_worker_running=false
-    chore_polling_pid=""
-    # Check via string matching (no process spawning)
-    [[ "${all_sessions}" == *"${chore_session}"* ]] && chore_worker_running=true
-    [[ -f "${chore_polling_log}" ]] && chore_polling_pid=$(echo "${all_polling}" | grep "worker-chore" | awk '{print $1}')
-    if [[ "${chore_worker_running}" = true ]]; then
-      echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${chore_session}]${C_RESET}"
-    elif [[ -n "${chore_polling_pid}" ]]; then
-      echo -e "  Status: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${chore_polling_pid}]${C_RESET}"
-    else
-      echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
-    fi
-    show_chores_indented 3
-
-    echo ""
-    echo "Merge Worker:"
-    mergeq_pid_file="${BUILD_DIR}/mergeq/.daemon.pid"
+    # Pre-check if all work queues are empty
+    bugs_in_progress=$(wk list --type bug --status in_progress 2>/dev/null || true)
+    bugs_open=$(wk list --type bug --status todo 2>/dev/null || true)
+    chores_in_progress=$(wk list --type chore --status in_progress 2>/dev/null || true)
+    chores_open=$(wk list --type chore --status todo 2>/dev/null || true)
     mergeq_queue_file="${BUILD_DIR}/mergeq/queue.json"
-    if [[ -f "${mergeq_pid_file}" ]] && kill -0 "$(cat "${mergeq_pid_file}" 2>/dev/null)" 2>/dev/null; then
-      mergeq_pid=$(cat "${mergeq_pid_file}")
-      # Single jq call extracts both processing and pending counts
-      read -r processing pending < <(
-        jq -r '[
-          ([.entries[] | select(.status == "processing")] | length),
-          ([.entries[] | select(.status == "pending")] | length)
-        ] | @tsv' "${mergeq_queue_file}" 2>/dev/null || echo "0	0"
-      )
-      if [[ "${processing}" -gt 0 ]]; then
-        echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}(merging) [pid: ${mergeq_pid}]${C_RESET}"
-      elif [[ "${pending}" -gt 0 ]]; then
-        echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}(pending) [pid: ${mergeq_pid}]${C_RESET}"
-      else
-        echo -e "  Status: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${mergeq_pid}]${C_RESET}"
-      fi
-    else
-      echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
+    merges_pending=""
+    if [[ -f "${mergeq_queue_file}" ]]; then
+      merges_pending=$(jq -r '.entries[] | select(.status == "pending" or .status == "processing") | .operation' "${mergeq_queue_file}" 2>/dev/null || true)
     fi
-    show_mergeq_indented 3
 
-    # Show coffee (wake lock) status
+    bugs_empty=false
+    chores_empty=false
+    merges_empty=false
+    [[ -z "${bugs_in_progress}" ]] && [[ -z "${bugs_open}" ]] && bugs_empty=true
+    [[ -z "${chores_in_progress}" ]] && [[ -z "${chores_open}" ]] && chores_empty=true
+    [[ -z "${merges_pending}" ]] && merges_empty=true
+
+    # If all queues are empty, show one-liner
+    if [[ "${bugs_empty}" = true ]] && [[ "${chores_empty}" = true ]] && [[ "${merges_empty}" = true ]]; then
+      echo ""
+      echo -e "Bugfix, Chores, Merges: ${C_DIM}none${C_RESET}"
+    else
+      # Show full sections for non-empty queues
+      echo ""
+      echo "Bugfix Worker:"
+      fix_worker_running=false
+      fix_polling_pid=""
+      # Check via string matching (no process spawning)
+      [[ "${all_sessions}" == *"${fix_session}"* ]] && fix_worker_running=true
+      [[ -f "${fix_polling_log}" ]] && fix_polling_pid=$(echo "${all_polling}" | grep "worker-fix" | awk '{print $1}')
+      if [[ "${fix_worker_running}" = true ]]; then
+        echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${fix_session}]${C_RESET}"
+      elif [[ -n "${fix_polling_pid}" ]]; then
+        echo -e "  Status: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${fix_polling_pid}]${C_RESET}"
+      else
+        echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
+      fi
+      if [[ "${bugs_empty}" = true ]]; then
+        echo -e "  Bugs: ${C_DIM}none${C_RESET}"
+      else
+        if [[ -n "${bugs_in_progress}" ]]; then
+          count=$(echo "${bugs_in_progress}" | wc -l | tr -d ' ')
+          echo "  In progress:"
+          if [[ "${count}" -le 3 ]]; then
+            echo "${bugs_in_progress}" | sed 's/^/    /'
+          else
+            echo "${bugs_in_progress}" | head -n 3 | sed 's/^/    /'
+            remaining=$((count - 3))
+            echo -e "    ${C_DIM}... and ${remaining} more${C_RESET}"
+          fi
+        fi
+        if [[ -n "${bugs_open}" ]]; then
+          count=$(echo "${bugs_open}" | wc -l | tr -d ' ')
+          echo "  Queued:"
+          if [[ "${count}" -le 3 ]]; then
+            echo "${bugs_open}" | sed 's/^/    /'
+          else
+            echo "${bugs_open}" | head -n 3 | sed 's/^/    /'
+            remaining=$((count - 3))
+            echo -e "    ${C_DIM}... and ${remaining} more${C_RESET}"
+          fi
+        fi
+      fi
+
+      echo ""
+      echo "Chore Worker:"
+      chore_worker_running=false
+      chore_polling_pid=""
+      # Check via string matching (no process spawning)
+      [[ "${all_sessions}" == *"${chore_session}"* ]] && chore_worker_running=true
+      [[ -f "${chore_polling_log}" ]] && chore_polling_pid=$(echo "${all_polling}" | grep "worker-chore" | awk '{print $1}')
+      if [[ "${chore_worker_running}" = true ]]; then
+        echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${chore_session}]${C_RESET}"
+      elif [[ -n "${chore_polling_pid}" ]]; then
+        echo -e "  Status: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${chore_polling_pid}]${C_RESET}"
+      else
+        echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
+      fi
+      if [[ "${chores_empty}" = true ]]; then
+        echo -e "  Chores: ${C_DIM}none${C_RESET}"
+      else
+        if [[ -n "${chores_in_progress}" ]]; then
+          count=$(echo "${chores_in_progress}" | wc -l | tr -d ' ')
+          echo "  In progress:"
+          if [[ "${count}" -le 3 ]]; then
+            echo "${chores_in_progress}" | sed 's/^/    /'
+          else
+            echo "${chores_in_progress}" | head -n 3 | sed 's/^/    /'
+            remaining=$((count - 3))
+            echo -e "    ${C_DIM}... and ${remaining} more${C_RESET}"
+          fi
+        fi
+        if [[ -n "${chores_open}" ]]; then
+          count=$(echo "${chores_open}" | wc -l | tr -d ' ')
+          echo "  Queued:"
+          if [[ "${count}" -le 3 ]]; then
+            echo "${chores_open}" | sed 's/^/    /'
+          else
+            echo "${chores_open}" | head -n 3 | sed 's/^/    /'
+            remaining=$((count - 3))
+            echo -e "    ${C_DIM}... and ${remaining} more${C_RESET}"
+          fi
+        fi
+      fi
+
+      echo ""
+      echo "Merge Worker:"
+      mergeq_pid_file="${BUILD_DIR}/mergeq/.daemon.pid"
+      if [[ -f "${mergeq_pid_file}" ]] && kill -0 "$(cat "${mergeq_pid_file}" 2>/dev/null)" 2>/dev/null; then
+        mergeq_pid=$(cat "${mergeq_pid_file}")
+        # Single jq call extracts both processing and pending counts
+        read -r processing pending < <(
+          jq -r '[
+            ([.entries[] | select(.status == "processing")] | length),
+            ([.entries[] | select(.status == "pending")] | length)
+          ] | @tsv' "${mergeq_queue_file}" 2>/dev/null || echo "0	0"
+        )
+        if [[ "${processing}" -gt 0 ]]; then
+          echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}(merging) [pid: ${mergeq_pid}]${C_RESET}"
+        elif [[ "${pending}" -gt 0 ]]; then
+          echo -e "  Status: ${C_CYAN}Active${C_RESET} ${C_DIM}(pending) [pid: ${mergeq_pid}]${C_RESET}"
+        else
+          echo -e "  Status: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${mergeq_pid}]${C_RESET}"
+        fi
+      else
+        echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
+      fi
+      if [[ "${merges_empty}" = true ]]; then
+        echo -e "  Merges: ${C_DIM}none${C_RESET}"
+      else
+        total=$(echo "${merges_pending}" | wc -l | tr -d ' ')
+        echo "  Merges:"
+        if [[ "${total}" -le 3 ]]; then
+          jq -r '.entries[] | select(.status == "pending" or .status == "processing") | "\(.status)\t\(.operation)"' "${mergeq_queue_file}" 2>/dev/null | while IFS=$'\t' read -r status op; do
+            status_color="${C_CYAN}"
+            [[ "${status}" = "pending" ]] && status_color=""
+            printf "    ${status_color}%-12s${C_RESET} %s\n" "[${status}]" "${op}"
+          done
+        else
+          jq -r '.entries[] | select(.status == "pending" or .status == "processing") | "\(.status)\t\(.operation)"' "${mergeq_queue_file}" 2>/dev/null | head -n 3 | while IFS=$'\t' read -r status op; do
+            status_color="${C_CYAN}"
+            [[ "${status}" = "pending" ]] && status_color=""
+            printf "    ${status_color}%-12s${C_RESET} %s\n" "[${status}]" "${op}"
+          done
+          remaining=$((total - 3))
+          echo -e "    ${C_DIM}... and ${remaining} more in queue${C_RESET}"
+        fi
+      fi
+    fi
+
+    # Show coffee and nudge status on one line
     echo ""
-    echo "Coffee (Wake Lock):"
+    coffee_status=""
+    nudge_status=""
     if coffee_is_running; then
       coffee_pid_val=$(coffee_pid)
-      echo -e "  Status: ${C_GREEN}Running${C_RESET} ${C_DIM}[pid: ${coffee_pid_val}]${C_RESET}"
+      coffee_status="${C_GREEN}Running${C_RESET} ${C_DIM}[pid: ${coffee_pid_val}]${C_RESET}"
     else
-      echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
+      coffee_status="${C_DIM}Stopped${C_RESET}"
     fi
-
-    # Show nudge worker status
-    echo ""
-    echo "Nudge Worker:"
     if nudge_running; then
-      nudge_pid_val=$(cat "$(nudge_pid_file)" 2>/dev/null)
-      echo -e "  Status: ${C_GREEN}Running${C_RESET} ${C_DIM}[pid: ${nudge_pid_val}]${C_RESET}"
+      nudge_pid_val=$(cat "$(nudge_pid_file)" 2>/dev/null || true)
+      nudge_status="${C_GREEN}Running${C_RESET} ${C_DIM}[pid: ${nudge_pid_val}]${C_RESET}"
     else
-      echo -e "  Status: ${C_DIM}Stopped${C_RESET}"
+      nudge_status="${C_DIM}Stopped${C_RESET}"
     fi
+    echo -e "Coffee: ${coffee_status}, Nudge: ${nudge_status}"
 
     # Show recently completed items (opt-in to avoid N+1 queries)
     if [[ -n "${RECENT}" ]]; then
