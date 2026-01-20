@@ -645,7 +645,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         ;;
     esac
 
-    printf "  %-20s %b%b%b%b%b ${C_DIM}(created: %s)${C_RESET}\n" "${name}:" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${created}"
+    printf "  %-20s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${name}:" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${created}"
     done < <(jq -rs 'sort_by(.created_at) | .[] | [
       .name,
       (.type // "build"),
