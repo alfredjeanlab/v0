@@ -620,12 +620,15 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     case "${phase}" in
       init)
         [[ -n "${status_icon}" ]] && status_icon=" ${C_YELLOW}(planning...)${C_RESET}"
+        [[ -n "${status_icon}" ]] && merge_icon=" ${C_DIM}(branch)${C_RESET}"
         ;;
       planned)
         [[ -n "${status_icon}" ]] && status_icon=" ${C_YELLOW}(decomposing...)${C_RESET}"
+        [[ -n "${status_icon}" ]] && merge_icon=" ${C_DIM}(branch)${C_RESET}"
         ;;
       queued|executing)
         [[ -n "${status_icon}" ]] && status_icon=" ${C_CYAN}(building...)${C_RESET}"
+        [[ -n "${status_icon}" ]] && merge_icon=" ${C_DIM}(branch)${C_RESET}"
         ;;
       blocked)
         [[ -n "${status_icon}" ]] && status_icon=" ${C_YELLOW}(waiting...)${C_RESET}"
