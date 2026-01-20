@@ -348,6 +348,7 @@ CHORE=""
 WATCH=""
 JSON=""
 RECENT=""
+NO_HINTS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -360,6 +361,7 @@ while [[ $# -gt 0 ]]; do
     --watch) WATCH=1; shift ;;
     --json) JSON=1; shift ;;
     --recent) RECENT=1; shift ;;
+    --no-hints) NO_HINTS=1; shift ;;
     --prune|--prune-all)
       echo "Warning: $1 is deprecated. Use 'v0 prune' instead." >&2
       exec "${V0_DIR}/bin/v0-prune" "$@"
@@ -846,8 +848,10 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     fi
   fi
 
-  echo ""
-  echo "Run with --help for more options"
+  if [[ -z "${NO_HINTS}" ]]; then
+    echo ""
+    echo "Run with --help for more options"
+  fi
   exit 0
 fi
 

@@ -93,9 +93,9 @@ while true; do
   clear
   show_header
   if [[ -n "${OPERATION_NAME}" ]]; then
-    "${SCRIPT_DIR}/v0-status" "${OPERATION_NAME}" ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
+    "${SCRIPT_DIR}/v0-status" "${OPERATION_NAME}" --no-hints ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
   else
-    "${SCRIPT_DIR}/v0-status" ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
+    "${SCRIPT_DIR}/v0-status" --no-hints ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
   fi
 
   # Check iteration limit (for testing)
