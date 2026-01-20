@@ -308,3 +308,90 @@ EOF
     run "${V0_DECOMPOSE}" "plans/ignored.md"
     assert_success
 }
+
+# ============================================================================
+# Auto-hold behavior tests
+# ============================================================================
+
+@test "v0-decompose: automatically sets held=true on success" {
+    cat > "${TEST_TEMP_DIR}/project/plans/auto-hold.md" <<'EOF'
+# Auto-hold Test Plan
+EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/auto-hold.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: auto-hold"
+
+    run "${V0_DECOMPOSE}" "plans/auto-hold.md"
+    assert_success
+
+    # Check that held=true in state.json
+    STATE_FILE="${TEST_TEMP_DIR}/project/.v0/build/operations/auto-hold/state.json"
+    assert_file_exists "${STATE_FILE}"
+    run jq -r '.held' "${STATE_FILE}"
+    assert_output "true"
+}
+
+@test "v0-decompose: sets held_at timestamp on success" {
+    cat > "${TEST_TEMP_DIR}/project/plans/held-at-test.md" <<'EOF'
+# Held-at Test Plan
+EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/held-at-test.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: held-at-test"
+
+    run "${V0_DECOMPOSE}" "plans/held-at-test.md"
+    assert_success
+
+    STATE_FILE="${TEST_TEMP_DIR}/project/.v0/build/operations/held-at-test/state.json"
+    run jq -r '.held_at' "${STATE_FILE}"
+    # Should be a valid ISO timestamp
+    refute_output "null"
+    assert_output --regexp '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+}
+
+@test "v0-decompose: emits hold:auto_set event" {
+    cat > "${TEST_TEMP_DIR}/project/plans/event-test.md" <<'EOF'
+# Event Test Plan
+EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/event-test.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: event-test"
+
+    run "${V0_DECOMPOSE}" "plans/event-test.md"
+    assert_success
+
+    # Check events.log for hold:auto_set event
+    EVENTS_LOG="${TEST_TEMP_DIR}/project/.v0/build/operations/event-test/logs/events.log"
+    assert_file_exists "${EVENTS_LOG}"
+    run cat "${EVENTS_LOG}"
+    assert_output --partial "hold:auto_set"
+    assert_output --partial "Automatically held after decompose"
+}
+
+@test "v0-decompose: output shows held message" {
+    cat > "${TEST_TEMP_DIR}/project/plans/output-test.md" <<'EOF'
+# Output Test Plan
+EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/output-test.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: output-test"
+
+    run "${V0_DECOMPOSE}" "plans/output-test.md"
+    assert_success
+    assert_output --partial "Operation is held"
+    assert_output --partial "v0 resume output-test"
+}
+
+@test "v0-decompose: phase transitions to queued with auto-hold" {
+    cat > "${TEST_TEMP_DIR}/project/plans/phase-test.md" <<'EOF'
+# Phase Test Plan
+EOF
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" add plans/phase-test.md
+    /usr/bin/git -C "${TEST_TEMP_DIR}/project" commit --quiet -m "Add plan: phase-test"
+
+    run "${V0_DECOMPOSE}" "plans/phase-test.md"
+    assert_success
+
+    STATE_FILE="${TEST_TEMP_DIR}/project/.v0/build/operations/phase-test/state.json"
+    run jq -r '.phase' "${STATE_FILE}"
+    assert_output "queued"
+
+    run jq -r '.held' "${STATE_FILE}"
+    assert_output "true"
+}

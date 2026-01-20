@@ -795,6 +795,54 @@ sm_exit_if_held() {
   fi
 }
 
+# sm_transition_to_planned_and_hold <op> <plan_file>
+# Transition to planned phase and set hold in one atomic update
+sm_transition_to_planned_and_hold() {
+  local op="$1"
+  local plan_file="$2"
+  local now
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+  sm_ensure_current_schema "${op}"
+
+  sm_bulk_update_state "${op}" \
+    "phase" "\"planned\"" \
+    "plan_file" "\"${plan_file}\"" \
+    "held" "true" \
+    "held_at" "\"${now}\""
+
+  sm_emit_event "${op}" "plan:created" "${plan_file}"
+  sm_emit_event "${op}" "hold:auto_set" "Automatically held after planning"
+}
+
+# sm_transition_to_queued_and_hold <op> [epic_id]
+# Transition to queued phase and set hold in one atomic update
+sm_transition_to_queued_and_hold() {
+  local op="$1"
+  local epic_id="${2:-}"
+  local now
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+  sm_ensure_current_schema "${op}"
+
+  if [[ -n "${epic_id}" ]]; then
+    sm_bulk_update_state "${op}" \
+      "phase" "\"queued\"" \
+      "epic_id" "\"${epic_id}\"" \
+      "held" "true" \
+      "held_at" "\"${now}\""
+    sm_emit_event "${op}" "work:queued" "Issues created"
+  else
+    sm_bulk_update_state "${op}" \
+      "phase" "\"queued\"" \
+      "held" "true" \
+      "held_at" "\"${now}\""
+    sm_emit_event "${op}" "work:queued" "Ready for execution"
+  fi
+
+  sm_emit_event "${op}" "hold:auto_set" "Automatically held after decompose"
+}
+
 # ============================================================================
 # Merge Readiness Checks
 # ============================================================================

@@ -131,11 +131,12 @@ EOF
   if "${V0_PLAN_EXEC}" "${NAME}" "${INSTRUCTIONS}"; then
     # Check plan file was actually created
     if [[ -f "${PLAN_FILE}" ]]; then
-      # Update state to planned
-      tmp=$(mktemp)
-      jq ".phase = \"planned\" | .plan_file = \"${V0_PLANS_DIR}/${NAME}.md\"" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
-      v0_log "plan:complete" "${NAME}"
-      v0_notify "${PROJECT}: plan completed" "${NAME}"
+      # Update state to planned and auto-hold
+      sm_transition_to_planned_and_hold "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
+      v0_log "plan:complete" "${NAME} (held)"
+      v0_notify "${PROJECT}: plan completed [HELD]" "${NAME}"
+      echo "Plan created: ${PLAN_FILE}"
+      echo "Operation is held. Review the plan, then run: v0 resume ${NAME}"
       exit 0
     else
       v0_log "plan:failed" "${NAME}: Plan file not created"
@@ -146,12 +147,13 @@ EOF
   else
     # v0-plan-exec failed, but check if plan file exists (recovery)
     if [[ -f "${PLAN_FILE}" ]]; then
-      # Update state to planned (recovery)
-      tmp=$(mktemp)
-      jq ".phase = \"planned\" | .plan_file = \"${V0_PLANS_DIR}/${NAME}.md\"" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
+      # Update state to planned and auto-hold (recovery)
+      sm_transition_to_planned_and_hold "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
       echo "Note: Process exited with non-zero code but plan file was created successfully"
-      v0_log "plan:complete" "${NAME} (recovered)"
-      v0_notify "${PROJECT}: plan completed" "${NAME}"
+      v0_log "plan:complete" "${NAME} (recovered, held)"
+      v0_notify "${PROJECT}: plan completed [HELD]" "${NAME}"
+      echo "Plan created: ${PLAN_FILE}"
+      echo "Operation is held. Review the plan, then run: v0 resume ${NAME}"
       exit 0
     else
       v0_log "plan:failed" "${NAME}: v0-plan-exec failed"
@@ -288,12 +290,13 @@ fi
 if [[ ${PLAN_EXIT} -ne 0 ]]; then
   if [[ -n "${PLAN_FOUND}" ]]; then
     # Plan file exists despite non-zero exit - treat as success
-    # Update state to planned (recovery)
-    tmp=$(mktemp)
-    jq ".phase = \"planned\" | .plan_file = \"${V0_PLANS_DIR}/${NAME}.md\"" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
+    # Update state to planned and auto-hold (recovery)
+    sm_transition_to_planned_and_hold "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
     echo "Note: Process exited with code ${PLAN_EXIT} but plan file was created successfully"
-    v0_log "plan:complete" "${NAME} (recovered from exit ${PLAN_EXIT})"
-    v0_notify "${PROJECT}: plan completed" "${NAME}"
+    v0_log "plan:complete" "${NAME} (recovered from exit ${PLAN_EXIT}, held)"
+    v0_notify "${PROJECT}: plan completed [HELD]" "${NAME}"
+    echo "Plan created: ${PLAN_FILE}"
+    echo "Operation is held. Review the plan, then run: v0 resume ${NAME}"
     exit 0
   else
     v0_log "plan:failed" "${NAME}: Exit code ${PLAN_EXIT}"
@@ -310,11 +313,11 @@ if [[ -z "${PLAN_FOUND}" ]]; then
   exit 1
 fi
 
-# Update state to planned
-tmp=$(mktemp)
-jq ".phase = \"planned\" | .plan_file = \"${V0_PLANS_DIR}/${NAME}.md\"" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
+# Update state to planned and auto-hold
+sm_transition_to_planned_and_hold "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
 
 # Success
-v0_log "plan:complete" "${NAME}"
-v0_notify "${PROJECT}: plan completed" "${NAME}"
+v0_log "plan:complete" "${NAME} (held)"
+v0_notify "${PROJECT}: plan completed [HELD]" "${NAME}"
 echo "Plan created: ${PLAN_FILE}"
+echo "Operation is held. Review the plan, then run: v0 resume ${NAME}"
