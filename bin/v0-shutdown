@@ -14,6 +14,9 @@ source "${V0_DIR}/lib/coffee-common.sh"
 # Source nudge functions for idle session monitoring
 source "${V0_DIR}/lib/nudge-common.sh"
 
+# Source worker functions for issue cleanup
+source "${V0_DIR}/lib/worker-common.sh"
+
 usage() {
   cat <<'EOF'
 Usage: v0 shutdown [options]
@@ -138,25 +141,16 @@ fi
 echo ""
 echo "Checking for in-progress issues to reopen..."
 
-# Define workers to check
-WORKERS=("worker:fix" "worker:chore")
-
-for worker in "${WORKERS[@]}"; do
-  # Find in-progress issues assigned to this worker
-  issues=$(wk list --status in_progress --assignee "${worker}" -f json 2>/dev/null | jq -r '.issues[].id' || true)
-
-  if [[ -n "${issues}" ]]; then
+for worker in "worker:fix" "worker:chore"; do
+  if [[ -n "${DRY_RUN}" ]]; then
+    # Show what would be reopened
+    issues=$(wk list --status in_progress --assignee "${worker}" -f json 2>/dev/null | jq -r '.issues[].id' || true)
     while IFS= read -r issue_id; do
       [[ -z "${issue_id}" ]] && continue
-
-      if [[ -n "${DRY_RUN}" ]]; then
-        echo "Would reopen: ${issue_id} (was assigned to ${worker})"
-      else
-        echo "Reopening: ${issue_id} (was assigned to ${worker})"
-        wk stop "${issue_id}" 2>/dev/null || true
-        wk edit "${issue_id}" assignee none 2>/dev/null || true
-      fi
+      echo "Would reopen: ${issue_id} (was assigned to ${worker})"
     done <<< "${issues}"
+  else
+    reopen_worker_issues "${worker}"
   fi
 done
 

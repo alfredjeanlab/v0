@@ -535,6 +535,7 @@ stop_worker() {
     stop_worker_standalone
     return
   fi
+  reopen_worker_issues "worker:chore"
   generic_stop_worker "${WORKER_SESSION}" "${WORKER_BRANCH}"
 }
 
@@ -545,6 +546,7 @@ stop_worker_standalone() {
     return 0
   fi
 
+  reopen_worker_issues "worker:chore"
   echo "Stopping standalone worker..."
 
   # Kill tmux session

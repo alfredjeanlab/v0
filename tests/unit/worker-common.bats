@@ -308,3 +308,103 @@ EOF
         assert_equal "$actual" "$expected" "Failure $i: expected $expected, got $actual"
     done
 }
+
+# ============================================================================
+# reopen_worker_issues() tests
+# ============================================================================
+
+@test "reopen_worker_issues succeeds with no matching issues" {
+    # Create mock wk that returns empty JSON
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "list" ]]; then
+    echo '{"issues":[]}'
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    run reopen_worker_issues "worker:chore"
+    assert_success
+    assert_output ""
+}
+
+@test "reopen_worker_issues reopens matching issues" {
+    # Create mock wk that returns issues and logs calls
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+echo "$@" >> "$TEST_TEMP_DIR/wk.log"
+if [[ "$1" == "list" ]]; then
+    echo '{"issues":[{"id":"testp-1234"},{"id":"testp-5678"}]}'
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    run reopen_worker_issues "worker:fix"
+    assert_success
+    assert_output --partial "Reopening: testp-1234"
+    assert_output --partial "Reopening: testp-5678"
+
+    # Verify wk was called with correct commands
+    run cat "$TEST_TEMP_DIR/wk.log"
+    assert_output --partial "reopen testp-1234"
+    assert_output --partial "edit testp-1234 assignee none"
+    assert_output --partial "reopen testp-5678"
+    assert_output --partial "edit testp-5678 assignee none"
+}
+
+@test "reopen_worker_issues handles wk command failures gracefully" {
+    # Create mock wk that fails on reopen/edit
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "list" ]]; then
+    echo '{"issues":[{"id":"testp-fail"}]}'
+    exit 0
+fi
+# All other commands fail
+exit 1
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    # Should not fail even when wk reopen/edit fails
+    run reopen_worker_issues "worker:chore"
+    assert_success
+    assert_output --partial "Reopening: testp-fail"
+}
+
+@test "reopen_worker_issues handles jq parse errors gracefully" {
+    # Create mock wk that returns invalid JSON
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "list" ]]; then
+    echo "invalid json"
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    # Should succeed even with invalid JSON (due to || true)
+    run reopen_worker_issues "worker:fix"
+    assert_success
+}

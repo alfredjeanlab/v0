@@ -373,6 +373,7 @@ FIXED_SCRIPT
 
 # Stop the worker
 stop_worker() {
+  reopen_worker_issues "worker:fix"
   generic_stop_worker "${WORKER_SESSION}" "${WORKER_BRANCH}"
 }
 

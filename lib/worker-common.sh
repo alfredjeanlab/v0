@@ -463,3 +463,24 @@ generic_stop_worker() {
 
   echo "Worker stopped"
 }
+
+# Reopen in-progress issues assigned to a worker
+# Args: $1 = worker assignee (e.g., "worker:chore", "worker:fix")
+reopen_worker_issues() {
+  local worker_assignee="$1"
+
+  # Find in-progress issues assigned to this worker
+  local issues
+  issues=$(wk list --status in_progress --assignee "${worker_assignee}" -f json 2>/dev/null | jq -r '.issues[].id' || true)
+
+  if [[ -z "${issues}" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r issue_id; do
+    [[ -z "${issue_id}" ]] && continue
+    echo "Reopening: ${issue_id} (was assigned to ${worker_assignee})"
+    wk reopen "${issue_id}" 2>/dev/null || true
+    wk edit "${issue_id}" assignee none 2>/dev/null || true
+  done <<< "${issues}"
+}
