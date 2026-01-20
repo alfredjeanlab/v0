@@ -845,7 +845,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       elif [[ "${bugs_empty}" = true ]]; then
         echo -e "Bugfix: ${C_DIM}None${C_RESET}"
       else
-        echo -e "Bugfix: ${C_DIM}Stopped${C_RESET}"
+        echo -e "Bugfix: ${C_RED}Stopped${C_RESET}"
       fi
       if [[ "${bugs_empty}" != true ]]; then
         if [[ -n "${bugs_in_progress}" ]]; then
@@ -885,7 +885,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       elif [[ "${chores_empty}" = true ]]; then
         echo -e "Chores: ${C_DIM}None${C_RESET}"
       else
-        echo -e "Chores: ${C_DIM}Stopped${C_RESET}"
+        echo -e "Chores: ${C_RED}Stopped${C_RESET}"
       fi
       if [[ "${chores_empty}" != true ]]; then
         if [[ -n "${chores_in_progress}" ]]; then
