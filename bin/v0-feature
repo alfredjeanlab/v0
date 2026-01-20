@@ -926,6 +926,18 @@ EOF
       done
     fi
 
+    # Auto-commit plan file changes from decompose (unless gitignored)
+    if git -C "${V0_ROOT}" diff --quiet -- "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+      emit_event "decompose:commit" "No changes to commit"
+    elif git -C "${V0_ROOT}" check-ignore -q "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+      emit_event "decompose:commit" "Skipped (gitignored)"
+    elif git -C "${V0_ROOT}" add "${V0_PLANS_DIR}/${NAME}.md" && \
+         git -C "${V0_ROOT}" commit -m "Update plan: ${NAME}" -m "Auto-committed by v0 decompose"; then
+      emit_event "decompose:commit" "Committed ${V0_PLANS_DIR}/${NAME}.md"
+    else
+      emit_event "decompose:commit" "Failed to commit (worktree may have other changes)"
+    fi
+
     rm -f "${STATE_DIR}/done"
   fi
 
