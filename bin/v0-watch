@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/v0-common.sh"
 
 # Default configuration
-REFRESH_INTERVAL=6
+REFRESH_INTERVAL=5
 FILTER_ARGS=()
 OPERATION_NAME=""
 MAX_ITERATIONS=""  # For testing: limit number of watch iterations
@@ -22,7 +22,7 @@ Arguments:
   OPERATION             Watch a specific operation by name
 
 Options:
-  -n, --interval SECS   Refresh interval in seconds (default: 6)
+  -n, --interval SECS   Refresh interval in seconds (default: 5)
   -o, --operation NAME  Watch a specific operation by name
   --fix                 Watch fix worker status only
   --chore               Watch chore worker status only
