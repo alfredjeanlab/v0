@@ -365,8 +365,10 @@ if [[ -n "${RESUME}" ]]; then
     emit_event "state:upgraded" "Added missing merge_queued field"
   fi
 
-  # Clear hold on resume
+  # Clear hold on resume (but remember if it was held for blocked operations)
+  WAS_HELD=""
   if sm_is_held "${NAME}"; then
+    WAS_HELD=1
     echo "Clearing hold on '${NAME}'..."
     sm_clear_hold "${NAME}"
   fi
@@ -486,6 +488,17 @@ if [[ -n "${RESUME}" ]]; then
         [[ -z "${PHASE}" ]] || [[ "${PHASE}" = "null" ]] && PHASE="init"
         update_state "after" 'null'
         emit_event "unblock:resumed" "After op ${AFTER} deleted"
+
+        # If this resume was just clearing a hold, don't start the operation
+        if [[ -n "${WAS_HELD}" ]]; then
+          update_state "phase" "\"${PHASE}\""
+          echo ""
+          echo "Hold cleared. Operation unblocked and ready at phase: ${PHASE}"
+          echo ""
+          echo "Start with:"
+          echo "  v0 feature ${NAME} --resume"
+          exit 0
+        fi
       elif is_after_op_merged "${AFTER}"; then
         echo "Operation '${AFTER}' has merged, proceeding..."
         PHASE=$(get_state blocked_phase)
@@ -494,6 +507,18 @@ if [[ -n "${RESUME}" ]]; then
         fi
         update_state "after" 'null'
         emit_event "unblock:resumed" "Unblocked by ${AFTER} merge"
+
+        # If this resume was just clearing a hold, don't start the operation
+        # Let the user run resume again to actually start it
+        if [[ -n "${WAS_HELD}" ]]; then
+          update_state "phase" "\"${PHASE}\""
+          echo ""
+          echo "Hold cleared. Operation unblocked and ready at phase: ${PHASE}"
+          echo ""
+          echo "Start with:"
+          echo "  v0 feature ${NAME} --resume"
+          exit 0
+        fi
       else
         after_phase=$(get_blocker_phase "${AFTER}")
         if [[ "${after_phase}" = "failed" ]] || [[ "${after_phase}" = "conflict" ]]; then

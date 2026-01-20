@@ -403,3 +403,127 @@ EOF
     assert_success
     assert_output "continued"
 }
+
+# ============================================================================
+# Blocked + Held Resume Tests
+# ============================================================================
+
+@test "v0-feature --resume: blocked and held operation only clears hold (blocker merged)" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Create a blocker operation that has merged
+    create_isolated_operation "${project_dir}" "blocker" '{"name": "blocker", "phase": "merged", "machine": "testmachine"}'
+
+    # Create a blocked + held operation
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "blocked", "machine": "testmachine", "after": "blocker", "blocked_phase": "init", "held": true, "held_at": "2026-01-15T10:00:00Z", "prompt": "test prompt"}'
+    mkdir -p "${project_dir}/.v0/build/operations/testop/logs"
+
+    # Create mock bins
+    local mock_dir="${TEST_TEMP_DIR}/mock-bin"
+    mkdir -p "${mock_dir}"
+
+    cat > "${mock_dir}/tmux" <<'EOF'
+#!/bin/bash
+exit 1  # No session exists
+EOF
+    chmod +x "${mock_dir}/tmux"
+
+    # Run resume
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR PATH="${mock_dir}:${PATH}" bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-feature" testop --resume
+    '
+    assert_success
+    assert_output --partial "Clearing hold"
+    assert_output --partial "Hold cleared"
+    assert_output --partial "ready at phase: init"
+    assert_output --partial "v0 feature testop --resume"
+
+    # Verify hold was cleared
+    run jq -r '.held' "${project_dir}/.v0/build/operations/testop/state.json"
+    assert_output "false"
+
+    # Verify phase was updated to the blocked_phase
+    run jq -r '.phase' "${project_dir}/.v0/build/operations/testop/state.json"
+    assert_output "init"
+
+    # Verify after was cleared (unblocked)
+    run jq -r '.after' "${project_dir}/.v0/build/operations/testop/state.json"
+    assert_output "null"
+}
+
+@test "v0-feature --resume: blocked and held operation only clears hold (blocker deleted)" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # No blocker operation exists (deleted)
+
+    # Create a blocked + held operation pointing to non-existent blocker
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "blocked", "machine": "testmachine", "after": "deleted-op", "blocked_phase": "queued", "held": true, "held_at": "2026-01-15T10:00:00Z", "prompt": "test prompt"}'
+    mkdir -p "${project_dir}/.v0/build/operations/testop/logs"
+
+    # Create mock bins
+    local mock_dir="${TEST_TEMP_DIR}/mock-bin"
+    mkdir -p "${mock_dir}"
+
+    cat > "${mock_dir}/tmux" <<'EOF'
+#!/bin/bash
+exit 1  # No session exists
+EOF
+    chmod +x "${mock_dir}/tmux"
+
+    # Run resume
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR PATH="${mock_dir}:${PATH}" bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-feature" testop --resume
+    '
+    assert_success
+    assert_output --partial "Clearing hold"
+    assert_output --partial "Hold cleared"
+    assert_output --partial "ready at phase: queued"
+
+    # Verify hold was cleared
+    run jq -r '.held' "${project_dir}/.v0/build/operations/testop/state.json"
+    assert_output "false"
+
+    # Verify phase was updated
+    run jq -r '.phase' "${project_dir}/.v0/build/operations/testop/state.json"
+    assert_output "queued"
+}
+
+@test "v0-feature --resume: blocked but not held operation proceeds normally" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Create a blocker operation that has merged
+    create_isolated_operation "${project_dir}" "blocker" '{"name": "blocker", "phase": "merged", "machine": "testmachine"}'
+
+    # Create a blocked (but not held) operation
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "blocked", "machine": "testmachine", "after": "blocker", "blocked_phase": "init", "held": false, "prompt": "test prompt"}'
+    mkdir -p "${project_dir}/.v0/build/operations/testop/logs"
+
+    # Create mock bins
+    local mock_dir="${TEST_TEMP_DIR}/mock-bin"
+    mkdir -p "${mock_dir}"
+
+    cat > "${mock_dir}/tmux" <<'EOF'
+#!/bin/bash
+exit 1  # No session exists
+EOF
+    chmod +x "${mock_dir}/tmux"
+
+    # Run resume with --dry-run to avoid actually starting
+    # Note: This will fail at plan file check, but we verify it proceeded past the blocked state
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR PATH="${mock_dir}:${PATH}" bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-feature" testop --resume --dry-run
+    '
+    # Command will fail because no plan file exists, but that's OK - we're checking it proceeded
+    # Should proceed past blocked state (not exit early like held operations)
+    assert_output --partial "has merged, proceeding"
+    # Should NOT show the "Hold cleared" message (because it wasn't held)
+    refute_output --partial "Hold cleared"
+    # Should show it attempted to continue with the next phase
+    assert_output --partial "plan:starting"
+}
