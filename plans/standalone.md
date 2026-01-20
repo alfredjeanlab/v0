@@ -1,5 +1,7 @@
 # Standalone Mode Implementation Plan
 
+**Root Feature:** `v0-c305`
+
 ## Overview
 
 Enable `v0` to function outside of project directories (without a `.v0.rc` file) for running general-purpose chores. This adds a "standalone mode" where users can log and execute chores from anywhere on their system, with state persisted in a global user directory.
