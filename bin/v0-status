@@ -715,7 +715,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       if [[ -n "${merge_color}" ]]; then
         # Special formatting for certain merge icons
         case "${raw_merge_icon}" in
-          "(merged)")
+          "[merged]")
             merge_icon=" $(sm_get_status_color "${merge_color}")${C_DIM}${raw_merge_icon}${C_RESET}"
             ;;
           "(== MERGE FAILED =="*|"(== CONFLICT =="*|"(== NEEDS MERGE =="*)

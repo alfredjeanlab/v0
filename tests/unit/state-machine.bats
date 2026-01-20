@@ -684,7 +684,7 @@ create_test_state() {
     create_test_state "test-op" "merged"
 
     run sm_get_display_status "test-op"
-    assert_output "merged|green|(merged)"
+    assert_output "merged|green|[merged]"
 }
 
 @test "sm_get_display_status returns conflict for conflict phase" {

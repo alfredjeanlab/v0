@@ -921,7 +921,7 @@ _sm_format_phase_display() {
   case "${phase}" in
     merged)
       display_phase="completed"
-      merge_icon="(merged)"
+      merge_icon="[merged]"
       ;;
     completed|pending_merge)
       # Plan-type operations don't merge
@@ -936,7 +936,7 @@ _sm_format_phase_display() {
             merge_icon="(merging...)"
             ;;
           completed)
-            merge_icon="(merged)"
+            merge_icon="[merged]"
             ;;
           failed)
             merge_icon="(== MERGE FAILED ==)"
@@ -950,11 +950,11 @@ _sm_format_phase_display() {
           *)
             # No queue entry - fall back to state.json
             if [[ "${merge_status}" = "merged" ]]; then
-              merge_icon="(merged)"
+              merge_icon="[merged]"
             elif [[ "${merge_status}" = "conflict" ]]; then
               merge_icon="(== CONFLICT ==)"
             elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
-              merge_icon="(merged)"
+              merge_icon="[merged]"
             else
               merge_icon="(merge pending)"
             fi
@@ -1028,7 +1028,7 @@ _sm_get_merge_icon_color() {
   local merge_icon="$1"
 
   case "${merge_icon}" in
-    "(merged)")
+    "[merged]")
       echo "green"
       ;;
     "(merging...)"*|"(resumed)"*|"(in queue)"*)
@@ -1105,7 +1105,7 @@ sm_get_display_status() {
       echo "pending_merge|yellow|${merge_display}"
       ;;
     merged)
-      echo "merged|green|(merged)"
+      echo "merged|green|[merged]"
       ;;
     conflict)
       echo "conflict|red|== CONFLICT =="
@@ -1136,7 +1136,7 @@ sm_get_merge_display_status() {
 
   # Check if already merged
   if [[ "${phase}" = "merged" ]] || [[ "${merge_status}" = "merged" ]]; then
-    echo "(merged)"
+    echo "[merged]"
     return
   fi
 
