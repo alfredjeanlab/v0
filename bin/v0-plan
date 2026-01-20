@@ -119,7 +119,8 @@ if [[ -n "${DIRECT}" ]]; then
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "plan_file": null,
   "tmux_session": null,
-  "merge_queued": false
+  "merge_queued": false,
+  "working_dir": "${V0_ROOT}"
 }
 EOF
   fi
@@ -189,7 +190,8 @@ if [[ ! -f "${STATE_FILE}" ]]; then
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "plan_file": null,
   "tmux_session": null,
-  "merge_queued": false
+  "merge_queued": false,
+  "working_dir": "${V0_ROOT}"
 }
 EOF
 fi
