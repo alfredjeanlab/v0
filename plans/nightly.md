@@ -1,5 +1,7 @@
 # Implementation Plan: v0 self update
 
+**Root Feature:** `v0-9c05`
+
 ## Overview
 
 Add a `v0 self update` command that allows users to switch between stable releases, nightly builds, and specific versions. This includes:

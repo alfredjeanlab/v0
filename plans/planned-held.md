@@ -1,5 +1,7 @@
 # Implementation Plan: Auto-Hold on Plan/Decompose Completion
 
+**Root Feature:** `v0-d025`
+
 ## Overview
 
 Modify `v0 plan` and `v0 decompose` to automatically set `held=true` when they complete successfully. This consolidates the workflow so operations enter a "planned [HELD]" or "queued [HELD]" state, eliminating the need for a separate manual hold step and removing the distinct "plan completed" display state.
