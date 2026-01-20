@@ -1,6 +1,6 @@
 # State Machine Integration Plan
 
-**Root Feature:** `v0-xxxx` (follows state-machine.md)
+**Root Feature:** `v0-8096` (follows state-machine.md)
 
 ## Overview
 
