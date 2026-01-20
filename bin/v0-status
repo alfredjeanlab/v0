@@ -59,7 +59,7 @@ show_bugs_indented() {
   if [[ -n "${in_progress}" ]]; then
     local count
     count=$(echo "${in_progress}" | wc -l | tr -d ' ')
-    echo "  In progress:"
+    echo -e "  ${C_DIM}In progress:${C_RESET}"
     if [[ "${count}" -le "${limit}" ]]; then
       echo "${in_progress}" | sed 's/^/    /'
     else
@@ -72,7 +72,7 @@ show_bugs_indented() {
   if [[ -n "${open}" ]]; then
     local count
     count=$(echo "${open}" | wc -l | tr -d ' ')
-    echo "  Queued:"
+    echo -e "  ${C_DIM}Queued:${C_RESET}"
     if [[ "${count}" -le "${limit}" ]]; then
       echo "${open}" | sed 's/^/    /'
     else
@@ -136,7 +136,7 @@ show_chores_indented() {
   if [[ -n "${in_progress}" ]]; then
     local count
     count=$(echo "${in_progress}" | wc -l | tr -d ' ')
-    echo "  In progress:"
+    echo -e "  ${C_DIM}In progress:${C_RESET}"
     if [[ "${count}" -le "${limit}" ]]; then
       echo "${in_progress}" | sed 's/^/    /'
     else
@@ -149,7 +149,7 @@ show_chores_indented() {
   if [[ -n "${open}" ]]; then
     local count
     count=$(echo "${open}" | wc -l | tr -d ' ')
-    echo "  Queued:"
+    echo -e "  ${C_DIM}Queued:${C_RESET}"
     if [[ "${count}" -le "${limit}" ]]; then
       echo "${open}" | sed 's/^/    /'
     else
@@ -442,7 +442,7 @@ if [[ -n "${FIX}" ]]; then
 
     if [[ -n "${in_progress_bugs}" ]]; then
       echo ""
-      echo "In Progress:"
+      echo -e "${C_DIM}In Progress:${C_RESET}"
       count=$(echo "${in_progress_bugs}" | wc -l | tr -d ' ')
       if [[ "${count}" -le "${shown}" ]]; then
         echo "${in_progress_bugs}" | sed 's/^/  /'
@@ -455,7 +455,7 @@ if [[ -n "${FIX}" ]]; then
 
     if [[ -n "${open_bugs}" ]]; then
       echo ""
-      echo "Queued:"
+      echo -e "${C_DIM}Queued:${C_RESET}"
       count=$(echo "${open_bugs}" | wc -l | tr -d ' ')
       if [[ "${count}" -le "${shown}" ]]; then
         echo "${open_bugs}" | sed 's/^/  /'
@@ -502,7 +502,7 @@ if [[ -n "${CHORE}" ]]; then
 
     if [[ -n "${in_progress_chores}" ]]; then
       echo ""
-      echo "In Progress:"
+      echo -e "${C_DIM}In Progress:${C_RESET}"
       count=$(echo "${in_progress_chores}" | wc -l | tr -d ' ')
       if [[ "${count}" -le "${shown}" ]]; then
         echo "${in_progress_chores}" | sed 's/^/  /'
@@ -515,7 +515,7 @@ if [[ -n "${CHORE}" ]]; then
 
     if [[ -n "${open_chores}" ]]; then
       echo ""
-      echo "Queued:"
+      echo -e "${C_DIM}Queued:${C_RESET}"
       count=$(echo "${open_chores}" | wc -l | tr -d ' ')
       if [[ "${count}" -le "${shown}" ]]; then
         echo "${open_chores}" | sed 's/^/  /'
@@ -783,7 +783,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       if [[ "${bugs_empty}" != true ]]; then
         if [[ -n "${bugs_in_progress}" ]]; then
           count=$(echo "${bugs_in_progress}" | wc -l | tr -d ' ')
-          echo "  In progress:"
+          echo -e "  ${C_DIM}In progress:${C_RESET}"
           if [[ "${count}" -le 3 ]]; then
             echo "${bugs_in_progress}" | sed 's/^/    /'
           else
@@ -794,7 +794,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         fi
         if [[ -n "${bugs_open}" ]]; then
           count=$(echo "${bugs_open}" | wc -l | tr -d ' ')
-          echo "  Queued:"
+          echo -e "  ${C_DIM}Queued:${C_RESET}"
           if [[ "${count}" -le 3 ]]; then
             echo "${bugs_open}" | sed 's/^/    /'
           else
@@ -823,7 +823,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       if [[ "${chores_empty}" != true ]]; then
         if [[ -n "${chores_in_progress}" ]]; then
           count=$(echo "${chores_in_progress}" | wc -l | tr -d ' ')
-          echo "  In progress:"
+          echo -e "  ${C_DIM}In progress:${C_RESET}"
           if [[ "${count}" -le 3 ]]; then
             echo "${chores_in_progress}" | sed 's/^/    /'
           else
@@ -834,7 +834,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         fi
         if [[ -n "${chores_open}" ]]; then
           count=$(echo "${chores_open}" | wc -l | tr -d ' ')
-          echo "  Queued:"
+          echo -e "  ${C_DIM}Queued:${C_RESET}"
           if [[ "${count}" -le 3 ]]; then
             echo "${chores_open}" | sed 's/^/    /'
           else
