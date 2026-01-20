@@ -698,9 +698,9 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     # If all queues are empty, show each on its own line
     if [[ "${bugs_empty}" = true ]] && [[ "${chores_empty}" = true ]] && [[ "${merges_empty}" = true ]]; then
       echo ""
-      echo -e "Bugfix: ${C_DIM}none${C_RESET}"
-      echo -e "Chores: ${C_DIM}none${C_RESET}"
-      echo -e "Merges: ${C_DIM}none${C_RESET}"
+      echo -e "Bugfix: ${C_DIM}None${C_RESET}"
+      echo -e "Chores: ${C_DIM}None${C_RESET}"
+      echo -e "Merges: ${C_DIM}None${C_RESET}"
     else
       # Show full sections for non-empty queues
       echo ""
@@ -715,7 +715,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       elif [[ -n "${fix_polling_pid}" ]]; then
         echo -e "Bugfix: ${C_YELLOW}Polling${C_RESET}"
       elif [[ "${bugs_empty}" = true ]]; then
-        echo -e "Bugfix: ${C_DIM}none${C_RESET}"
+        echo -e "Bugfix: ${C_DIM}None${C_RESET}"
       else
         echo -e "Bugfix: ${C_DIM}Stopped${C_RESET}"
       fi
@@ -754,7 +754,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       elif [[ -n "${chore_polling_pid}" ]]; then
         echo -e "Chores: ${C_YELLOW}Polling${C_RESET}"
       elif [[ "${chores_empty}" = true ]]; then
-        echo -e "Chores: ${C_DIM}none${C_RESET}"
+        echo -e "Chores: ${C_DIM}None${C_RESET}"
       else
         echo -e "Chores: ${C_DIM}Stopped${C_RESET}"
       fi
@@ -801,7 +801,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
           echo -e "Merges: ${C_YELLOW}Polling${C_RESET}"
         fi
       elif [[ "${merges_empty}" = true ]]; then
-        echo -e "Merges: ${C_DIM}none${C_RESET}"
+        echo -e "Merges: ${C_DIM}None${C_RESET}"
       else
         echo -e "Merges: ${C_DIM}Stopped${C_RESET}"
       fi
