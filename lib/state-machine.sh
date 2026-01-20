@@ -956,7 +956,7 @@ _sm_format_phase_display() {
             elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
               merge_icon="[merged]"
             else
-              merge_icon="(merge pending)"
+              merge_icon="[merge pending]"
             fi
             ;;
         esac
@@ -1034,7 +1034,7 @@ _sm_get_merge_icon_color() {
     "(merging...)"*|"(resumed)"*|"(in queue)"*)
       echo "cyan"
       ;;
-    "(merge pending)"*|"(== NEEDS MERGE ==)"*)
+    "[merge pending]"*|"(== NEEDS MERGE ==)"*)
       echo "yellow"
       ;;
     "(== MERGE FAILED =="*|"(== CONFLICT =="*)
