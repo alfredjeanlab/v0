@@ -1,5 +1,7 @@
 # Implementation Plan: V0_DEVELOP_BRANCH Configuration
 
+**Root Feature:** `v0-9568`
+
 ## Overview
 
 Rename `V0_MAIN_BRANCH` to `V0_DEVELOP_BRANCH` throughout the codebase and replace all hardcoded `main` branch references with the configurable variable. Add the variable as a commented option in the default `.v0.rc` template and create tests to verify the configuration is respected.
