@@ -403,10 +403,16 @@ EOF
 @test "find_operation_for_session finds operation by tmux_session" {
     source_lib "nudge-common.sh"
 
-    # Set up a mock operation directory with state.json
-    local project_dir="$HOME/.local/state/v0/testproj"
-    local build_dir="$project_dir/../.v0/build"
+    # Set up a mock state directory with a tree that has project root reference
+    local state_dir="$HOME/.local/state/v0/testproj"
+    local project_root="$BATS_TEST_TMPDIR/mock-project"
+    local tree_dir="$state_dir/tree/my-worker"
+    local build_dir="$project_root/.v0/build"
+    mkdir -p "$tree_dir"
     mkdir -p "$build_dir/operations/my-feature"
+
+    # Create the project root reference
+    echo "$project_root" > "$tree_dir/.worker-project-root"
 
     cat > "$build_dir/operations/my-feature/state.json" <<'EOF'
 {
@@ -437,10 +443,16 @@ EOF
 @test "find_operation_for_session ignores operations without tmux_session" {
     source_lib "nudge-common.sh"
 
-    # Set up a mock operation without tmux_session
-    local project_dir="$HOME/.local/state/v0/testproj"
-    local build_dir="$project_dir/../.v0/build"
+    # Set up a mock state directory with a tree that has project root reference
+    local state_dir="$HOME/.local/state/v0/testproj"
+    local project_root="$BATS_TEST_TMPDIR/mock-project"
+    local tree_dir="$state_dir/tree/my-worker"
+    local build_dir="$project_root/.v0/build"
+    mkdir -p "$tree_dir"
     mkdir -p "$build_dir/operations/no-session"
+
+    # Create the project root reference
+    echo "$project_root" > "$tree_dir/.worker-project-root"
 
     cat > "$build_dir/operations/no-session/state.json" <<'EOF'
 {

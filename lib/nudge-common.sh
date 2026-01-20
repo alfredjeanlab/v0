@@ -235,7 +235,7 @@ is_session_done() {
 
 # Find worktree for a tmux session by searching state files
 # Args: $1 = session name
-# Outputs: worktree path if found
+# Outputs: worktree path if found (or working_dir for plans)
 # Returns: 0 if found, 1 if not found
 find_session_worktree() {
   local session="$1"
@@ -244,10 +244,12 @@ find_session_worktree() {
   for state_root in "${HOME}/.local/state/v0"/*; do
     [[ ! -d "${state_root}" ]] && continue
 
-    # Check tree directories for matching session via .tmux-session file
+    # First, try to find project root from any tree directory
+    local project_root=""
     for tree_dir in "${state_root}/tree"/*; do
       [[ ! -d "${tree_dir}" ]] && continue
 
+      # Check if this tree has the session we're looking for
       if [[ -f "${tree_dir}/.tmux-session" ]]; then
         local stored_session
         stored_session=$(cat "${tree_dir}/.tmux-session" 2>/dev/null)
@@ -256,21 +258,40 @@ find_session_worktree() {
           return 0
         fi
       fi
+
+      # Capture project root from any tree directory for later use
+      if [[ -z "${project_root}" ]] && [[ -f "${tree_dir}/.worker-project-root" ]]; then
+        project_root=$(cat "${tree_dir}/.worker-project-root" 2>/dev/null)
+      fi
     done
 
-    # Also check operations state for feature sessions
-    local build_dir="${state_root}/../.v0/build"
-    if [[ -d "${build_dir}/operations" ]]; then
+    # Also check operations state for feature/plan sessions
+    # Use project_root if available, otherwise skip operations check
+    local build_dir=""
+    if [[ -n "${project_root}" ]] && [[ -d "${project_root}/.v0/build" ]]; then
+      build_dir="${project_root}/.v0/build"
+    fi
+
+    if [[ -n "${build_dir}" ]] && [[ -d "${build_dir}/operations" ]]; then
       for op_dir in "${build_dir}/operations"/*; do
         [[ ! -f "${op_dir}/state.json" ]] && continue
 
-        local tmux_session tree
+        local tmux_session
         tmux_session=$(jq -r '.tmux_session // empty' "${op_dir}/state.json" 2>/dev/null)
         if [[ "${tmux_session}" = "${session}" ]]; then
+          # Check for worktree (features) or working_dir (plans)
+          local tree working_dir
           tree=$(jq -r '.worktree // empty' "${op_dir}/state.json" 2>/dev/null)
           if [[ -n "${tree}" ]] && [[ -d "${tree}" ]]; then
             # Return the parent of worktree (the tree_dir)
             dirname "${tree}"
+            return 0
+          fi
+
+          # For plans, use working_dir (which is V0_ROOT)
+          working_dir=$(jq -r '.working_dir // empty' "${op_dir}/state.json" 2>/dev/null)
+          if [[ -n "${working_dir}" ]] && [[ -d "${working_dir}" ]]; then
+            echo "${working_dir}"
             return 0
           fi
         fi
@@ -304,9 +325,23 @@ find_operation_for_session() {
   for state_root in "${HOME}/.local/state/v0"/*; do
     [[ ! -d "${state_root}" ]] && continue
 
-    # Check operations state for feature sessions
-    local build_dir="${state_root}/../.v0/build"
-    if [[ -d "${build_dir}/operations" ]]; then
+    # Find project root from tree directories
+    local project_root=""
+    for tree_dir in "${state_root}/tree"/*; do
+      [[ ! -d "${tree_dir}" ]] && continue
+      if [[ -f "${tree_dir}/.worker-project-root" ]]; then
+        project_root=$(cat "${tree_dir}/.worker-project-root" 2>/dev/null)
+        break
+      fi
+    done
+
+    # Check operations state using correct build_dir path
+    local build_dir=""
+    if [[ -n "${project_root}" ]] && [[ -d "${project_root}/.v0/build" ]]; then
+      build_dir="${project_root}/.v0/build"
+    fi
+
+    if [[ -n "${build_dir}" ]] && [[ -d "${build_dir}/operations" ]]; then
       for op_dir in "${build_dir}/operations"/*; do
         [[ ! -f "${op_dir}/state.json" ]] && continue
 
