@@ -467,8 +467,7 @@ if [[ -n "${FIX}" ]]; then
   [[ -f "${fix_polling_log}" ]] && fix_polling_pid=$(pgrep -f "while true.*${fix_session}" 2>/dev/null || true)
 
   if [[ "${fix_worker_running}" = true ]]; then
-    echo -e "Fix Worker: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${fix_session}]${C_RESET}"
-    echo -e "Attach with: v0 attach fix"
+    echo -e "Fix Worker: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${fix_session}] Attach with: v0 attach fix${C_RESET}"
   elif [[ -n "${fix_polling_pid}" ]]; then
     echo -e "Fix Worker: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${fix_polling_pid}]${C_RESET}"
   else
@@ -527,8 +526,7 @@ if [[ -n "${CHORE}" ]]; then
   [[ -f "${chore_polling_log}" ]] && chore_polling_pid=$(pgrep -f "while true.*${chore_session}" 2>/dev/null || true)
 
   if [[ "${chore_worker_running}" = true ]]; then
-    echo -e "Chore Worker: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${chore_session}]${C_RESET}"
-    echo -e "Attach with: v0 attach chore"
+    echo -e "Chore Worker: ${C_CYAN}Active${C_RESET} ${C_DIM}[tmux: ${chore_session}] Attach with: v0 attach chore${C_RESET}"
   elif [[ -n "${chore_polling_pid}" ]]; then
     echo -e "Chore Worker: ${C_YELLOW}Polling${C_RESET} ${C_DIM}[pid: ${chore_polling_pid}]${C_RESET}"
   else
