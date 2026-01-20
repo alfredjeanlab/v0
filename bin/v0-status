@@ -531,6 +531,27 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   done
 
   found_any=""
+  # Calculate max name length for dynamic column width (with truncation for long names)
+  max_name_len=0
+  max_name_display=40  # Truncate names longer than this
+  if [[ ${#state_files[@]} -gt 0 ]]; then
+    while IFS= read -r name; do
+      [[ -z "${name}" ]] && continue
+      name_len=${#name}
+      # Account for the ":" suffix we add when displaying
+      ((name_len++))
+      # Truncate check: if name would be truncated, use truncated length
+      if [[ ${name_len} -gt ${max_name_display} ]]; then
+        name_len=${max_name_display}
+      fi
+      if [[ ${name_len} -gt ${max_name_len} ]]; then
+        max_name_len=${name_len}
+      fi
+    done < <(jq -rs '.[] | .name' "${state_files[@]}")
+  fi
+  # Ensure minimum width for readability
+  [[ ${max_name_len} -lt 8 ]] && max_name_len=8
+
   # Process all state files in single jq -s invocation (one process instead of many)
   if [[ ${#state_files[@]} -gt 0 ]]; then
     while IFS=$'\t' read -r name op_type phase created machine completed merge_queued merge_status merged_at after session worker_pid held held_at; do
@@ -645,7 +666,12 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         ;;
     esac
 
-    printf "  %-20s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${name}:" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${created}"
+    # Truncate long names with "..." (max_name_display - 1 for ":" suffix, - 3 for "...")
+    display_name="${name}:"
+    if [[ ${#display_name} -gt ${max_name_display} ]]; then
+      display_name="${name:0:$((max_name_display - 4))}...:"
+    fi
+    printf "  %-${max_name_len}s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${display_name}" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${created}"
     done < <(jq -rs 'sort_by(.created_at) | .[] | [
       .name,
       (.type // "build"),
