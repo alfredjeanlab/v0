@@ -544,7 +544,8 @@ RESOLVE_EOF
     fi
 
     # Check if rebase is still in progress (claude didn't complete it)
-    if [[ -d "${WORKTREE}/.git/rebase-merge" ]] || [[ -d "${WORKTREE}/.git/rebase-apply" ]]; then
+    # Use WORKTREE_GIT_DIR since worktrees have a .git file, not directory
+    if [[ -d "${WORKTREE_GIT_DIR}/rebase-merge" ]] || [[ -d "${WORKTREE_GIT_DIR}/rebase-apply" ]]; then
       echo "Error: Rebase not completed. Claude should have run 'git rebase --continue'"
       if [[ -f "${RESOLVE_LOG}" ]]; then
         echo "Check log file: ${RESOLVE_LOG}"
@@ -552,26 +553,12 @@ RESOLVE_EOF
       exit 1
     fi
 
-    # After successful resolution, just fast-forward merge (branch is now rebased)
-    if git merge --ff-only "${BRANCH}" 2>/dev/null; then
-      echo "Fast-forward merge successful"
-      rm -f "${RESOLVE_LOG}"
-      cleanup
-      git push
-      update_operation_state
-      update_merge_queue_entry
+    # After successful resolution, merge using do_merge which handles rebase retry
+    do_merge && rm -f "${RESOLVE_LOG}" && cleanup && git push && update_operation_state && update_merge_queue_entry && {
       sm_trigger_dependents "$(basename "${BRANCH}")"
       v0_notify "${PROJECT}: merged" "${BRANCH} (after resolution)"
       git push origin --delete "${BRANCH}" 2>/dev/null || true
-    else
-      # If ff fails, something went wrong with the resolution
-      echo "Error: Fast-forward merge failed after conflict resolution"
-      echo "The worktree branch may not be properly rebased onto main"
-      if [[ -f "${RESOLVE_LOG}" ]]; then
-        echo "Check log file: ${RESOLVE_LOG}"
-      fi
-      exit 1
-    fi
+    }
   else
     echo
     echo "Error: Merge would have conflicts. To resolve:"
