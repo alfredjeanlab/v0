@@ -558,16 +558,16 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       fi
     fi
 
-    # Add after indicator (only show if still blocked)
+    # Add after indicator (always show if has after dependency)
     after_icon=""
-    if [[ -n "${after}" ]] && [[ "${after}" != "null" ]] && [[ "${phase}" = "blocked" ]]; then
+    if [[ -n "${after}" ]] && [[ "${after}" != "null" ]]; then
       after_icon=" ${C_YELLOW}[after ${after}]${C_RESET}"
     fi
 
     # Add hold indicator
     hold_icon=""
     if [[ "${held}" = "true" ]]; then
-      hold_icon=" ${C_YELLOW}[HELD]${C_RESET}"
+      hold_icon=" ${C_YELLOW}[held]${C_RESET}"
     fi
 
     # Get queue entry status for merge display (only needed when merge_queued)
