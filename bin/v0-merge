@@ -338,8 +338,8 @@ do_merge() {
     else
       git merge --abort 2>/dev/null || true
       echo
-      echo "Error: Merge would have conflicts. To resolve:"
-      echo "  v0 merge ${TREE_DIR} --resolve"
+      echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge would have conflicts. To resolve:"
+      echo -e "  ${C_BOLD}v0 merge ${TREE_DIR} --resolve${C_RESET}"
       return 1
     fi
   fi
@@ -574,8 +574,8 @@ RESOLVE_EOF
     fi
   else
     echo
-    echo "Error: Merge would have conflicts. To resolve:"
-    echo "  v0 merge ${TREE_DIR} --resolve"
+    echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge would have conflicts. To resolve:"
+    echo -e "  ${C_BOLD}v0 merge ${TREE_DIR} --resolve${C_RESET}"
     exit 1
   fi
 else
