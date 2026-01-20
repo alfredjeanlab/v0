@@ -25,7 +25,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p dist
-          tar -czf "dist/v0-${VERSION}.tar.gz" bin/ lib/ LICENSE
+          tar -czf "dist/v0-${VERSION}.tar.gz" bin/ lib/ LICENSE VERSION
           echo "Created dist/v0-${VERSION}.tar.gz"
 
       - name: Generate checksums

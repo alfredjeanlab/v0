@@ -1,0 +1,98 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-self-version - Show version information
+
+set -e
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "${SOURCE}" ]]; do
+  DIR="$(cd -P "$(dirname "${SOURCE}")" && pwd)"
+  SOURCE="$(readlink "${SOURCE}")"
+  [[ ${SOURCE} != /* ]] && SOURCE="${DIR}/${SOURCE}"
+done
+V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
+
+# Source common utilities
+source "${V0_DIR}/lib/update-common.sh"
+
+# Colors (disabled if not a terminal)
+if [[ -t 1 ]]; then
+  CYAN='\033[0;36m'
+  NC='\033[0m'
+else
+  CYAN=''
+  NC=''
+fi
+
+show_help() {
+  cat <<'EOF'
+v0 self version - Show version information
+
+Usage:
+  v0 self version [options]
+
+Options:
+  --check, -c   Also check for available updates
+  --help, -h    Show this help
+
+Examples:
+  v0 self version          # Show current version info
+  v0 self version --check  # Show version and check for updates
+EOF
+}
+
+show_version_info() {
+  local check_updates="${1:-}"
+  local current_version channel install_method
+
+  current_version=$(get_current_version)
+  channel=$(get_current_channel)
+  install_method=$(get_install_method)
+
+  echo -e "v0 version ${CYAN}${current_version}${NC}"
+  echo ""
+  echo "Channel: ${channel}"
+  echo "Install: ${install_method}"
+  echo "Path:    ${V0_DIR}"
+
+  if [[ "${check_updates}" == "--check" ]]; then
+    echo ""
+    echo "Checking for updates..."
+
+    local latest_stable latest_nightly
+    latest_stable=$(get_latest_stable 2>/dev/null || echo "unknown")
+    latest_nightly=$(get_latest_nightly 2>/dev/null || echo "none")
+
+    echo ""
+    echo -e "Latest stable:  ${CYAN}${latest_stable}${NC}"
+    echo -e "Latest nightly: ${CYAN}${latest_nightly:-none}${NC}"
+
+    if [[ "${channel}" == "stable" ]] && [[ "${current_version}" != "${latest_stable}" ]] && [[ "${latest_stable}" != "unknown" ]]; then
+      echo ""
+      echo "Update available: ${current_version} -> ${latest_stable}"
+      echo "Run: v0 self update"
+    elif [[ "${channel}" == "nightly" ]] && [[ -n "${latest_nightly}" ]] && [[ "${current_version}" != *"${latest_nightly}"* ]]; then
+      echo ""
+      echo "Update available: ${current_version} -> ${latest_nightly}"
+      echo "Run: v0 self update"
+    fi
+  fi
+}
+
+case "${1:-}" in
+  --check|-c)
+    show_version_info --check
+    ;;
+  --help|-h)
+    show_help
+    ;;
+  "")
+    show_version_info
+    ;;
+  *)
+    echo "Unknown option: ${1}" >&2
+    echo "Run 'v0 self version --help' for usage" >&2
+    exit 1
+    ;;
+esac

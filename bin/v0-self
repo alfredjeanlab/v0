@@ -1,0 +1,60 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-self - Self-management commands (debug, update, version)
+
+set -e
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "${SOURCE}" ]]; do
+  DIR="$(cd -P "$(dirname "${SOURCE}")" && pwd)"
+  SOURCE="$(readlink "${SOURCE}")"
+  [[ ${SOURCE} != /* ]] && SOURCE="${DIR}/${SOURCE}"
+done
+V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
+
+show_help() {
+  cat <<'EOF'
+v0 self - Self-management commands
+
+Usage: v0 self <command> [args]
+
+Commands:
+  debug         Generate debug report for failed operations
+  update        Update v0 to a different version
+  version       Show current and available versions
+
+Run 'v0 self <command> --help' for command-specific options.
+
+Examples:
+  v0 self update                 # Update to latest stable
+  v0 self update nightly         # Switch to nightly channel
+  v0 self update stable          # Switch to stable channel
+  v0 self update 0.2.1           # Install specific version
+  v0 self version                # Show version info
+EOF
+}
+
+case "${1:-}" in
+  debug)
+    shift
+    exec "${V0_DIR}/bin/v0-self-debug" "$@"
+    ;;
+  update)
+    shift
+    exec "${V0_DIR}/bin/v0-self-update" "$@"
+    ;;
+  version)
+    shift
+    exec "${V0_DIR}/bin/v0-self-version" "$@"
+    ;;
+  --help|-h|"")
+    show_help
+    exit 0
+    ;;
+  *)
+    echo "Unknown self command: ${1}" >&2
+    echo "Run 'v0 self --help' for usage" >&2
+    exit 1
+    ;;
+esac

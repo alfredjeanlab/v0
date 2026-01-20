@@ -1,0 +1,347 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-self-update - Update v0 to a different version or channel
+
+set -e
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "${SOURCE}" ]]; do
+  DIR="$(cd -P "$(dirname "${SOURCE}")" && pwd)"
+  SOURCE="$(readlink "${SOURCE}")"
+  [[ ${SOURCE} != /* ]] && SOURCE="${DIR}/${SOURCE}"
+done
+V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
+
+# Source common utilities
+source "${V0_DIR}/lib/update-common.sh"
+
+# Colors (disabled if not a terminal)
+if [[ -t 1 ]]; then
+  RED='\033[0;31m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  CYAN='\033[0;36m'
+  NC='\033[0m'
+else
+  RED=''
+  GREEN=''
+  YELLOW=''
+  CYAN=''
+  NC=''
+fi
+
+info() { echo -e "${GREEN}==>${NC} $1"; }
+warn() { echo -e "${YELLOW}Warning:${NC} $1"; }
+error() { echo -e "${RED}Error:${NC} $1" >&2; exit 1; }
+
+show_help() {
+  cat <<'EOF'
+v0 self update - Update v0 installation
+
+Usage:
+  v0 self update [channel|version]
+
+Channels:
+  stable        Latest stable release (default)
+  nightly       Latest nightly build from development
+
+Versions:
+  <version>     Specific version (e.g., 0.2.0, 0.2.1-rc1)
+
+Options:
+  --list        Show available versions
+  --check       Check for updates without installing
+  --force       Force reinstall even if same version
+  --help, -h    Show this help
+
+Examples:
+  v0 self update              # Update to latest stable
+  v0 self update nightly      # Switch to nightly channel
+  v0 self update stable       # Switch back to stable
+  v0 self update 0.2.0        # Install specific version
+  v0 self update --list       # Show available versions
+  v0 self update --check      # Check what would be installed
+EOF
+}
+
+# Show available versions
+show_versions() {
+  info "Fetching available versions..."
+
+  echo ""
+  echo "Stable releases:"
+  curl -fsSL "${GITHUB_API}/repos/${V0_REPO}/releases" 2>/dev/null |
+    jq -r '.[] | select(.tag_name | startswith("v") and (startswith("nightly-") | not)) | "  \(.tag_name) - \(.published_at | split("T")[0])"' |
+    head -5
+
+  echo ""
+  echo "Nightly builds:"
+  local nightlies
+  nightlies=$(curl -fsSL "${GITHUB_API}/repos/${V0_REPO}/releases" 2>/dev/null |
+    jq -r '.[] | select(.tag_name | startswith("nightly-")) | "  \(.tag_name) - \(.published_at | split("T")[0])"' |
+    head -5)
+
+  if [[ -n "${nightlies}" ]]; then
+    echo "${nightlies}"
+  else
+    echo "  (no nightly builds available)"
+  fi
+
+  echo ""
+  echo "Current: $(get_current_version) ($(get_current_channel))"
+}
+
+# Check for updates without installing
+check_updates() {
+  local current_version current_channel target_version
+
+  current_version=$(get_current_version)
+  current_channel=$(get_current_channel)
+
+  info "Checking for updates..."
+  echo ""
+  echo -e "Current version: ${CYAN}${current_version}${NC}"
+  echo -e "Current channel: ${CYAN}${current_channel}${NC}"
+  echo ""
+
+  case "${current_channel}" in
+    stable)
+      target_version=$(get_latest_stable)
+      if [[ -z "${target_version}" ]]; then
+        error "Could not fetch latest stable version"
+      fi
+      echo -e "Latest stable: ${CYAN}${target_version}${NC}"
+      if [[ "${current_version}" == "${target_version}" ]]; then
+        echo ""
+        echo "You are running the latest stable version."
+      else
+        echo ""
+        echo "Update available: ${current_version} -> ${target_version}"
+        echo "Run 'v0 self update' to install."
+      fi
+      ;;
+    nightly)
+      local nightly_tag
+      nightly_tag=$(get_latest_nightly)
+      if [[ -z "${nightly_tag}" ]]; then
+        echo "Latest nightly: (none available)"
+      else
+        echo -e "Latest nightly: ${CYAN}${nightly_tag}${NC}"
+        if [[ "${current_version}" == *"${nightly_tag}"* ]] || [[ "${nightly_tag}" == *"${current_version}"* ]]; then
+          echo ""
+          echo "You are running the latest nightly."
+        else
+          echo ""
+          echo "Update available: ${current_version} -> ${nightly_tag}"
+          echo "Run 'v0 self update' to install."
+        fi
+      fi
+      ;;
+    pinned:*)
+      echo "Version is pinned to: ${current_channel#pinned:}"
+      echo "Run 'v0 self update stable' or 'v0 self update nightly' to unpin."
+      ;;
+  esac
+}
+
+# Resolve user input to target version and tag
+resolve_target() {
+  local input="$1"
+  local current_channel
+
+  current_channel=$(get_current_channel)
+
+  case "${input}" in
+    ""|stable)
+      # Latest stable
+      TARGET_VERSION=$(get_latest_stable)
+      if [[ -z "${TARGET_VERSION}" ]]; then
+        error "Could not fetch latest stable version"
+      fi
+      TARGET_TAG="v${TARGET_VERSION}"
+      TARGET_CHANNEL="stable"
+      ;;
+    nightly)
+      # Latest nightly
+      TARGET_TAG=$(get_latest_nightly)
+      if [[ -z "${TARGET_TAG}" ]]; then
+        error "No nightly builds available"
+      fi
+      TARGET_VERSION="${TARGET_TAG}"
+      TARGET_CHANNEL="nightly"
+      ;;
+    nightly-*)
+      # Specific nightly
+      TARGET_TAG="${input}"
+      TARGET_VERSION="${input}"
+      TARGET_CHANNEL="pinned:${input}"
+      ;;
+    *)
+      # Specific version (e.g., 0.2.0)
+      TARGET_VERSION="${input#v}"  # Strip leading v if present
+      TARGET_TAG="v${TARGET_VERSION}"
+      TARGET_CHANNEL="pinned:${TARGET_VERSION}"
+      ;;
+  esac
+}
+
+# Perform the actual update
+perform_update() {
+  local version="$1"
+  local tag_name="$2"
+  local channel="$3"
+  local force="${4:-}"
+
+  local current_version
+  current_version=$(get_current_version)
+
+  # Check if already at target version
+  if [[ "${current_version}" == "${version}" ]] && [[ -z "${force}" ]]; then
+    echo "Already at version ${version}. Use --force to reinstall."
+    exit 0
+  fi
+
+  # Detect install method
+  local install_method
+  install_method=$(get_install_method)
+
+  case "${install_method}" in
+    homebrew)
+      echo ""
+      echo "Homebrew installation detected."
+      echo ""
+      echo "For stable updates, use:"
+      echo "  brew upgrade alfredjeanlab/tap/v0"
+      echo ""
+      echo "To switch to direct installation (for nightly access):"
+      echo "  brew uninstall v0"
+      echo "  curl -fsSL ${GITHUB_RELEASES}/download/${tag_name}/install.sh | bash"
+      exit 1
+      ;;
+    direct|unknown)
+      perform_direct_update "${version}" "${tag_name}" "${channel}"
+      ;;
+  esac
+}
+
+perform_direct_update() {
+  local version="$1"
+  local tag_name="$2"
+  local channel="$3"
+
+  # Determine tarball name based on tag format
+  local tarball download_url
+  if [[ "${tag_name}" == nightly-* ]]; then
+    tarball="v0-${tag_name}.tar.gz"
+    download_url="${GITHUB_RELEASES}/download/${tag_name}"
+  else
+    tarball="v0-${version}.tar.gz"
+    download_url="${GITHUB_RELEASES}/download/${tag_name}"
+  fi
+
+  info "Downloading v0 ${version}..."
+
+  # Create temp directory
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "${tmpdir}"' EXIT
+
+  # Download tarball
+  if ! curl -fsSL "${download_url}/${tarball}" -o "${tmpdir}/${tarball}"; then
+    error "Failed to download ${tarball}. Version ${version} may not exist."
+  fi
+
+  # Download checksum
+  local checksum_file="${tarball}.sha256"
+  if ! curl -fsSL "${download_url}/${checksum_file}" -o "${tmpdir}/${checksum_file}"; then
+    warn "Could not download checksum file, skipping verification"
+  else
+    info "Verifying checksum..."
+    if ! verify_checksum "${tmpdir}/${tarball}" "${tmpdir}/${checksum_file}"; then
+      error "Checksum verification failed!"
+    fi
+  fi
+
+  # Backup current installation
+  local backup_dir="${V0_DIR}.bak"
+  info "Creating backup at ${backup_dir}..."
+  rm -rf "${backup_dir}"
+  cp -R "${V0_DIR}" "${backup_dir}"
+
+  # Extract new version
+  info "Installing..."
+  local extract_dir="${tmpdir}/extract"
+  mkdir -p "${extract_dir}"
+  tar -xzf "${tmpdir}/${tarball}" -C "${extract_dir}"
+
+  # Copy new files (preserve any local config)
+  rm -rf "${V0_DIR:?}/bin" "${V0_DIR:?}/lib"
+  cp -R "${extract_dir}/bin" "${V0_DIR}/"
+  cp -R "${extract_dir}/lib" "${V0_DIR}/"
+  [[ -f "${extract_dir}/VERSION" ]] && cp "${extract_dir}/VERSION" "${V0_DIR}/"
+  [[ -f "${extract_dir}/LICENSE" ]] && cp "${extract_dir}/LICENSE" "${V0_DIR}/"
+
+  # Write channel marker
+  set_current_channel "${channel}"
+
+  # Verify new version works
+  local new_version
+  new_version=$("${V0_DIR}/bin/v0" --version 2>/dev/null | awk '{print $2}')
+
+  if [[ -z "${new_version}" ]]; then
+    warn "Could not verify new installation, restoring backup..."
+    rm -rf "${V0_DIR}"
+    mv "${backup_dir}" "${V0_DIR}"
+    error "Update failed - previous version restored"
+  fi
+
+  # Success - remove backup
+  rm -rf "${backup_dir}"
+
+  echo ""
+  info "Updated to v0 ${new_version} (${channel})"
+}
+
+# Parse arguments
+FORCE=""
+TARGET=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    --list)
+      show_versions
+      exit 0
+      ;;
+    --check)
+      check_updates
+      exit 0
+      ;;
+    --force)
+      FORCE="1"
+      shift
+      ;;
+    -*)
+      error "Unknown option: $1"
+      ;;
+    *)
+      if [[ -n "${TARGET}" ]]; then
+        error "Only one target version can be specified"
+      fi
+      TARGET="$1"
+      shift
+      ;;
+  esac
+done
+
+# Resolve target version
+resolve_target "${TARGET}"
+
+info "Target: ${TARGET_VERSION} (${TARGET_CHANNEL})"
+
+# Perform update
+perform_update "${TARGET_VERSION}" "${TARGET_TAG}" "${TARGET_CHANNEL}" "${FORCE}"

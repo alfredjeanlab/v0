@@ -1,0 +1,126 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Run at 2:00 AM UTC daily
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    name: Create Nightly Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0  # Needed for commit comparison
+
+      - name: Check for changes since last nightly
+        id: changes
+        run: |
+          # Get last nightly release date
+          LAST_NIGHTLY=$(gh release list --limit 50 | grep nightly | head -1 | awk '{print $4}' || echo "")
+          if [[ -z "$LAST_NIGHTLY" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "No previous nightly found, will create one"
+            exit 0
+          fi
+
+          # Check for commits since then
+          COMMITS=$(git log --since="$LAST_NIGHTLY" --oneline | wc -l)
+          echo "Commits since last nightly ($LAST_NIGHTLY): $COMMITS"
+          if [[ "$COMMITS" -gt 0 ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes since last nightly, skipping"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Generate nightly tag
+        if: steps.changes.outputs.has_changes == 'true'
+        id: tag
+        run: |
+          DATE=$(date -u '+%Y%m%d')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAG="nightly-${DATE}-${SHORT_SHA}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=nightly-${DATE}" >> "$GITHUB_OUTPUT"
+          echo "Generated tag: $TAG"
+
+      - name: Update VERSION file for nightly
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          echo "${TAG}" > VERSION
+          echo "VERSION file set to: ${TAG}"
+
+      - name: Create tarball
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          mkdir -p dist
+          tar -czf "dist/v0-${TAG}.tar.gz" bin/ lib/ LICENSE VERSION
+          echo "Created dist/v0-${TAG}.tar.gz"
+          ls -la dist/
+
+      - name: Generate checksums
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          cd dist
+          sha256sum "v0-${TAG}.tar.gz" > "v0-${TAG}.tar.gz.sha256"
+          cat "v0-${TAG}.tar.gz.sha256"
+
+      - name: Prepare install script
+        if: steps.changes.outputs.has_changes == 'true'
+        run: cp install.sh dist/install.sh
+
+      - name: Delete old nightly releases
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          # Keep only the 5 most recent nightlies
+          echo "Checking for old nightly releases to clean up..."
+          gh release list --limit 50 | grep nightly | tail -n +6 | awk '{print $1}' | while read -r tag; do
+            echo "Deleting old nightly: $tag"
+            gh release delete "$tag" --yes --cleanup-tag || true
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create GitHub Release
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Nightly ${{ steps.tag.outputs.version }}
+          draft: false
+          prerelease: true
+          body: |
+            Automated nightly build from `main` branch.
+
+            **Commit**: ${{ github.sha }}
+            **Date**: ${{ steps.tag.outputs.version }}
+
+            ## Installation
+
+            ```bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/install.sh | V0_CHANNEL=nightly bash
+            ```
+
+            Or if you already have v0 installed:
+            ```bash
+            v0 self update nightly
+            ```
+
+            ---
+            This is an unstable development build. Use `v0 self update stable` to return to stable releases.
+          files: |
+            dist/v0-${{ steps.tag.outputs.tag }}.tar.gz
+            dist/v0-${{ steps.tag.outputs.tag }}.tar.gz.sha256
+            dist/install.sh
