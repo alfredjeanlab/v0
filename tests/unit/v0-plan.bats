@@ -537,3 +537,108 @@ EOF
     assert_output --partial "Skipped (draft mode)"
     unset V0_DRAFT
 }
+
+# ============================================================================
+# Auto-hold behavior tests
+# ============================================================================
+
+@test "v0-plan --direct: automatically sets held=true on success" {
+    create_v0rc "testproj" "tp"
+
+    cat > "${V0_PLAN_EXEC}" <<'EOF'
+#!/bin/bash
+mkdir -p plans
+echo "# Auto-hold Test Plan" > plans/auto-hold-test.md
+exit 0
+EOF
+    chmod +x "${V0_PLAN_EXEC}"
+
+    run "${PROJECT_ROOT}/bin/v0-plan" "auto-hold-test" "Create a test plan" --direct
+    assert_success
+
+    # Check that held=true in state.json
+    STATE_FILE="${TEST_TEMP_DIR}/project/.v0/build/operations/auto-hold-test/state.json"
+    assert_file_exists "${STATE_FILE}"
+    run jq -r '.held' "${STATE_FILE}"
+    assert_output "true"
+}
+
+@test "v0-plan --direct: sets held_at timestamp on success" {
+    create_v0rc "testproj" "tp"
+
+    cat > "${V0_PLAN_EXEC}" <<'EOF'
+#!/bin/bash
+mkdir -p plans
+echo "# Held-at Test Plan" > plans/held-at-test.md
+exit 0
+EOF
+    chmod +x "${V0_PLAN_EXEC}"
+
+    run "${PROJECT_ROOT}/bin/v0-plan" "held-at-test" "Create a test plan" --direct
+    assert_success
+
+    STATE_FILE="${TEST_TEMP_DIR}/project/.v0/build/operations/held-at-test/state.json"
+    run jq -r '.held_at' "${STATE_FILE}"
+    # Should be a valid ISO timestamp
+    refute_output "null"
+    assert_output --regexp '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+}
+
+@test "v0-plan --direct: emits hold:auto_set event" {
+    create_v0rc "testproj" "tp"
+
+    cat > "${V0_PLAN_EXEC}" <<'EOF'
+#!/bin/bash
+mkdir -p plans
+echo "# Event Test Plan" > plans/event-test.md
+exit 0
+EOF
+    chmod +x "${V0_PLAN_EXEC}"
+
+    run "${PROJECT_ROOT}/bin/v0-plan" "event-test" "Create a test plan" --direct
+    assert_success
+
+    # Check events.log for hold:auto_set event
+    EVENTS_LOG="${TEST_TEMP_DIR}/project/.v0/build/operations/event-test/logs/events.log"
+    assert_file_exists "${EVENTS_LOG}"
+    run cat "${EVENTS_LOG}"
+    assert_output --partial "hold:auto_set"
+    assert_output --partial "Automatically held after planning"
+}
+
+@test "v0-plan --direct: output shows held message" {
+    create_v0rc "testproj" "tp"
+
+    cat > "${V0_PLAN_EXEC}" <<'EOF'
+#!/bin/bash
+mkdir -p plans
+echo "# Output Test Plan" > plans/output-test.md
+exit 0
+EOF
+    chmod +x "${V0_PLAN_EXEC}"
+
+    run "${PROJECT_ROOT}/bin/v0-plan" "output-test" "Create a test plan" --direct
+    assert_success
+    assert_output --partial "Operation is held"
+    assert_output --partial "v0 resume output-test"
+}
+
+@test "v0-plan --direct: recovery also sets held=true" {
+    create_v0rc "testproj" "tp"
+
+    # Create mock that creates plan but exits non-zero (recovery case)
+    cat > "${V0_PLAN_EXEC}" <<'EOF'
+#!/bin/bash
+mkdir -p plans
+echo "# Recovery Hold Test" > plans/recovery-hold.md
+exit 1
+EOF
+    chmod +x "${V0_PLAN_EXEC}"
+
+    run "${PROJECT_ROOT}/bin/v0-plan" "recovery-hold" "Test" --direct
+    assert_success
+
+    STATE_FILE="${TEST_TEMP_DIR}/project/.v0/build/operations/recovery-hold/state.json"
+    run jq -r '.held' "${STATE_FILE}"
+    assert_output "true"
+}

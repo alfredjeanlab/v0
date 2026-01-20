@@ -104,13 +104,10 @@ EPIC_ID=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" | head -1 | tr -d '`' |
 
 # Update state based on result
 if [[ ${DECOMPOSE_EXIT} -eq 0 ]] || [[ -n "${EPIC_ID}" ]]; then
-  # Update state to queued with epic_id
-  tmp=$(mktemp)
-  if [[ -n "${EPIC_ID}" ]]; then
-    jq ".phase = \"queued\" | .epic_id = \"${EPIC_ID}\"" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
-  else
-    jq ".phase = \"queued\"" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
-  fi
+  # Update state to queued and auto-hold
+  sm_transition_to_queued_and_hold "${BASENAME}" "${EPIC_ID}"
+  echo "Decompose complete. Issues created."
+  echo "Operation is held. Review issues, then run: v0 resume ${BASENAME}"
   exit 0
 else
   exit "${DECOMPOSE_EXIT}"
