@@ -859,9 +859,9 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         fi
       fi
     fi
+    [[ "${merges_empty}" != true ]] && echo ""
 
     # Show coffee and nudge status on one line
-    echo ""
     coffee_status=""
     nudge_status=""
     if coffee_is_running; then
