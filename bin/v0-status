@@ -558,10 +558,17 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       fi
     fi
 
-    # Add after indicator (always show if has after dependency)
+    # Add after indicator (only show for phases where operation is still waiting)
     after_icon=""
     if [[ -n "${after}" ]] && [[ "${after}" != "null" ]]; then
-      after_icon=" ${C_YELLOW}[after ${after}]${C_RESET}"
+      case "${phase}" in
+        executing|completed|pending_merge|merged|cancelled)
+          # Don't show [after] for these phases - operation is already past waiting
+          ;;
+        *)
+          after_icon=" ${C_YELLOW}[after ${after}]${C_RESET}"
+          ;;
+      esac
     fi
 
     # Add hold indicator
