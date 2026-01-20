@@ -20,3 +20,10 @@ Write the plan to `plans/{name}.md`.
 - Include code snippets for complex patterns
 - Reference existing project files when relevant
 - Keep phases focused and achievable
+
+## Exit
+
+When the plan is complete and written to the file, run:
+```bash
+./done  # or ../done from repo dir
+```
