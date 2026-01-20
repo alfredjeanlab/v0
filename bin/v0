@@ -78,6 +78,22 @@ show_version() {
   echo "v0 0.1.0"
 }
 
+# Sanitize a string for display (truncate and escape control chars)
+sanitize_for_display() {
+  local str="$1"
+  local max_len="${2:-60}"
+
+  # Replace newlines and tabs with spaces, collapse whitespace
+  str=$(printf '%s' "${str}" | tr '\n\t\r' '   ' | tr -s ' ')
+
+  # Truncate if too long
+  if [[ ${#str} -gt ${max_len} ]]; then
+    str="${str:0:${max_len}}..."
+  fi
+
+  echo "${str}"
+}
+
 # Handle special commands first
 case "${1:-}" in
   init)
@@ -180,7 +196,19 @@ SELF_HELP
     esac
     ;;
   *)
-    echo "Unknown command: ${CMD}" >&2
+    # Sanitize command for display
+    safe_cmd=$(sanitize_for_display "${CMD}")
+
+    echo "Unknown command: ${safe_cmd}" >&2
+    echo "" >&2
+
+    # If it looks like a description (contains spaces/long), suggest v0 fix
+    if [[ ${#CMD} -gt 20 ]] || [[ "${CMD}" == *" "* ]] || [[ "${CMD}" == *$'\n'* ]]; then
+      echo "Did you mean to report a bug? Try:" >&2
+      echo "  v0 fix \"${safe_cmd}\"" >&2
+      echo "" >&2
+    fi
+
     echo "Run 'v0 --help' for usage" >&2
     exit 1
     ;;
