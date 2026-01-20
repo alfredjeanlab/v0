@@ -186,6 +186,33 @@ format_elapsed() {
   fi
 }
 
+# Format operation timestamp for display
+# Shows relative time for recent operations (< 12 hours), date for older ones
+# Args: $1 = ISO 8601 timestamp (UTC with Z suffix)
+format_operation_time() {
+  local ts="$1"
+  local ts_epoch now_epoch elapsed
+
+  ts_epoch=$(timestamp_to_epoch "${ts}")
+  if [[ -z "${ts_epoch}" ]]; then
+    # Fallback: return first 10 chars (YYYY-MM-DD) if parsing fails
+    echo "${ts:0:10}"
+    return
+  fi
+
+  now_epoch=$(date +%s)
+  elapsed=$((now_epoch - ts_epoch))
+
+  # 12 hours = 43200 seconds
+  if [[ "${elapsed}" -lt 43200 ]]; then
+    format_elapsed "${elapsed}"
+  else
+    # Convert UTC timestamp to local date
+    # Use the epoch value to get local date
+    date -r "${ts_epoch}" +%Y-%m-%d 2>/dev/null || echo "${ts:0:10}"
+  fi
+}
+
 # Get recently merged operations (features/builds)
 # Args: $1 = hours to look back (default: 72)
 # Output: name|merged_at (one per line, sorted most recent first)
@@ -671,7 +698,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     if [[ ${#display_name} -gt ${max_name_display} ]]; then
       display_name="${name:0:$((max_name_display - 4))}...:"
     fi
-    printf "  %-${max_name_len}s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${display_name}" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${created}"
+    display_time=$(format_operation_time "${created}")
+    printf "  %-${max_name_len}s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${display_name}" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${display_time}"
     done < <(jq -rs 'sort_by(.created_at) | .[] | [
       .name,
       (.type // "build"),
