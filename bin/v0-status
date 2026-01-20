@@ -568,89 +568,66 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       hold_icon=" ${C_YELLOW}[HELD]${C_RESET}"
     fi
 
-    # Determine display phase and merge indicator
-    display_phase="${phase}"
-    merge_icon=""
+    # Get queue entry status for merge display (only needed when merge_queued)
+    queue_entry_status=""
+    if [[ "${merge_queued}" = "true" ]]; then
+      queue_file="${BUILD_DIR}/mergeq/queue.json"
+      if [[ -f "${queue_file}" ]]; then
+        queue_entry_status=$(jq -r ".entries[] | select(.operation == \"${name}\") | .status" "${queue_file}" 2>/dev/null || true)
+      fi
+    fi
 
+    # Use shared helper for phase display formatting
+    IFS='|' read -r raw_display raw_merge_icon <<< \
+      "$(_sm_format_phase_display "${phase}" "${op_type}" "${merge_queued}" "${merge_status}" "${merged_at}" "${queue_entry_status}")"
+
+    # Get colors for display
+    phase_color=$(_sm_get_phase_color "${raw_display}" "${raw_merge_icon}")
+    merge_color=$(_sm_get_merge_icon_color "${raw_merge_icon}")
+
+    # Apply colors to display_phase
+    if [[ -n "${phase_color}" ]]; then
+      display_phase="$(sm_get_status_color "${phase_color}")${raw_display}${C_RESET}"
+    else
+      display_phase="${raw_display}"
+    fi
+
+    # Apply colors to merge_icon
+    merge_icon=""
+    if [[ -n "${raw_merge_icon}" ]]; then
+      if [[ -n "${merge_color}" ]]; then
+        # Special formatting for certain merge icons
+        case "${raw_merge_icon}" in
+          "(merged)")
+            merge_icon=" $(sm_get_status_color "${merge_color}")${C_DIM}${raw_merge_icon}${C_RESET}"
+            ;;
+          "(== MERGE FAILED =="*|"(== CONFLICT =="*|"(== NEEDS MERGE =="*)
+            merge_icon=" $(sm_get_status_color "${merge_color}")${C_BOLD}${raw_merge_icon}${C_RESET}"
+            ;;
+          *)
+            merge_icon=" $(sm_get_status_color "${merge_color}")${raw_merge_icon}${C_RESET}"
+            ;;
+        esac
+      else
+        merge_icon=" ${raw_merge_icon}"
+      fi
+    fi
+
+    # Update status_icon for specific phase/activity combinations
     case "${phase}" in
-      merged)
-        display_phase="${C_GREEN}completed${C_RESET}"
-        merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
-        ;;
-      completed|pending_merge)
-        # Plan-type operations don't merge, so show "plan completed" without merge indicators
-        if [[ "${op_type}" = "plan" ]]; then
-          display_phase="${C_GREEN}plan completed${C_RESET}"
-          merge_icon=""
-        elif [[ "${merge_queued}" = "true" ]]; then
-          display_phase="${C_GREEN}completed${C_RESET}"
-          # Always check queue status first - it's more authoritative than state.json
-          # The queue reflects actual merge attempts, while state.json may be stale
-          queue_file="${BUILD_DIR}/mergeq/queue.json"
-          queue_entry_status=""
-          if [[ -f "${queue_file}" ]]; then
-            queue_entry_status=$(jq -r ".entries[] | select(.operation == \"${name}\") | .status" "${queue_file}" 2>/dev/null || true)
-          fi
-          case "${queue_entry_status}" in
-            pending|processing)
-              merge_icon=" ${C_CYAN}(merging...)${C_RESET}"
-              ;;
-            completed)
-              merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
-              ;;
-            failed)
-              merge_icon=" ${C_RED}${C_BOLD}(== MERGE FAILED ==)${C_RESET}"
-              ;;
-            conflict)
-              merge_icon=" ${C_RED}${C_BOLD}(== CONFLICT ==)${C_RESET}"
-              ;;
-            resumed)
-              merge_icon=" ${C_CYAN}(resumed)${C_RESET}"
-              ;;
-            *)
-              # No queue entry - fall back to state.json indicators
-              if [[ "${merge_status}" = "merged" ]]; then
-                merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
-              elif [[ "${merge_status}" = "conflict" ]]; then
-                merge_icon=" ${C_RED}${C_BOLD}(== CONFLICT ==)${C_RESET}"
-              elif [[ -n "${merged_at}" ]] && [[ "${merged_at}" != "null" ]]; then
-                merge_icon=" ${C_GREEN}${C_DIM}(merged)${C_RESET}"
-              else
-                merge_icon=" ${C_YELLOW}(merge pending)${C_RESET}"
-              fi
-              ;;
-          esac
-        else
-          display_phase="${C_GREEN}completed${C_RESET}"
-          merge_icon=" ${C_YELLOW}(== NEEDS MERGE ==)${C_RESET}"
-        fi
-        ;;
       init)
-        if [[ -n "${status_icon}" ]]; then
-          display_phase="new"
-          status_icon=" ${C_YELLOW}[planning]${C_RESET}"
-        else
-          display_phase="new"
-        fi
+        [[ -n "${status_icon}" ]] && status_icon=" ${C_YELLOW}[planning]${C_RESET}"
         ;;
       planned)
-        display_phase="${C_YELLOW}planned${C_RESET}"
-        if [[ -n "${status_icon}" ]]; then
-          status_icon=" ${C_YELLOW}[decomposing]${C_RESET}"
-        fi
+        [[ -n "${status_icon}" ]] && status_icon=" ${C_YELLOW}[decomposing]${C_RESET}"
         ;;
       queued|executing)
-        display_phase="${C_CYAN}assigned${C_RESET}"
-        if [[ -n "${status_icon}" ]]; then
-          status_icon=" ${C_CYAN}[building]${C_RESET}"
-        fi
+        [[ -n "${status_icon}" ]] && status_icon=" ${C_CYAN}[building]${C_RESET}"
         ;;
       failed)
-        display_phase="${C_RED}failed${C_RESET}"
         status_icon=" ${C_RED}${C_BOLD}(== ERROR ==)${C_RESET}"
         ;;
       interrupted)
-        display_phase="${C_RED}interrupted${C_RESET}"
         status_icon=" ${C_RED}${C_BOLD}(== INTERRUPTED ==)${C_RESET}"
         ;;
     esac
@@ -782,58 +759,40 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   exit 0
 fi
 
-STATE_FILE="${BUILD_DIR}/operations/${NAME}/state.json"
-if [[ ! -f "${STATE_FILE}" ]]; then
+# Check operation exists using state machine
+if ! sm_state_exists "${NAME}"; then
   echo "Error: No operation found for '${NAME}'"
   exit 1
 fi
 
 show_status() {
-  local state
-  state=$(cat "${STATE_FILE}")
-  local op_type
-  op_type=$(echo "${state}" | jq -r '.type // "build"')
-  local phase
-  phase=$(echo "${state}" | jq -r '.phase')
-  local feature_id
-  feature_id=$(echo "${state}" | jq -r '.epic_id // empty')
-  local machine
-  machine=$(echo "${state}" | jq -r '.machine // empty')
-  local session
-  session=$(echo "${state}" | jq -r '.tmux_session // empty')
-  local current_issue
-  current_issue=$(echo "${state}" | jq -r '.current_issue // empty')
+  # Batch read all state fields in single jq invocation (instead of 20+ separate calls)
+  local phase op_type feature_id machine session current_issue last_activity \
+        merge_queued merge_status merged_at after eager worker_pid worker_log \
+        worker_started_at error_msg held held_at worktree
+  IFS=$'\t' read -r phase op_type feature_id machine session current_issue \
+    last_activity merge_queued merge_status merged_at after eager worker_pid \
+    worker_log worker_started_at error_msg held held_at worktree <<< \
+    "$(sm_read_state_fields "${NAME}" phase type epic_id machine tmux_session \
+       current_issue last_activity merge_queued merge_status merged_at \
+       after eager worker_pid worker_log worker_started_at error held held_at worktree)"
+
+  # Handle defaults for fields that need them
+  [[ -z "${op_type}" ]] && op_type="build"
+  [[ -z "${merge_queued}" ]] && merge_queued="false"
+  [[ -z "${eager}" ]] && eager="false"
+  [[ -z "${held}" ]] && held="false"
+
+  # Get completed count separately (requires array length calculation)
   local completed
-  completed=$(echo "${state}" | jq -r '.completed | length')
-  local last_activity
-  last_activity=$(echo "${state}" | jq -r '.last_activity // empty')
-  local merge_queued
-  merge_queued=$(echo "${state}" | jq -r '.merge_queued // false')
-  local merge_status
-  merge_status=$(echo "${state}" | jq -r '.merge_status // empty')
-  local merged_at
-  merged_at=$(echo "${state}" | jq -r '.merged_at // empty')
-  local after
-  after=$(echo "${state}" | jq -r '.after // empty')
-  local eager
-  eager=$(echo "${state}" | jq -r '.eager // false')
-  local worker_pid
-  worker_pid=$(echo "${state}" | jq -r '.worker_pid // empty')
-  local worker_log
-  worker_log=$(echo "${state}" | jq -r '.worker_log // empty')
-  local worker_started_at
-  worker_started_at=$(echo "${state}" | jq -r '.worker_started_at // empty')
-  local error_msg
-  error_msg=$(echo "${state}" | jq -r '.error // empty')
-  local held
-  held=$(echo "${state}" | jq -r '.held // false')
-  local held_at
-  held_at=$(echo "${state}" | jq -r '.held_at // empty')
+  completed=$(sm_read_state "${NAME}" "completed | length")
+  [[ -z "${completed}" ]] && completed=0
+
   local local_machine
   local_machine=$(hostname -s)
 
   if [[ -n "${JSON}" ]]; then
-    echo "${state}"
+    cat "$(sm_get_state_file "${NAME}")"
     return
   fi
 
@@ -888,9 +847,8 @@ show_status() {
         esac
       else
         echo "Status: completed (== NEEDS MERGE ==)"
-        local worktree branch
-        worktree=$(echo "${state}" | jq -r '.worktree // empty')
-        branch=$(echo "${state}" | jq -r '.tmux_session // empty')
+        # worktree already read in batch, branch is session (tmux_session)
+        local branch="${session}"
         if [[ -n "${worktree}" ]] && [[ -d "${worktree}" ]]; then
           echo "  Merge: v0 merge ${worktree}"
         elif [[ -n "${branch}" ]] && git rev-parse --verify "${branch}" >/dev/null 2>&1; then
@@ -922,10 +880,10 @@ show_status() {
     echo "After: ${after}"
     [[ "${eager}" = "true" ]] && echo "Mode: eager (plan first)" || echo "Mode: wait first"
 
-    local after_state_file="${BUILD_DIR}/operations/${after}/state.json"
-    if [[ -f "${after_state_file}" ]]; then
-      local after_phase
-      after_phase=$(jq -r '.phase' "${after_state_file}")
+    # Use state machine to get after operation status
+    local after_phase
+    if sm_state_exists "${after}"; then
+      after_phase=$(sm_get_phase "${after}")
       echo "Status: ${after_phase}"
     else
       echo "Status: unknown (operation not found)"
@@ -1010,14 +968,13 @@ show_status() {
           echo "  Status: Merge in progress..."
           ;;
         conflict)
-          local worktree
-          worktree=$(echo "${state}" | jq -r '.worktree // empty')
+          # worktree already read in batch
           echo "  Status: CONFLICTS - needs resolution"
           echo "  Resolve: v0 merge ${worktree} --resolve"
           ;;
         failed)
           local merge_error
-          merge_error=$(echo "${state}" | jq -r '.merge_error // empty')
+          merge_error=$(sm_read_state "${NAME}" "merge_error")
           echo "  Status: FAILED - ${merge_error}"
           ;;
         *)

@@ -542,3 +542,41 @@ is_session_active() {
 
     assert_equal "$status_icon" "[active]"
 }
+
+# ============================================================================
+# State machine integration tests (added in state-machine-step3)
+# ============================================================================
+
+@test "v0-status uses sm_state_exists for operation lookup" {
+    # Verify no direct file checks for state.json existence in show_status path
+    # The grep pattern looks for the old pattern: -f.*state.json (file exists check)
+    run grep -c '\-f "\${STATE_FILE}"' "$PROJECT_ROOT/bin/v0-status"
+    assert_output "0"
+}
+
+@test "v0-status uses sm_read_state_fields for batch reads" {
+    # Verify batch read usage in show_status
+    run grep -c "sm_read_state_fields" "$PROJECT_ROOT/bin/v0-status"
+    # Should have at least 1 batch read call
+    [[ "${output}" -ge 1 ]]
+}
+
+@test "v0-status uses state machine helpers for display" {
+    # Verify state machine helper functions are used for display formatting
+    run grep -c "_sm_format_phase_display" "$PROJECT_ROOT/bin/v0-status"
+    # Should have at least 1 call in list view
+    [[ "${output}" -ge 1 ]]
+}
+
+@test "v0-status no inline jq phase access" {
+    # Verify no inline jq calls for .phase field (queue.json is OK)
+    # This ensures we use state machine functions instead
+    run bash -c "grep 'jq.*\.phase' '$PROJECT_ROOT/bin/v0-status' | grep -v 'queue.json' | wc -l | tr -d ' '"
+    assert_output "0"
+}
+
+@test "v0-status no inline jq held access" {
+    # Verify no inline jq calls for .held field
+    run bash -c "grep 'jq.*\.held' '$PROJECT_ROOT/bin/v0-status' | wc -l | tr -d ' '"
+    assert_output "0"
+}
