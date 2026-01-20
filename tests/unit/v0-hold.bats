@@ -429,6 +429,13 @@ exit 1  # No session exists
 EOF
     chmod +x "${mock_dir}/tmux"
 
+    cat > "${mock_dir}/claude" <<'EOF'
+#!/bin/bash
+echo "mock claude $*"
+exit 0
+EOF
+    chmod +x "${mock_dir}/claude"
+
     # Run resume
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR PATH="${mock_dir}:${PATH}" bash -c '
         cd "'"${project_dir}"'" || exit 1
@@ -473,6 +480,13 @@ exit 1  # No session exists
 EOF
     chmod +x "${mock_dir}/tmux"
 
+    cat > "${mock_dir}/claude" <<'EOF'
+#!/bin/bash
+echo "mock claude $*"
+exit 0
+EOF
+    chmod +x "${mock_dir}/claude"
+
     # Run resume
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR PATH="${mock_dir}:${PATH}" bash -c '
         cd "'"${project_dir}"'" || exit 1
@@ -512,6 +526,13 @@ EOF
 exit 1  # No session exists
 EOF
     chmod +x "${mock_dir}/tmux"
+
+    cat > "${mock_dir}/claude" <<'EOF'
+#!/bin/bash
+echo "mock claude $*"
+exit 0
+EOF
+    chmod +x "${mock_dir}/claude"
 
     # Run resume with --dry-run to avoid actually starting
     # Note: This will fail at plan file check, but we verify it proceeded past the blocked state
