@@ -82,7 +82,7 @@ show_header() {
   local now version
   now=$(date '+%Y-%m-%d %H:%M:%S')
   version=$(cat "${SCRIPT_DIR}/../VERSION" 2>/dev/null || echo "unknown")
-  echo "v0 ${version} | Last refresh: ${now} | Interval: ${REFRESH_INTERVAL}s | Ctrl+C to exit"
+  echo -e "${C_BOLD}v0${C_RESET} (${version}) | Last refresh: ${C_CYAN}${now}${C_RESET} | Interval: ${C_CYAN}${REFRESH_INTERVAL}s${C_RESET} | ${C_DIM}Ctrl+C to exit${C_RESET}"
   echo "─────────────────────────────────────────────────────────────────────"
 }
 
