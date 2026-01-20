@@ -706,6 +706,7 @@ EOF
     fi
 
     update_state "tmux_session" "\"${PLAN_SESSION}\""
+    update_state "working_dir" "\"${V0_ROOT}\""
 
     IDLE_COUNT=0
     IDLE_THRESHOLD=6
@@ -851,6 +852,7 @@ EOF
     fi
 
     update_state "tmux_session" "\"${FEATURE_SESSION}\""
+    update_state "working_dir" "\"${V0_ROOT}\""
 
     PLAN_MTIME_BEFORE=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null)
 
