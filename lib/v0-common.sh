@@ -709,6 +709,110 @@ v0_verify_commit_on_branch() {
   return 0
 }
 
+# v0_verify_push_with_retry <commit> <remote_branch> [max_attempts] [delay_seconds]
+# Verify a pushed commit exists on a remote branch with retries
+# Returns 0 if verified, 1 if all attempts fail
+#
+# Handles:
+# - Transient network issues
+# - Propagation delays after push
+# - Git ref cache staleness
+#
+# Args:
+#   commit        - Commit hash to verify
+#   remote_branch - Remote branch (e.g., "origin/main")
+#   max_attempts  - Number of verification attempts (default: 3)
+#   delay_seconds - Delay between attempts (default: 2)
+v0_verify_push_with_retry() {
+  local commit="$1"
+  local remote_branch="$2"
+  local max_attempts="${3:-3}"
+  local delay="${4:-2}"
+
+  local remote="${remote_branch%%/*}"  # e.g., "origin" from "origin/main"
+  local branch="${remote_branch#*/}"   # e.g., "main" from "origin/main"
+
+  local attempt=1
+  while [[ ${attempt} -le ${max_attempts} ]]; do
+    # Force-refresh the remote ref
+    if ! git fetch "${remote}" "${branch}" --force 2>/dev/null; then
+      echo "Warning: fetch attempt ${attempt} failed" >&2
+    fi
+
+    # Try standard verification
+    if git merge-base --is-ancestor "${commit}" "${remote_branch}" 2>/dev/null; then
+      return 0
+    fi
+
+    # Fallback: check via ls-remote (bypasses local ref cache)
+    local remote_head
+    remote_head=$(git ls-remote "${remote}" "refs/heads/${branch}" 2>/dev/null | cut -f1)
+    if [[ -n "${remote_head}" ]]; then
+      # Check if our commit is ancestor of the remote HEAD
+      if git merge-base --is-ancestor "${commit}" "${remote_head}" 2>/dev/null; then
+        return 0
+      fi
+      # Check if commit IS the remote head (prefix match for short hashes)
+      if [[ "${commit}" = "${remote_head}"* ]] || [[ "${remote_head}" = "${commit}"* ]]; then
+        return 0
+      fi
+    fi
+
+    if [[ ${attempt} -lt ${max_attempts} ]]; then
+      echo "Verification attempt ${attempt}/${max_attempts} failed, retrying in ${delay}s..." >&2
+      sleep "${delay}"
+    fi
+    ((attempt++))
+  done
+
+  return 1
+}
+
+# v0_diagnose_push_verification <commit> <remote_branch>
+# Output diagnostic information when push verification fails
+# Called after v0_verify_push_with_retry fails
+v0_diagnose_push_verification() {
+  local commit="$1"
+  local remote_branch="$2"
+  local remote="${remote_branch%%/*}"
+  local branch="${remote_branch#*/}"
+
+  echo "=== Push Verification Diagnostic ===" >&2
+  echo "Commit to verify: ${commit}" >&2
+  echo "Target branch: ${remote_branch}" >&2
+  echo "" >&2
+
+  # Check local refs
+  echo "Local refs:" >&2
+  echo "  HEAD: $(git rev-parse HEAD 2>/dev/null || echo 'N/A')" >&2
+  echo "  main: $(git rev-parse main 2>/dev/null || echo 'N/A')" >&2
+  echo "  ${remote_branch}: $(git rev-parse "${remote_branch}" 2>/dev/null || echo 'N/A')" >&2
+  echo "" >&2
+
+  # Check remote state
+  echo "Remote state (via ls-remote):" >&2
+  git ls-remote "${remote}" "refs/heads/${branch}" 2>/dev/null || echo "  Failed to query remote" >&2
+  echo "" >&2
+
+  # Check if commit exists at all
+  if git cat-file -e "${commit}^{commit}" 2>/dev/null; then
+    echo "Commit ${commit:0:8} exists locally" >&2
+  else
+    echo "Commit ${commit:0:8} NOT FOUND locally" >&2
+  fi
+
+  # Check ancestry
+  echo "" >&2
+  echo "Ancestry check:" >&2
+  if git merge-base --is-ancestor "${commit}" main 2>/dev/null; then
+    echo "  ${commit:0:8} IS ancestor of local main" >&2
+  else
+    echo "  ${commit:0:8} is NOT ancestor of local main" >&2
+  fi
+
+  echo "==================================" >&2
+}
+
 # v0_verify_merge_by_op <operation> [require_remote]
 # Verify merge using operation's recorded merge commit
 # This is the ONLY reliable way to verify after merge completion.

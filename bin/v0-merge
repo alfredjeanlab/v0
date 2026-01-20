@@ -559,9 +559,8 @@ RESOLVE_EOF
       merge_commit=$(git rev-parse HEAD)
 
       rm -f "${RESOLVE_LOG}" && cleanup && git push && {
-        # Verify push succeeded by checking remote
-        git fetch origin main --quiet
-        if v0_verify_commit_on_branch "${merge_commit}" "origin/main"; then
+        # Verify push succeeded with retries to handle propagation delay
+        if v0_verify_push_with_retry "${merge_commit}" "origin/main" 3 2; then
           # Record merge commit in state, then update status
           op_to_update="${OP_NAME:-}"
           if [[ -z "${op_to_update}" ]]; then
@@ -581,7 +580,10 @@ RESOLVE_EOF
           v0_notify "${PROJECT}: merged" "${BRANCH} (after resolution)"
           git push origin --delete "${BRANCH}" 2>/dev/null || true
         else
-          echo "Error: Push succeeded but commit not found on origin/main" >&2
+          v0_diagnose_push_verification "${merge_commit}" "origin/main"
+          echo "Error: Push succeeded but commit not verified on origin/main after retries" >&2
+          # Generate debug report for investigation
+          "${V0_DIR}/bin/v0-debug" "${OP_NAME:-$(basename "${BRANCH}")}" 2>/dev/null || true
           exit 1
         fi
       }
@@ -598,9 +600,8 @@ else
     merge_commit=$(git rev-parse HEAD)
 
     cleanup && git push && {
-      # Verify push succeeded by checking remote
-      git fetch origin main --quiet
-      if v0_verify_commit_on_branch "${merge_commit}" "origin/main"; then
+      # Verify push succeeded with retries to handle propagation delay
+      if v0_verify_push_with_retry "${merge_commit}" "origin/main" 3 2; then
         # Record merge commit in state, then update status
         # Try operation name first (if available), then basename of branch
         op_to_update="${OP_NAME:-}"
@@ -621,7 +622,10 @@ else
         v0_notify "${PROJECT}: merged" "${BRANCH}"
         git push origin --delete "${BRANCH}" 2>/dev/null || true
       else
-        echo "Error: Push succeeded but commit not found on origin/main" >&2
+        v0_diagnose_push_verification "${merge_commit}" "origin/main"
+        echo "Error: Push succeeded but commit not verified on origin/main after retries" >&2
+        # Generate debug report for investigation
+        "${V0_DIR}/bin/v0-debug" "${OP_NAME:-$(basename "${BRANCH}")}" 2>/dev/null || true
         exit 1
       fi
     }
