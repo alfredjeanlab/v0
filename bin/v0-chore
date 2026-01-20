@@ -13,13 +13,23 @@ source "${V0_DIR}/lib/v0-common.sh"
 source "${V0_DIR}/lib/worker-common.sh"
 source "${V0_DIR}/lib/nudge-common.sh"
 
-# Load project config (exits if not found)
-v0_load_config
+# Determine if we're in standalone or project mode
+if v0_find_project_root >/dev/null 2>&1; then
+    v0_load_config
+else
+    v0_load_standalone_config
+fi
 
-# Initialize namespaced session names (must be after v0_load_config)
-WORKER_SESSION=$(v0_session_name "worker" "chore")
-POLLING_SESSION=$(v0_session_name "polling" "chore")
-POLLING_LOG="/tmp/v0-${PROJECT}-chore-polling.log"
+# Initialize namespaced session names (must be after config load)
+if v0_is_standalone; then
+    WORKER_SESSION="v0-standalone-worker-chore"
+    POLLING_SESSION="v0-standalone-polling-chore"
+    POLLING_LOG="/tmp/v0-standalone-chore-polling.log"
+else
+    WORKER_SESSION=$(v0_session_name "worker" "chore")
+    POLLING_SESSION=$(v0_session_name "polling" "chore")
+    POLLING_LOG="/tmp/v0-${PROJECT}-chore-polling.log"
+fi
 
 usage() {
   cat <<'EOF'
@@ -81,6 +91,12 @@ start_worker() {
   if worker_running || polling_running; then
     echo "Worker already running"
     return 0
+  fi
+
+  # Use standalone-specific startup for standalone mode
+  if v0_is_standalone; then
+    start_worker_standalone
+    return
   fi
 
   # Create worktree with proper branch name
@@ -319,9 +335,236 @@ FIXED_SCRIPT
   fi
 }
 
+# Start the standalone worker (no git worktree, no merge queue)
+start_worker_standalone() {
+  local tree_dir="${V0_STANDALONE_DIR}/tree/chore-worker"
+  local cwd="${ROOT_DIR}"  # Current working directory when chore was invoked
+
+  # Create the worker directory
+  mkdir -p "${tree_dir}"
+
+  # Save state for later cleanup
+  echo "${tree_dir}" > "${tree_dir}/.worker-tree-dir"
+  echo "${cwd}" > "${tree_dir}/.worker-cwd"
+
+  # Link worktree to standalone workspace
+  rm -rf "${tree_dir}/.wok"
+  wk init --workspace "${V0_STANDALONE_DIR}/.wok" --path "${tree_dir}"
+
+  # Write worker assignee role for this worktree
+  mkdir -p "${tree_dir}/.wok/current"
+  echo "worker:chore" > "${tree_dir}/.wok/current/assignee"
+
+  # Copy standalone worker instructions template
+  if [[ -f "${V0_DIR}/lib/templates/claude.chore.standalone.md" ]]; then
+    # Use CWD variable in template
+    sed "s|{{CWD}}|${cwd}|g" "${V0_DIR}/lib/templates/claude.chore.standalone.md" > "${tree_dir}/CLAUDE.md"
+  else
+    # Fallback to regular template
+    cp "${V0_DIR}/lib/templates/claude.chore.md" "${tree_dir}/CLAUDE.md"
+  fi
+
+  # Create settings.local.json with Stop hook AND progress notification hook
+  HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-chore.sh"
+  NOTIFY_HOOK="${V0_DIR}/lib/hooks/notify-progress.sh"
+  mkdir -p "${tree_dir}/.claude"
+  cat > "${tree_dir}/.claude/settings.local.json" <<SETTINGS_EOF
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOOK_SCRIPT}"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "V0_BUILD_DIR='${BUILD_DIR}' ${NOTIFY_HOOK}"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [{"type": "command", "command": "wk prime"}]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [{"type": "command", "command": "wk prime"}]
+      }
+    ]
+  }
+}
+SETTINGS_EOF
+
+  # Create start-chore script (simpler than new-branch, no git operations)
+  cat > "${tree_dir}/start-chore" <<START_CHORE_SCRIPT
+#!/bin/bash
+set -e
+
+CHORE_ID="\$1"
+if [[ -z "\${CHORE_ID}" ]]; then
+  echo "Usage: ./start-chore <chore-id>"
+  exit 1
+fi
+
+STATE_DIR="${BUILD_DIR}/chore/\${CHORE_ID}"
+
+# Record state for tracking
+mkdir -p "\${STATE_DIR}"
+cat > "\${STATE_DIR}/state.json" <<STATE_EOF
+{
+  "issue_id": "\${CHORE_ID}",
+  "started_at": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "cwd": "${cwd}",
+  "status": "started"
+}
+STATE_EOF
+
+# Set assignee to this worker
+wk edit "\${CHORE_ID}" assignee "worker:chore"
+
+echo "Ready to work on \${CHORE_ID}"
+echo "Working directory: ${cwd}"
+START_CHORE_SCRIPT
+  chmod +x "${tree_dir}/start-chore"
+
+  # Create completed script (mark done, exit session - no git/merge queue)
+  cat > "${tree_dir}/completed" <<COMPLETED_SCRIPT
+#!/bin/bash
+set -e
+
+CHORE_ID="\$1"
+if [[ -z "\${CHORE_ID}" ]]; then
+  echo "Usage: ./completed <chore-id>"
+  exit 1
+fi
+
+STATE_DIR="${BUILD_DIR}/chore/\${CHORE_ID}"
+
+# Update state file
+mkdir -p "\${STATE_DIR}"
+cat > "\${STATE_DIR}/state.json" <<STATE_EOF
+{
+  "issue_id": "\${CHORE_ID}",
+  "completed_at": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "completed"
+}
+STATE_EOF
+
+# Close the chore
+echo "Closing \${CHORE_ID}..."
+wk done "\${CHORE_ID}"
+
+echo ""
+echo "Completed \${CHORE_ID}"
+
+# Exit Claude session to keep context window small
+echo "Exiting session..."
+
+# Mark clean exit
+touch "${tree_dir}/.done-exit"
+
+# Find and kill claude process
+find_claude() {
+  local pid=\$1
+  while [[ -n "\${pid}" ]] && [[ "\${pid}" != "1" ]]; do
+    local cmd
+    cmd=\$(ps -o comm= -p "\${pid}" 2>/dev/null)
+    if [[ "\${cmd}" == *"claude"* ]]; then
+      echo "\${pid}"
+      return
+    fi
+    pid=\$(ps -o ppid= -p "\${pid}" 2>/dev/null | tr -d ' ')
+  done
+}
+
+CLAUDE_PID=\$(find_claude \$\$)
+if [[ -n "\${CLAUDE_PID}" ]]; then
+  kill -TERM "\${CLAUDE_PID}" 2>/dev/null || true
+fi
+exit 0
+COMPLETED_SCRIPT
+  chmod +x "${tree_dir}/completed"
+
+  # Create done script for worker
+  create_done_script "${tree_dir}" "chore"
+
+  # Read CLAUDE.md and pass as instruction
+  local claude_instruction
+  claude_instruction="$(cat "${tree_dir}/CLAUDE.md")"
+  create_wrapper_script "${tree_dir}" "claude-worker.log" "Claude Chore Worker (Standalone)" "v0 chore --err" "${V0_DIR}" claude --model opus --dangerously-skip-permissions --allow-dangerously-skip-permissions "${claude_instruction}"
+
+  echo -e "Starting standalone chore worker in tmux session: ${C_CYAN}${WORKER_SESSION}${C_RESET}"
+  echo -e "Working directory: ${C_CYAN}${cwd}${C_RESET}"
+
+  local wrapper_script="${tree_dir}/claude-worker.sh"
+
+  # Ensure nudge worker is running to monitor the session
+  ensure_nudge_running
+
+  # Start the polling loop
+  create_polling_loop "${tree_dir}" chore "${POLLING_LOG}"
+
+  # Launch Claude for the first time
+  tmux new-session -d -s "${WORKER_SESSION}" -c "${tree_dir}" "${wrapper_script}"
+
+  # Verify the session started
+  if tmux has-session -t "${WORKER_SESSION}" 2>/dev/null; then
+    echo -e "${C_GREEN}Worker started.${C_RESET} Use '${C_BOLD}v0 chore --status${C_RESET}' to check progress."
+  else
+    echo "Error: Failed to start worker tmux session" >&2
+    return 1
+  fi
+}
+
 # Stop the worker
 stop_worker() {
+  if v0_is_standalone; then
+    stop_worker_standalone
+    return
+  fi
   generic_stop_worker "${WORKER_SESSION}" "${WORKER_BRANCH}"
+}
+
+# Stop the standalone worker
+stop_worker_standalone() {
+  if ! tmux has-session -t "${WORKER_SESSION}" 2>/dev/null && ! pgrep -f "while true.*${WORKER_SESSION}" > /dev/null 2>&1; then
+    echo "Worker not running"
+    return 0
+  fi
+
+  echo "Stopping standalone worker..."
+
+  # Kill tmux session
+  tmux kill-session -t "${WORKER_SESSION}" 2>/dev/null || true
+
+  # Kill polling daemon
+  pkill -f "while true.*${WORKER_SESSION}" 2>/dev/null || true
+
+  # Clean up worker directory (keep logs)
+  local tree_dir="${V0_STANDALONE_DIR}/tree/chore-worker"
+  if [[ -d "${tree_dir}" ]]; then
+    # Remove helper scripts but keep logs
+    rm -f "${tree_dir}/start-chore" "${tree_dir}/completed" "${tree_dir}/done"
+    rm -f "${tree_dir}/CLAUDE.md" "${tree_dir}/claude-worker.sh"
+    rm -rf "${tree_dir}/.claude"
+    rm -f "${tree_dir}/.worker-tree-dir" "${tree_dir}/.worker-cwd"
+    rm -f "${tree_dir}/.done-exit" "${tree_dir}/.worker-error"
+  fi
+
+  echo "Worker stopped"
 }
 
 # Show status

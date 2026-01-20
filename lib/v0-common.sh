@@ -32,6 +32,20 @@ else
     C_RED=''
 fi
 
+# Global standalone state directory (no project required)
+V0_STANDALONE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/v0/standalone"
+
+# Initialize standalone directory structure
+v0_init_standalone() {
+    mkdir -p "${V0_STANDALONE_DIR}/build/chore"
+    mkdir -p "${V0_STANDALONE_DIR}/logs"
+
+    # Initialize .wok if not present
+    if [[ ! -f "${V0_STANDALONE_DIR}/.wok/config.toml" ]]; then
+        (cd "${V0_STANDALONE_DIR}" && wk init --prefix "chore")
+    fi
+}
+
 # Find project root by walking up directory tree looking for .v0.rc
 v0_find_project_root() {
   local dir="${1:-$(pwd)}"
@@ -144,6 +158,28 @@ v0_load_config() {
   export V0_BUILD_DIR V0_PLANS_DIR V0_MAIN_BRANCH V0_FEATURE_BRANCH V0_BUGFIX_BRANCH V0_CHORE_BRANCH
   # shellcheck disable=SC2090  # V0_WORKTREE_INIT is a shell command used with eval
   export V0_WORKTREE_INIT
+}
+
+# Load standalone configuration (no .v0.rc required)
+# Sets minimal variables needed for chore operations
+v0_load_standalone_config() {
+    v0_init_standalone
+
+    # Set variables that chore command needs
+    export V0_STANDALONE=1
+    export V0_STATE_DIR="${V0_STANDALONE_DIR}"
+    export BUILD_DIR="${V0_STANDALONE_DIR}/build"
+    export PROJECT="standalone"
+    export ISSUE_PREFIX="chore"
+
+    # No V0_ROOT in standalone mode
+    export V0_ROOT=""
+    export V0_MAIN_BRANCH=""
+}
+
+# Check if we're in standalone mode
+v0_is_standalone() {
+    [[ "${V0_STANDALONE:-0}" == "1" ]]
 }
 
 # Generate a namespaced tmux session name

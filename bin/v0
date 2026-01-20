@@ -15,11 +15,47 @@ while [[ -L "${SOURCE}" ]]; do
 done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
-# Commands that need config
-CONFIG_COMMANDS="plan tree decompose merge mergeq status feature resume fix chore attach cancel shutdown startup hold"
+# Commands that require a project (.v0.rc)
+PROJECT_COMMANDS="plan tree decompose merge mergeq status feature resume fix attach cancel shutdown startup hold"
 
-# Commands that work without config
-NO_CONFIG_COMMANDS="init help version coffee"
+# Commands that work in standalone mode (no .v0.rc needed)
+STANDALONE_COMMANDS="chore"
+
+# Commands that never need config
+NO_CONFIG_COMMANDS="init help version coffee talk"
+
+# Source common functions for standalone mode checking
+source "${V0_DIR}/lib/v0-common.sh"
+
+# Check if running in standalone mode and handle appropriately
+# Returns 0 if standalone mode should be used, 1 if in a project
+v0_check_standalone_mode() {
+    local cmd="$1"
+
+    # Try to find project root
+    if v0_find_project_root >/dev/null 2>&1; then
+        return 1  # In a project, not standalone
+    fi
+
+    # Check if command supports standalone mode
+    if [[ " ${STANDALONE_COMMANDS} " == *" ${cmd} "* ]]; then
+        return 0  # Standalone mode for this command
+    fi
+
+    # Command requires project but we're not in one
+    echo "Error: Not in a v0 project directory." >&2
+    echo "" >&2
+    echo "The command 'v0 ${cmd}' requires a project with a .v0.rc file." >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  1. Navigate to a project directory, or" >&2
+    echo "  2. Run 'v0 init' to create a new project here" >&2
+    echo "" >&2
+    echo "Available without a project:" >&2
+    echo "  v0 chore    - Work on standalone chores" >&2
+    echo "  v0 help     - Show help" >&2
+    exit 1
+}
 
 show_help() {
   cat <<'EOF'
@@ -132,7 +168,24 @@ CMD="${1}"
 shift
 
 case "${CMD}" in
-  plan|tree|decompose|merge|mergeq|status|watch|feature|fix|chore|attach|cancel|shutdown|startup|talk|coffee|prune|monitor|hold)
+  # Project-required commands
+  plan|tree|decompose|merge|mergeq|status|watch|feature|fix|attach|cancel|shutdown|startup|prune|monitor|hold)
+    # Check if we're in a project - if not, show error
+    if ! v0_find_project_root >/dev/null 2>&1; then
+        v0_check_standalone_mode "${CMD}"
+    fi
+    exec "${V0_DIR}/bin/v0-${CMD}" "$@"
+    ;;
+  # Standalone-capable commands
+  chore)
+    # Check if in standalone mode (sets V0_STANDALONE=1 if needed)
+    if v0_check_standalone_mode "${CMD}"; then
+        export V0_STANDALONE=1
+    fi
+    exec "${V0_DIR}/bin/v0-${CMD}" "$@"
+    ;;
+  # No-config commands
+  talk|coffee)
     exec "${V0_DIR}/bin/v0-${CMD}" "$@"
     ;;
   self-debug)
