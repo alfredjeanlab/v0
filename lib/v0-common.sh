@@ -743,18 +743,8 @@ v0_verify_push() {
   return 0
 }
 
-# DEPRECATED: v0_verify_push_with_retry <commit> <remote_branch> [max_attempts] [delay_seconds]
-# Use v0_verify_push instead. Remote verification is unreliable due to caching.
-# This function now just calls v0_verify_push (ignoring retry params).
-v0_verify_push_with_retry() {
-  local commit="$1"
-  # Ignore remote_branch, max_attempts, delay - they cause more harm than good
-  v0_verify_push "${commit}"
-}
-
 # v0_diagnose_push_verification <commit> <remote_branch>
 # Output diagnostic information when push verification fails
-# Called after v0_verify_push_with_retry fails
 v0_diagnose_push_verification() {
   local commit="$1"
   local remote_branch="$2"
@@ -820,26 +810,6 @@ v0_verify_merge_by_op() {
   fi
 
   v0_verify_commit_on_branch "${merge_commit}" "main" "${require_remote}"
-}
-
-# DEPRECATED: v0_verify_merge <branch> [require_remote]
-# DO NOT USE for post-merge verification - fails for rebase workflows.
-#
-# This function checks if a branch's current tip is on main. It fails when:
-# 1. Rebase+FF merge: original commits have different hashes than rebased commits
-# 2. Post-cleanup: branch is deleted, git rev-parse fails
-#
-# Only valid use case: checking if a branch COULD be fast-forwarded (pre-merge).
-v0_verify_merge() {
-  local branch="$1"
-  local require_remote="${2:-false}"
-
-  echo "Warning: v0_verify_merge is deprecated, use v0_verify_merge_by_op" >&2
-
-  local branch_commit
-  branch_commit=$(git rev-parse "${branch}" 2>/dev/null) || return 1
-
-  v0_verify_commit_on_branch "${branch_commit}" "main" "${require_remote}"
 }
 
 # v0_prune_mergeq [--dry-run]
