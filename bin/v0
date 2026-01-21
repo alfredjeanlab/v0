@@ -64,7 +64,10 @@ v0 - A tool to ease you in to multi-agent vibe coding.
 Usage: v0 <command> [args]
 
 Commands:
-  init          Initialize .v0.rc in current directory
+  init [path]   Initialize .v0.rc in current directory (or path)
+                Options:
+                  --develop <branch>  Target branch for merges (auto-detects 'develop', fallback 'main')
+                  --remote <name>     Git remote name (default: origin)
   status        Show operation status
   watch         Continuously watch status (like 'status --watch')
   startup       Start workers (fix, chore, mergeq)
@@ -96,7 +99,9 @@ Options:
   --version     Show version
 
 Examples:
-  v0 init                              # Create .v0.rc in current project
+  v0 init                              # Initialize with auto-detected branch
+  v0 init --develop agent              # Use 'agent' as the development branch
+  v0 init ./myproject --remote upstream  # Init in myproject, use 'upstream' remote
   v0 feature auth "Add JWT auth"       # Full autonomous pipeline
   v0 fix "Button not working"          # Report a bug to the fix worker
   v0 status                            # List all operations
@@ -151,7 +156,33 @@ case "${1:-}" in
     fi
 
     shift
-    v0_init_config "${1:-.}"
+
+    init_path="."
+    init_develop=""
+    init_remote=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --develop|--branch)
+          init_develop="$2"
+          shift 2
+          ;;
+        --remote)
+          init_remote="$2"
+          shift 2
+          ;;
+        -*)
+          echo "Unknown option: $1" >&2
+          exit 1
+          ;;
+        *)
+          init_path="$1"
+          shift
+          ;;
+      esac
+    done
+
+    v0_init_config "${init_path}" "${init_develop}" "${init_remote}"
     exit 0
     ;;
   help|--help|-h)

@@ -619,6 +619,124 @@ EOF
 }
 
 # ============================================================================
+# v0_detect_develop_branch() tests
+# ============================================================================
+
+@test "v0_detect_develop_branch returns develop when it exists locally" {
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    git branch develop
+
+    source_lib "v0-common.sh"
+
+    run v0_detect_develop_branch
+    assert_success
+    assert_output "develop"
+}
+
+@test "v0_detect_develop_branch returns main when develop does not exist" {
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
+
+    source_lib "v0-common.sh"
+
+    run v0_detect_develop_branch
+    assert_success
+    assert_output "main"
+}
+
+@test "v0_detect_develop_branch checks remote when local branch not found" {
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
+
+    # Create a bare remote with develop branch
+    git clone --bare . "${TEST_TEMP_DIR}/upstream.git"
+    cd "${TEST_TEMP_DIR}/upstream.git" || return 1
+    git branch develop
+
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    git remote add upstream "${TEST_TEMP_DIR}/upstream.git"
+
+    source_lib "v0-common.sh"
+
+    run v0_detect_develop_branch upstream
+    assert_success
+    assert_output "develop"
+}
+
+# ============================================================================
+# v0_init_config() with branch/remote parameters
+# ============================================================================
+
+@test "v0_init_config accepts develop branch parameter" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
+    source_lib_with_mocks "v0-common.sh"
+
+    v0_init_config "${test_dir}" "staging"
+
+    assert_file_exists "${test_dir}/.v0.rc"
+    run grep 'V0_DEVELOP_BRANCH="staging"' "${test_dir}/.v0.rc"
+    assert_success
+}
+
+@test "v0_init_config accepts remote parameter" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
+    source_lib_with_mocks "v0-common.sh"
+
+    v0_init_config "${test_dir}" "" "upstream"
+
+    assert_file_exists "${test_dir}/.v0.rc"
+    run grep 'V0_GIT_REMOTE="upstream"' "${test_dir}/.v0.rc"
+    assert_success
+}
+
+@test "v0_init_config auto-detects develop branch" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    init_mock_git_repo "${test_dir}"
+    cd "${test_dir}" || return 1
+    git branch develop
+
+    source_lib_with_mocks "v0-common.sh"
+
+    v0_init_config "${test_dir}"
+
+    run grep 'V0_DEVELOP_BRANCH="develop"' "${test_dir}/.v0.rc"
+    assert_success
+}
+
+@test "v0_init_config uses commented defaults when main/origin specified" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
+
+    source_lib_with_mocks "v0-common.sh"
+
+    # Explicitly pass main/origin to test commented defaults
+    v0_init_config "${test_dir}" "main" "origin"
+
+    # Should be commented when using defaults (use regex for flexible whitespace)
+    run grep -E '^# V0_DEVELOP_BRANCH=' "${test_dir}/.v0.rc"
+    assert_success
+    run grep -E '^# V0_GIT_REMOTE=' "${test_dir}/.v0.rc"
+    assert_success
+}
+
+@test "v0_init_config uses uncommented values for non-defaults" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    mkdir -p "${test_dir}"
+    source_lib_with_mocks "v0-common.sh"
+
+    v0_init_config "${test_dir}" "agent" "upstream"
+
+    # Should be uncommented when using non-defaults
+    run grep '^V0_DEVELOP_BRANCH="agent"' "${test_dir}/.v0.rc"
+    assert_success
+    run grep '^V0_GIT_REMOTE="upstream"' "${test_dir}/.v0.rc"
+    assert_success
+}
+
+# ============================================================================
 # v0_git_worktree_clean() tests
 # ============================================================================
 
