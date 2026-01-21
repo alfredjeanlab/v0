@@ -201,9 +201,33 @@ v0_session_name() {
   echo "v0-${PROJECT}-${suffix}-${type}"
 }
 
+# Detect the best default branch for development
+# Returns: branch name (develop if exists, otherwise main)
+v0_detect_develop_branch() {
+  local remote="${1:-origin}"
+
+  # Check if 'develop' exists locally
+  if git branch --list develop 2>/dev/null | grep -q develop; then
+    echo "develop"
+    return 0
+  fi
+
+  # Check if 'develop' exists on remote
+  if git ls-remote --heads "${remote}" develop 2>/dev/null | grep -q develop; then
+    echo "develop"
+    return 0
+  fi
+
+  # Fallback to main
+  echo "main"
+}
+
 # Create .v0.rc template in specified directory
+# Args: target_dir [develop_branch] [git_remote]
 v0_init_config() {
   local target_dir="${1:-$(pwd)}"
+  local develop_branch="${2:-}"
+  local git_remote="${3:-origin}"
   # Normalize the path (convert "." to absolute path)
   target_dir="$(cd "${target_dir}" && pwd)"
   local config_file="${target_dir}/.v0.rc"
@@ -256,10 +280,29 @@ v0_init_config() {
     echo "Created .gitignore with .v0/"
   fi
 
+  # Auto-detect branch if not specified
+  if [[ -z "${develop_branch}" ]]; then
+    develop_branch="$(v0_detect_develop_branch "${git_remote}")"
+  fi
+
   # Only create or update .v0.rc if it doesn't exist
   if [[ -f "${config_file}" ]]; then
     echo ".v0.rc already exists in ${target_dir}"
   else
+    # Generate config with conditional commenting based on defaults
+    local branch_line remote_line
+    if [[ "${develop_branch}" != "main" ]]; then
+      branch_line="V0_DEVELOP_BRANCH=\"${develop_branch}\"     # Target branch for merges"
+    else
+      branch_line="# V0_DEVELOP_BRANCH=\"main\"      # Target branch for merges (default: main)"
+    fi
+
+    if [[ "${git_remote}" != "origin" ]]; then
+      remote_line="V0_GIT_REMOTE=\"${git_remote}\"        # Git remote for push/fetch"
+    else
+      remote_line="# V0_GIT_REMOTE=\"origin\"        # Git remote for push/fetch"
+    fi
+
     cat > "${config_file}" <<EOF
 # v0 project configuration
 # See: https://github.com/alfredjeanlab/v0
@@ -271,11 +314,11 @@ ISSUE_PREFIX="${issue_prefix}"    # Issue IDs: ${issue_prefix}-abc123
 # Optional: Override defaults
 # V0_BUILD_DIR=".v0/build"      # Build state directory
 # V0_PLANS_DIR="plans"          # Implementation plans
-# V0_DEVELOP_BRANCH="main"      # Target branch for merges (default: main)
+${branch_line}
 # V0_FEATURE_BRANCH="feature/{name}"
 # V0_BUGFIX_BRANCH="fix/{id}"
 # V0_CHORE_BRANCH="chore/{id}"
-# V0_GIT_REMOTE="origin"        # Git remote for push/fetch
+${remote_line}
 # DISABLE_NOTIFICATIONS=1       # Disable macOS notifications
 EOF
 

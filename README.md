@@ -28,6 +28,17 @@ cd /path/to/your/project
 v0 init
 ```
 
+The init command auto-detects your development branch:
+- Uses `develop` if it exists (locally or on remote)
+- Falls back to `main` otherwise
+
+To specify a different branch or remote:
+
+```bash
+v0 init --develop agent              # Use 'agent' branch
+v0 init --develop staging --remote upstream
+```
+
 ### Requirements
 
 - [wk](https://github.com/alfredjeanlab/wok) - Issue tracking
@@ -114,14 +125,23 @@ While attached to tmux: scroll with `Ctrl-b [`, exit scroll with `q`, detach wit
 
 ## Configuration
 
-Running `v0 init` creates a `.v0.rc` file with optional settings:
+Running `v0 init` creates a `.v0.rc` file with sensible defaults. You can override
+these by editing the file or by passing flags to `v0 init`:
+
+| Setting | Init Flag | Default |
+|---------|-----------|---------|
+| V0_DEVELOP_BRANCH | `--develop <branch>` | auto-detect (develop → main) |
+| V0_GIT_REMOTE | `--remote <name>` | origin |
+
+All available settings:
 
 ```bash
 PROJECT="myproject"         # Project name (default: directory name)
 ISSUE_PREFIX="proj"         # Issue ID prefix (default: project name)
 V0_BUILD_DIR=".v0/build"    # Build state location
 V0_PLANS_DIR="plans"        # Where plans are written
-V0_DEVELOP_BRANCH="main"    # Target branch for merges (default: main)
+V0_DEVELOP_BRANCH="main"    # Target branch for merges (auto-detects 'develop', fallback 'main')
+V0_GIT_REMOTE="origin"      # Git remote for push/fetch
 V0_FEATURE_BRANCH="feature/{name}"
 V0_BUGFIX_BRANCH="fix/{id}"
 V0_CHORE_BRANCH="chore/{id}"
