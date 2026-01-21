@@ -926,8 +926,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       mergeq_pid_file="${BUILD_DIR}/mergeq/.daemon.pid"
       if [[ -f "${mergeq_pid_file}" ]] && kill -0 "$(cat "${mergeq_pid_file}" 2>/dev/null)" 2>/dev/null; then
         # Derive counts from pre-fetched mergeq_entries (Phase 2 optimization)
-        processing=$(echo "${mergeq_entries}" | grep -c "^processing" 2>/dev/null || echo 0)
-        pending=$(echo "${mergeq_entries}" | grep -c "^pending" 2>/dev/null || echo 0)
+        processing=$(echo "${mergeq_entries}" | grep -c "^processing" 2>/dev/null || true)
+        pending=$(echo "${mergeq_entries}" | grep -c "^pending" 2>/dev/null || true)
         if [[ "${processing}" -gt 0 ]]; then
           echo -e "Merges: ${C_CYAN}Active${C_RESET}"
         elif [[ "${pending}" -gt 0 ]]; then
@@ -942,7 +942,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       fi
       if [[ "${merges_empty}" != true ]]; then
         # Use pre-fetched mergeq_entries (Phase 2 optimization)
-        total=$(echo "${mergeq_entries}" | grep -c '' 2>/dev/null || echo 0)
+        total=$(echo "${mergeq_entries}" | grep -c '' 2>/dev/null || true)
         if [[ "${total}" -le 3 ]]; then
           echo "${mergeq_entries}" | while IFS=$'\t' read -r status op; do
             [[ -z "${status}" ]] && continue
