@@ -55,6 +55,7 @@ check_shellcheckrc() {
 # Inline disables allowed because they're case-specific with documentation.
 ALLOWED_INLINE_DISABLES=(
     "SC2012"  # ls usage - sometimes needed for sorting by time
+    "SC2064"  # trap expansion - intentional early variable capture
     "SC2090"  # eval usage - intentional in specific cases
 )
 
