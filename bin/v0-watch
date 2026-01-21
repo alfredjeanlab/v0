@@ -91,14 +91,23 @@ show_header() {
   # 5. fallback to 80
   width="${COLUMNS:-}"
   if ! [[ "${width}" =~ ^[0-9]+$ ]] || [[ "${width}" -lt 1 ]]; then
-    width=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2) ||
-      width=$(tput cols </dev/tty 2>/dev/null) ||
-      width=$(tput cols 2>/dev/null) ||
+    # Try stty first (most reliable with actual terminal)
+    # Use subshell to suppress bash's input redirection errors
+    width=$( { stty size </dev/tty | awk '{print $2}'; } 2>/dev/null ) || width=""
+    # Validate stty result
+    if ! [[ "${width}" =~ ^[0-9]+$ ]] || [[ "${width}" -lt 1 ]]; then
+      # Try tput with /dev/tty
+      width=$( { tput cols </dev/tty; } 2>/dev/null ) || width=""
+    fi
+    # Validate tput result
+    if ! [[ "${width}" =~ ^[0-9]+$ ]] || [[ "${width}" -lt 1 ]]; then
+      # Try tput without /dev/tty
+      width=$(tput cols 2>/dev/null) || width=""
+    fi
+    # Final fallback
+    if ! [[ "${width}" =~ ^[0-9]+$ ]] || [[ "${width}" -lt 1 ]]; then
       width=80
-  fi
-  # Final validation
-  if ! [[ "${width}" =~ ^[0-9]+$ ]] || [[ "${width}" -lt 1 ]]; then
-    width=80
+    fi
   fi
   echo -e "v0 (${C_DIM}${C_LAVENDER}${version}${C_RESET}) | Project: ${C_CYAN}${project_name}/${C_RESET} | Last refresh: ${C_CYAN}${now}${C_RESET} | Interval: ${C_CYAN}${REFRESH_INTERVAL}s${C_RESET} | ${C_DIM}Ctrl+C to exit${C_RESET}"
   # Use bash string replication for portability across macOS/Linux
@@ -112,7 +121,8 @@ trap 'echo; exit 0' INT TERM
 
 iteration=0
 while true; do
-  clear
+  # Only clear screen if stdout is a terminal
+  [[ -t 1 ]] && clear
   show_header
   if [[ -n "${OPERATION_NAME}" ]]; then
     "${SCRIPT_DIR}/v0-status" "${OPERATION_NAME}" --no-hints ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
