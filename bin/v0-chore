@@ -116,9 +116,9 @@ start_worker() {
   echo "${WORKER_BRANCH}" > "${WORKER_TREE_DIR}/.worker-branch"
   pwd > "${WORKER_TREE_DIR}/.worker-project-root"
 
-  # Fast-forward worktree to latest main
-  git -C "${WORKER_GIT_DIR}" fetch origin main
-  git -C "${WORKER_GIT_DIR}" reset --hard origin/main
+  # Fast-forward worktree to latest develop branch
+  git -C "${WORKER_GIT_DIR}" fetch origin "${V0_DEVELOP_BRANCH}"
+  git -C "${WORKER_GIT_DIR}" reset --hard "origin/${V0_DEVELOP_BRANCH}"
 
   # Link worktree to main repo's shared workspace
   # Remove any local .wok database first (if it exists)
@@ -194,9 +194,9 @@ WORKTREE_ROOT="\$(pwd)"
 
 cd ${REPO_NAME}
 
-# Reset worktree to latest main
-git fetch origin main
-git reset --hard origin/main
+# Reset worktree to latest develop branch
+git fetch origin "${V0_DEVELOP_BRANCH}"
+git reset --hard "origin/${V0_DEVELOP_BRANCH}"
 
 # Record branch state for recovery
 mkdir -p "\${STATE_DIR}"
@@ -266,10 +266,10 @@ echo "Queueing for merge..."
 echo "Closing \${CHORE_ID}..."
 (cd "\${WORKTREE_ROOT}" && wk done "\${CHORE_ID}")
 
-# Reset worktree to latest main
-echo "Resetting to latest main..."
-git fetch origin main
-git reset --hard origin/main
+# Reset worktree to latest develop branch
+echo "Resetting to latest ${V0_DEVELOP_BRANCH}..."
+git fetch origin "${V0_DEVELOP_BRANCH}"
+git reset --hard "origin/${V0_DEVELOP_BRANCH}"
 
 echo ""
 echo "Completed \${CHORE_ID}"

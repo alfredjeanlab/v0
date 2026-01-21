@@ -605,12 +605,12 @@ process_branch_merge() {
   # Ensure we're on the main branch
   local current_branch
   current_branch=$(git rev-parse --abbrev-ref HEAD)
-  if [[ "${current_branch}" != "${V0_MAIN_BRANCH}" ]]; then
-    echo "[$(date +%H:%M:%S)] Switching to ${V0_MAIN_BRANCH} (was on ${current_branch})"
-    git checkout "${V0_MAIN_BRANCH}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log"
+  if [[ "${current_branch}" != "${V0_DEVELOP_BRANCH}" ]]; then
+    echo "[$(date +%H:%M:%S)] Switching to ${V0_DEVELOP_BRANCH} (was on ${current_branch})"
+    git checkout "${V0_DEVELOP_BRANCH}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log"
     local checkout_exit=${PIPESTATUS[0]}
     if [[ ${checkout_exit} -ne 0 ]]; then
-      echo "[$(date +%H:%M:%S)] Failed to checkout ${V0_MAIN_BRANCH} (exit ${checkout_exit})" >&2
+      echo "[$(date +%H:%M:%S)] Failed to checkout ${V0_DEVELOP_BRANCH} (exit ${checkout_exit})" >&2
       update_entry "${branch}" "failed"
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:failed: ${branch} (checkout failed)" >> "${MERGEQ_DIR}/logs/merges.log"
       emit_event "merge:failed" "${branch}"
@@ -619,7 +619,7 @@ process_branch_merge() {
   fi
 
   # Pull latest main to stay current
-  git pull --ff-only origin "${V0_MAIN_BRANCH}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log" || true
+  git pull --ff-only origin "${V0_DEVELOP_BRANCH}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log" || true
 
   # Clean up any incomplete merge/rebase state from previous failed attempts
   if [[ -d ".git/rebase-merge" ]] || [[ -d ".git/rebase-apply" ]]; then
@@ -655,7 +655,7 @@ process_branch_merge() {
   if [[ ${merge_exit} -eq 0 ]]; then
     # Success - push to remote (capture exit code with PIPESTATUS)
     echo "Pushing merged changes..."
-    git push origin "${V0_MAIN_BRANCH}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log"
+    git push origin "${V0_DEVELOP_BRANCH}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log"
     local push_exit=${PIPESTATUS[0]}
 
     if [[ ${push_exit} -ne 0 ]]; then
@@ -731,7 +731,7 @@ fi
 git commit --no-edit || true
 
 # Push the result to main branch explicitly (HEAD may track a worker branch)
-git push origin HEAD:"${V0_MAIN_BRANCH}"
+git push origin HEAD:"${V0_DEVELOP_BRANCH}"
 
 # Delete the merged branch
 git push origin --delete "${branch}" 2>/dev/null || true
@@ -786,7 +786,7 @@ RESOLVE_EOF
     echo "    git fetch origin ${branch}"
     echo "    git merge origin/${branch}"
     echo "    # resolve conflicts"
-    echo "    git push origin HEAD:${V0_MAIN_BRANCH}"
+    echo "    git push origin HEAD:${V0_DEVELOP_BRANCH}"
     echo "  Or attach to resolve session:"
     echo "    tmux attach -t ${resolve_session}"
     return 1
@@ -858,8 +858,8 @@ process_merge() {
         echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but no merge_commit recorded"
         update_operation_state "${op}" "merge_error" '"No merge_commit in state - possible v0-merge bug"'
       else
-        echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but commit ${merge_commit:0:8} not on origin/main"
-        update_operation_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on origin/main\""
+        echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but commit ${merge_commit:0:8} not on origin/${V0_DEVELOP_BRANCH}"
+        update_operation_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on origin/${V0_DEVELOP_BRANCH}\""
       fi
 
       update_operation_state "${op}" "merge_status" '"verification_failed"'
@@ -932,8 +932,8 @@ process_merge() {
           echo "[$(date +%H:%M:%S)] Warning: Resolution succeeded but no merge_commit recorded"
           update_operation_state "${op}" "merge_error" '"No merge_commit in state after resolution"'
         else
-          echo "[$(date +%H:%M:%S)] Warning: Resolution succeeded but commit ${merge_commit:0:8} not on origin/main"
-          update_operation_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on origin/main after resolution\""
+          echo "[$(date +%H:%M:%S)] Warning: Resolution succeeded but commit ${merge_commit:0:8} not on origin/${V0_DEVELOP_BRANCH}"
+          update_operation_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on origin/${V0_DEVELOP_BRANCH} after resolution\""
         fi
 
         update_operation_state "${op}" "merge_status" '"verification_failed"'

@@ -122,7 +122,7 @@ v0_load_config() {
   # Defaults (can be overridden in .v0.rc)
   V0_BUILD_DIR=".v0/build"
   V0_PLANS_DIR="plans"
-  V0_MAIN_BRANCH="main"
+  V0_DEVELOP_BRANCH="main"
   V0_FEATURE_BRANCH="feature/{name}"
   V0_BUGFIX_BRANCH="fix/{id}"
   V0_CHORE_BRANCH="chore/{id}"
@@ -157,7 +157,7 @@ v0_load_config() {
 
   # Export for subprocesses
   export V0_ROOT PROJECT ISSUE_PREFIX REPO_NAME V0_STATE_DIR BUILD_DIR PLANS_DIR
-  export V0_BUILD_DIR V0_PLANS_DIR V0_MAIN_BRANCH V0_FEATURE_BRANCH V0_BUGFIX_BRANCH V0_CHORE_BRANCH
+  export V0_BUILD_DIR V0_PLANS_DIR V0_DEVELOP_BRANCH V0_FEATURE_BRANCH V0_BUGFIX_BRANCH V0_CHORE_BRANCH
   # shellcheck disable=SC2090  # V0_WORKTREE_INIT is a shell command used with eval
   export V0_WORKTREE_INIT
 }
@@ -176,7 +176,7 @@ v0_load_standalone_config() {
 
     # No V0_ROOT in standalone mode
     export V0_ROOT=""
-    export V0_MAIN_BRANCH=""
+    export V0_DEVELOP_BRANCH=""
 }
 
 # Check if we're in standalone mode
@@ -269,6 +269,7 @@ ISSUE_PREFIX="${issue_prefix}"    # Issue IDs: ${issue_prefix}-abc123
 # Optional: Override defaults
 # V0_BUILD_DIR=".v0/build"      # Build state directory
 # V0_PLANS_DIR="plans"          # Implementation plans
+# V0_DEVELOP_BRANCH="main"      # Target branch for merges (default: main)
 # V0_FEATURE_BRANCH="feature/{name}"
 # V0_BUGFIX_BRANCH="fix/{id}"
 # V0_CHORE_BRANCH="chore/{id}"

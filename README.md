@@ -121,6 +121,7 @@ PROJECT="myproject"         # Project name (default: directory name)
 ISSUE_PREFIX="proj"         # Issue ID prefix (default: project name)
 V0_BUILD_DIR=".v0/build"    # Build state location
 V0_PLANS_DIR="plans"        # Where plans are written
+V0_DEVELOP_BRANCH="main"    # Target branch for merges (default: main)
 V0_FEATURE_BRANCH="feature/{name}"
 V0_BUGFIX_BRANCH="fix/{id}"
 V0_CHORE_BRANCH="chore/{id}"

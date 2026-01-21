@@ -322,10 +322,10 @@ do_merge() {
   if git merge --ff-only "${BRANCH}" 2>/dev/null; then
     echo "Fast-forward merge successful"
   else
-    # Rebase branch onto main to enable fast-forward
-    echo "Rebasing ${BRANCH} onto main..."
-    git -C "${WORKTREE}" fetch origin main 2>/dev/null || true
-    if git -C "${WORKTREE}" rebase origin/main 2>/dev/null; then
+    # Rebase branch onto develop branch to enable fast-forward
+    echo "Rebasing ${BRANCH} onto ${V0_DEVELOP_BRANCH}..."
+    git -C "${WORKTREE}" fetch origin "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
+    if git -C "${WORKTREE}" rebase "origin/${V0_DEVELOP_BRANCH}" 2>/dev/null; then
       if git merge --ff-only "${BRANCH}"; then
         echo "Fast-forward merge successful (after rebase)"
         return 0
@@ -395,8 +395,8 @@ if has_conflicts; then
     BRANCH_COMMITS=$(commits_on_branch)
 
     # Start rebase to trigger conflicts (from root, targeting worktree)
-    git -C "${WORKTREE}" fetch origin main 2>/dev/null || true
-    git -C "${WORKTREE}" rebase origin/main || true
+    git -C "${WORKTREE}" fetch origin "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
+    git -C "${WORKTREE}" rebase "origin/${V0_DEVELOP_BRANCH}" || true
 
     # Create resolve session name
     RESOLVE_SESSION=$(v0_session_name "$(echo "${BRANCH}" | tr '/' '-')" "merge-resolve")

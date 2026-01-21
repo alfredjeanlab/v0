@@ -253,6 +253,39 @@ EOF
     refute_output --partial "Error"
 }
 
+@test "v0_load_config sets V0_DEVELOP_BRANCH default to main" {
+    create_v0rc
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    source_lib "v0-common.sh"
+
+    v0_load_config
+
+    assert_equal "${V0_DEVELOP_BRANCH}" "main"
+}
+
+@test "v0_load_config allows V0_DEVELOP_BRANCH override" {
+    create_v0rc
+    echo 'V0_DEVELOP_BRANCH="develop"' >> "${TEST_TEMP_DIR}/project/.v0.rc"
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    source_lib "v0-common.sh"
+
+    v0_load_config
+
+    assert_equal "${V0_DEVELOP_BRANCH}" "develop"
+}
+
+@test "v0_load_config exports V0_DEVELOP_BRANCH" {
+    create_v0rc
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    source_lib "v0-common.sh"
+
+    v0_load_config
+
+    # Verify it's exported by checking in subshell
+    run bash -c 'echo "${V0_DEVELOP_BRANCH}"'
+    assert_output "main"
+}
+
 # ============================================================================
 # v0_issue_pattern() tests
 # ============================================================================

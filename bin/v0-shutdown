@@ -32,7 +32,7 @@ This is a complete shutdown that:
 - Deletes legacy v0-*-worker branches (old naming convention)
 
 Note: v0/worker/chore and v0/worker/fix branches are checked before deletion.
-If they contain commits not in ${V0_MAIN_BRANCH:-main}, a warning is shown
+If they contain commits not in ${V0_DEVELOP_BRANCH:-main}, a warning is shown
 and the branch is preserved. Use --force to delete them anyway.
 
 Options:
@@ -244,13 +244,13 @@ if [[ -n "${local_branches}" ]]; then
     # Check if this is a chore or fix branch that needs merge verification
     if [[ "${branch}" == "v0/worker/chore" || "${branch}" == "v0/worker/fix" ]]; then
       # Check if branch is merged (is an ancestor of main)
-      if ! git -C "${V0_ROOT}" merge-base --is-ancestor "${branch}" "${V0_MAIN_BRANCH}" 2>/dev/null; then
+      if ! git -C "${V0_ROOT}" merge-base --is-ancestor "${branch}" "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
         if [[ -z "${FORCE}" ]]; then
-          echo "Warning: ${branch} has commits not in ${V0_MAIN_BRANCH}, skipping (use --force to delete)"
+          echo "Warning: ${branch} has commits not in ${V0_DEVELOP_BRANCH}, skipping (use --force to delete)"
           skipped_branches="${skipped_branches}${branch}"$'\n'
           continue
         else
-          echo "Warning: ${branch} has commits not in ${V0_MAIN_BRANCH}, deleting anyway (--force)"
+          echo "Warning: ${branch} has commits not in ${V0_DEVELOP_BRANCH}, deleting anyway (--force)"
         fi
       fi
     fi
@@ -276,13 +276,13 @@ if [[ -n "${remote_branches}" ]]; then
     # Check if this is a chore or fix branch that needs merge verification
     if [[ "${branch_name}" == "v0/worker/chore" || "${branch_name}" == "v0/worker/fix" ]]; then
       # Check if the remote branch is merged (fetch first to ensure we have the ref)
-      if ! git -C "${V0_ROOT}" merge-base --is-ancestor "${branch}" "${V0_MAIN_BRANCH}" 2>/dev/null; then
+      if ! git -C "${V0_ROOT}" merge-base --is-ancestor "${branch}" "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
         if [[ -z "${FORCE}" ]]; then
-          echo "Warning: ${branch_name} (remote) has commits not in ${V0_MAIN_BRANCH}, skipping (use --force to delete)"
+          echo "Warning: ${branch_name} (remote) has commits not in ${V0_DEVELOP_BRANCH}, skipping (use --force to delete)"
           skipped_branches="${skipped_branches}${branch_name} (remote)"$'\n'
           continue
         else
-          echo "Warning: ${branch_name} (remote) has commits not in ${V0_MAIN_BRANCH}, deleting anyway (--force)"
+          echo "Warning: ${branch_name} (remote) has commits not in ${V0_DEVELOP_BRANCH}, deleting anyway (--force)"
         fi
       fi
     fi

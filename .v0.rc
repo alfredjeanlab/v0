@@ -8,6 +8,7 @@ ISSUE_PREFIX="v0"    # Issue IDs: v0-abc123
 # Optional: Override defaults
 # V0_BUILD_DIR=".v0/build"      # Build state directory
 # V0_PLANS_DIR="plans"          # Implementation plans
+# V0_DEVELOP_BRANCH="main"      # Target branch for merges (default: main)
 # V0_FEATURE_BRANCH="feature/{name}"
 # V0_BUGFIX_BRANCH="fix/{id}"
 # V0_CHORE_BRANCH="chore/{id}"

@@ -65,7 +65,8 @@ cleanup_worktree() {
   }
 
   # Delete the branch AFTER removing worktree (worktree may hold a reference)
-  if [[ -n "${branch}" ]] && [[ "${branch}" != "main" ]] && [[ "${branch}" != "master" ]]; then
+  # Protect the configured develop branch plus common defaults (main, master)
+  if [[ -n "${branch}" ]] && [[ "${branch}" != "${V0_DEVELOP_BRANCH:-main}" ]] && [[ "${branch}" != "main" ]] && [[ "${branch}" != "master" ]]; then
     echo "Deleting branch: ${branch}"
     git -C "${git_root}" branch -D "${branch}" 2>/dev/null || true
   fi
@@ -338,10 +339,10 @@ create_polling_loop() {
             git_dir=\$(cat \"${tree_dir}/.worker-git-dir\")
             worker_branch=\$(cat \"${tree_dir}/.worker-branch\")
             if [[ -d \"\${git_dir}\" ]]; then
-              echo \"[\$(date)] Resetting worktree to latest main...\" >> \"${polling_log}\"
-              git -C \"\${git_dir}\" fetch origin main >> \"${polling_log}\" 2>&1 || true
+              echo \"[\$(date)] Resetting worktree to latest develop branch...\" >> \"${polling_log}\"
+              git -C \"\${git_dir}\" fetch origin \"\${V0_DEVELOP_BRANCH:-main}\" >> \"${polling_log}\" 2>&1 || true
               git -C \"\${git_dir}\" checkout \"\${worker_branch}\" >> \"${polling_log}\" 2>&1 || true
-              git -C \"\${git_dir}\" reset --hard origin/main >> \"${polling_log}\" 2>&1 || true
+              git -C \"\${git_dir}\" reset --hard \"origin/\${V0_DEVELOP_BRANCH:-main}\" >> \"${polling_log}\" 2>&1 || true
               echo \"[\$(date)] Worktree reset complete\" >> \"${polling_log}\"
             fi
           fi

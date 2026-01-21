@@ -100,9 +100,9 @@ start_worker() {
   echo "${WORKER_BRANCH}" > "${WORKER_TREE_DIR}/.worker-branch"
   pwd > "${WORKER_TREE_DIR}/.worker-project-root"
 
-  # Fast-forward worktree to latest main
-  git -C "${WORKER_GIT_DIR}" fetch origin main
-  git -C "${WORKER_GIT_DIR}" reset --hard origin/main
+  # Fast-forward worktree to latest develop branch
+  git -C "${WORKER_GIT_DIR}" fetch origin "${V0_DEVELOP_BRANCH}"
+  git -C "${WORKER_GIT_DIR}" reset --hard "origin/${V0_DEVELOP_BRANCH}"
 
   # Link worktree to main repo's shared workspace
   # Remove any local .wok database first (if it exists)
@@ -183,8 +183,8 @@ CURRENT_BRANCH=\$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 if [[ "\$CURRENT_BRANCH" == fix/* ]]; then
   PREV_BUG_ID="\${CURRENT_BRANCH#fix/}"
 
-  # Check if there are commits beyond origin/main
-  COMMITS_AHEAD=\$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "0")
+  # Check if there are commits beyond origin develop branch
+  COMMITS_AHEAD=\$(git rev-list --count "origin/${V0_DEVELOP_BRANCH}..HEAD" 2>/dev/null || echo "0")
 
   if [[ "\$COMMITS_AHEAD" -gt 0 ]]; then
     echo "Found uncommitted fix on branch \$CURRENT_BRANCH"
@@ -230,9 +230,9 @@ STATE_EOF
   fi
 fi
 
-# Reset worktree to latest main
-git fetch origin main
-git reset --hard origin/main
+# Reset worktree to latest develop branch
+git fetch origin "${V0_DEVELOP_BRANCH}"
+git reset --hard "origin/${V0_DEVELOP_BRANCH}"
 
 # Record branch state for recovery
 mkdir -p "\$STATE_DIR"
@@ -302,10 +302,10 @@ echo "Queueing for merge..."
 echo "Closing \$BUG_ID..."
 (cd "\$WORKTREE_ROOT" && wk done "\$BUG_ID")
 
-# Reset worktree to latest main
-echo "Resetting to latest main..."
-git fetch origin main
-git reset --hard origin/main
+# Reset worktree to latest develop branch
+echo "Resetting to latest ${V0_DEVELOP_BRANCH}..."
+git fetch origin "${V0_DEVELOP_BRANCH}"
+git reset --hard "origin/${V0_DEVELOP_BRANCH}"
 
 echo ""
 echo "Completed \$BUG_ID"
