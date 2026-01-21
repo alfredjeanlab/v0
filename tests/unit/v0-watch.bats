@@ -228,3 +228,70 @@ EOF
     # Header should show the project directory name
     assert_output --partial "Project: project/"
 }
+
+# ============================================================================
+# Header bar width tests
+# ============================================================================
+
+@test "watch header bar contains box-drawing characters" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"$project_dir"'"
+        "'"$PROJECT_ROOT"'/bin/v0-watch" --max-iterations 1 2>&1 || true
+    '
+    # Header bar should contain horizontal box-drawing character
+    assert_output --partial "─"
+}
+
+@test "watch header bar respects COLUMNS env variable" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Test with a specific width
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT COLUMNS=40 bash -c '
+        cd "'"$project_dir"'"
+        output=$("'"$PROJECT_ROOT"'/bin/v0-watch" --max-iterations 1 2>&1 || true)
+        # Extract the bar line (second line after header)
+        bar=$(echo "$output" | grep -E "^─+$" | head -1)
+        # Count characters (using wc -m for UTF-8)
+        char_count=$(printf "%s" "$bar" | wc -m | tr -d " ")
+        echo "bar_length=$char_count"
+    '
+    assert_output --partial "bar_length=40"
+}
+
+@test "watch header bar defaults to 80 with zero COLUMNS" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Test with COLUMNS=0, which should fall back to 80
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT COLUMNS=0 bash -c '
+        cd "'"$project_dir"'"
+        output=$("'"$PROJECT_ROOT"'/bin/v0-watch" --max-iterations 1 2>&1 || true)
+        # Extract the bar line
+        bar=$(echo "$output" | grep -E "^─+$" | head -1)
+        # Count characters
+        char_count=$(printf "%s" "$bar" | wc -m | tr -d " ")
+        echo "bar_length=$char_count"
+    '
+    assert_output --partial "bar_length=80"
+}
+
+@test "watch header bar handles invalid COLUMNS gracefully" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Test with invalid COLUMNS value
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT COLUMNS="invalid" bash -c '
+        cd "'"$project_dir"'"
+        output=$("'"$PROJECT_ROOT"'/bin/v0-watch" --max-iterations 1 2>&1 || true)
+        # Extract the bar line
+        bar=$(echo "$output" | grep -E "^─+$" | head -1)
+        # Count characters - should fall back to 80
+        char_count=$(printf "%s" "$bar" | wc -m | tr -d " ")
+        echo "bar_length=$char_count"
+    '
+    assert_output --partial "bar_length=80"
+}

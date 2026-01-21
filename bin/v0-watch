@@ -83,10 +83,16 @@ show_header() {
   now=$(date '+%Y-%m-%d %H:%M:%S')
   version=$(cat "${SCRIPT_DIR}/../VERSION" 2>/dev/null || echo "unknown")
   project_name=$(basename "$(pwd)")
-  width=$(tput cols 2>/dev/null || echo 80)
+  width=$(tput cols 2>/dev/null)
+  # Validate width is a positive integer; fall back to 80 if not
+  if ! [[ "${width}" =~ ^[0-9]+$ ]] || [[ "${width}" -lt 1 ]]; then
+    width=80
+  fi
   echo -e "v0 (${C_DIM}${C_LAVENDER}${version}${C_RESET}) | Project: ${C_CYAN}${project_name}/${C_RESET} | Last refresh: ${C_CYAN}${now}${C_RESET} | Interval: ${C_CYAN}${REFRESH_INTERVAL}s${C_RESET} | ${C_DIM}Ctrl+C to exit${C_RESET}"
-  printf '─%.0s' $(seq 1 "${width}")
-  echo
+  # Use bash string replication for portability across macOS/Linux
+  local bar=""
+  for ((i=0; i<width; i++)); do bar+="─"; done
+  printf '%s\n' "${bar}"
 }
 
 # Main watch loop
