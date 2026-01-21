@@ -102,6 +102,13 @@ fi
 ISSUE_PATTERN=$(v0_issue_pattern)
 EPIC_ID=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" | head -1 | tr -d '`' || true)
 
+# Log whether feature ID was found in plan file
+if [[ -n "${EPIC_ID}" ]]; then
+  v0_log "decompose:plan_check" "Feature ID ${EPIC_ID} found in plan file"
+else
+  v0_log "decompose:plan_check" "No feature ID found in plan file after decompose"
+fi
+
 # Auto-commit the updated plan file if it has changes (epic ID was added)
 if git -C "${V0_ROOT}" rev-parse --is-inside-work-tree &>/dev/null; then
   if ! git -C "${V0_ROOT}" check-ignore -q "${PLAN_FILE}" 2>/dev/null; then
@@ -112,10 +119,17 @@ if git -C "${V0_ROOT}" rev-parse --is-inside-work-tree &>/dev/null; then
          git -C "${V0_ROOT}" commit -m "Update plan: ${BASENAME}" -m "Added Root Feature ID after decompose"; then
         v0_log "decompose:commit" "Committed updated ${PLAN_FILE}"
       else
-        v0_log "decompose:commit" "Failed to commit updated plan file"
+        git_status=$(git -C "${V0_ROOT}" status --porcelain 2>&1 | head -5 || true)
+        v0_log "decompose:commit" "Failed to commit (status: ${git_status:-unknown})"
       fi
+    else
+      v0_log "decompose:commit" "No changes to plan file (already committed or unchanged)"
     fi
+  else
+    v0_log "decompose:commit" "Plan file is gitignored, skipping commit"
   fi
+else
+  v0_log "decompose:commit" "Not in git worktree, skipping commit"
 fi
 
 # Update state based on result
