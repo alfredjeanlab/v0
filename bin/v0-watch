@@ -79,10 +79,11 @@ fi
 
 # Show header with timestamp
 show_header() {
-  local now version
+  local now version project_name
   now=$(date '+%Y-%m-%d %H:%M:%S')
   version=$(cat "${SCRIPT_DIR}/../VERSION" 2>/dev/null || echo "unknown")
-  echo -e "v0 (${C_DIM}${C_LAVENDER}${version}${C_RESET}) | Last refresh: ${C_CYAN}${now}${C_RESET} | Interval: ${C_CYAN}${REFRESH_INTERVAL}s${C_RESET} | ${C_DIM}Ctrl+C to exit${C_RESET}"
+  project_name=$(basename "$(pwd)")
+  echo -e "v0 (${C_DIM}${C_LAVENDER}${version}${C_RESET}) | Project: ${C_CYAN}${project_name}/${C_RESET} | Last refresh: ${C_CYAN}${now}${C_RESET} | Interval: ${C_CYAN}${REFRESH_INTERVAL}s${C_RESET} | ${C_DIM}Ctrl+C to exit${C_RESET}"
   echo "─────────────────────────────────────────────────────────────────────"
 }
 

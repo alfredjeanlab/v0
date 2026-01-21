@@ -216,3 +216,15 @@ EOF
     assert_output --partial "watch"
     assert_output --partial "Continuously watch status"
 }
+
+@test "watch header shows project name" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"$project_dir"'"
+        "'"$PROJECT_ROOT"'/bin/v0-watch" --max-iterations 1 2>&1 || true
+    '
+    # Header should show the project directory name
+    assert_output --partial "Project: project/"
+}
