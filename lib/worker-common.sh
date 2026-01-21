@@ -465,6 +465,33 @@ generic_stop_worker() {
   echo "Worker stopped"
 }
 
+# Detect if a bug has a note but no fix commits
+# This indicates the worker documented why they couldn't fix it
+# Args: $1 = bug_id, $2 = git_dir (optional, defaults to pwd)
+# Returns 0 (true) if bug has a note but no commits, 1 otherwise
+detect_note_without_fix() {
+  local bug_id="$1"
+  local git_dir="${2:-$(pwd)}"
+
+  # Check for notes on the bug (wk show returns JSON with notes array)
+  local notes_count
+  notes_count=$(wk show "${bug_id}" -f json 2>/dev/null | jq '.notes | length' 2>/dev/null || echo "0")
+
+  if [[ "${notes_count}" -eq 0 ]]; then
+    return 1  # No notes, normal exit
+  fi
+
+  # Check for commits beyond develop branch
+  local commits_ahead
+  commits_ahead=$(git -C "${git_dir}" rev-list --count "${V0_GIT_REMOTE:-origin}/${V0_DEVELOP_BRANCH:-main}..HEAD" 2>/dev/null || echo "0")
+
+  if [[ "${commits_ahead}" -gt 0 ]]; then
+    return 1  # Has commits, normal fix
+  fi
+
+  return 0  # Note exists but no commits
+}
+
 # Reopen in-progress issues assigned to a worker
 # Args: $1 = worker assignee (e.g., "worker:chore", "worker:fix")
 reopen_worker_issues() {

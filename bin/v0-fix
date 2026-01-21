@@ -270,6 +270,26 @@ WORKTREE_ROOT="\$(pwd)"
 
 cd ${REPO_NAME}
 
+# Check for commits beyond develop branch
+COMMITS_AHEAD=\$(git rev-list --count "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}..HEAD" 2>/dev/null || echo "0")
+
+if [[ "\$COMMITS_AHEAD" -eq 0 ]]; then
+  # No commits - check if there's a note explaining why
+  NOTES_COUNT=\$(wk show "\$BUG_ID" -f json 2>/dev/null | jq '.notes | length' 2>/dev/null || echo "0")
+
+  if [[ "\$NOTES_COUNT" -gt 0 ]]; then
+    echo "Bug has note but no fix commits - handing to human for review"
+    (cd "\$WORKTREE_ROOT" && wk edit "\$BUG_ID" assignee "worker:human") 2>/dev/null || true
+    echo "Assigned \$BUG_ID to worker:human"
+    # Exit cleanly without pushing or closing
+    touch "${tree_dir}/.done-exit"
+    exit 0
+  else
+    echo "Error: No commits to push and no notes explaining why"
+    exit 1
+  fi
+fi
+
 # Get commit info before pushing
 COMMIT_SHA=\$(git rev-parse HEAD)
 COMMIT_MSG=\$(git log -1 --format=%s)

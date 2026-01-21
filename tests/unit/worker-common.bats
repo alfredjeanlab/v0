@@ -408,3 +408,150 @@ EOF
     run reopen_worker_issues "worker:fix"
     assert_success
 }
+
+# ============================================================================
+# detect_note_without_fix() tests
+# ============================================================================
+
+@test "detect_note_without_fix returns 1 when bug has no notes" {
+    # Create mock wk that returns bug with no notes
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "show" ]]; then
+    echo '{"id":"testp-1234","notes":[]}'
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Create mock git repo
+    mkdir -p "$TEST_TEMP_DIR/repo"
+    (
+        cd "$TEST_TEMP_DIR/repo"
+        git init --quiet
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        echo "test" > README.md
+        git add README.md
+        git commit --quiet -m "Initial commit"
+    )
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    run detect_note_without_fix "testp-1234" "$TEST_TEMP_DIR/repo"
+    assert_failure  # Returns 1 when no notes
+}
+
+@test "detect_note_without_fix returns 1 when bug has notes and commits" {
+    # Create mock wk that returns bug with notes
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "show" ]]; then
+    echo '{"id":"testp-1234","notes":[{"content":"Cannot reproduce"}]}'
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Create mock git repo with commits ahead of origin/main
+    mkdir -p "$TEST_TEMP_DIR/repo"
+    (
+        cd "$TEST_TEMP_DIR/repo"
+        git init --quiet
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        echo "test" > README.md
+        git add README.md
+        git commit --quiet -m "Initial commit"
+        # Create origin/main ref
+        git update-ref refs/remotes/origin/main HEAD
+        # Add another commit
+        echo "fix" > fix.txt
+        git add fix.txt
+        git commit --quiet -m "Fix commit"
+    )
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    run detect_note_without_fix "testp-1234" "$TEST_TEMP_DIR/repo"
+    assert_failure  # Returns 1 when has commits
+}
+
+@test "detect_note_without_fix returns 0 when bug has notes but no commits" {
+    # Create mock wk that returns bug with notes
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "show" ]]; then
+    echo '{"id":"testp-1234","notes":[{"content":"Cannot reproduce"}]}'
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Create mock git repo with no commits ahead of origin/main
+    mkdir -p "$TEST_TEMP_DIR/repo"
+    (
+        cd "$TEST_TEMP_DIR/repo"
+        git init --quiet
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        echo "test" > README.md
+        git add README.md
+        git commit --quiet -m "Initial commit"
+        # Create origin/main ref pointing to HEAD (no commits ahead)
+        git update-ref refs/remotes/origin/main HEAD
+    )
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    run detect_note_without_fix "testp-1234" "$TEST_TEMP_DIR/repo"
+    assert_success  # Returns 0 when note exists but no commits
+}
+
+@test "detect_note_without_fix returns 1 for invalid bug ID" {
+    # Create mock wk that fails for invalid ID
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "show" ]]; then
+    echo "error: issue not found" >&2
+    exit 1
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    run detect_note_without_fix "invalid-id" "$TEST_TEMP_DIR"
+    assert_failure  # Returns 1 when wk show fails
+}
+
+@test "detect_note_without_fix handles wk command failure gracefully" {
+    # Create mock wk that always fails
+    mkdir -p "$TEST_TEMP_DIR/bin"
+    cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+    chmod +x "$TEST_TEMP_DIR/bin/wk"
+    export PATH="$TEST_TEMP_DIR/bin:$PATH"
+
+    # Source the function
+    source "$BATS_TEST_DIRNAME/../../lib/worker-common.sh"
+
+    # Should return 1 (no note scenario) when wk fails
+    run detect_note_without_fix "testp-1234" "$TEST_TEMP_DIR"
+    assert_failure
+}

@@ -213,6 +213,43 @@ pending → processing → completed
 | `failed` | Merge failed (fetch, push, etc.) |
 | `conflict` | Merge conflict, resolution failed |
 
+## Human Handoff Flow
+
+For fix workers, there's a special flow when the agent cannot complete a fix:
+
+### Note-Without-Fix Scenario
+
+When a fix worker:
+1. Starts working on a bug (`wk start`, `./new-branch`)
+2. Documents why they can't fix it (`wk note <id> "reason"`)
+3. Attempts to exit without committing a fix
+
+The system detects this pattern and:
+1. Reassigns the bug to `worker:human`
+2. Blocks the stop hook with a helpful message
+3. Bug remains in `in_progress` status for human review
+
+### Human Resolution Options
+
+When a bug is assigned to `worker:human`:
+
+| Action | Command | When to Use |
+|--------|---------|-------------|
+| View details | `wk show <id>` | See the agent's notes explaining the issue |
+| Fix manually | Fix code, then `wk done <id>` | When you can resolve the bug yourself |
+| Close as invalid | `wk close <id> --reason="..."` | When bug is not reproducible or invalid |
+| Reassign to worker | `wk edit <id> assignee worker:fix && wk reopen <id>` | When issue was transient |
+
+### Assignee Semantics
+
+| Assignee | Meaning |
+|----------|---------|
+| `worker:fix` | Assigned to fix worker for automated processing |
+| `worker:chore` | Assigned to chore worker |
+| `worker:mergeq` | Assigned to merge queue (pending merge) |
+| `worker:human` | Requires human attention - agent documented why they couldn't complete |
+| `none` | Unassigned, available for pickup |
+
 ## Recovery from Error States
 
 When an operation is in `failed`, `interrupted`, or `cancelled` state:

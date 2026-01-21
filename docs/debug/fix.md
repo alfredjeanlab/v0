@@ -33,22 +33,24 @@ wk new bug "desc"              v0 fix --start
            │ fixed called │  Claude calls: fixed {id}
            └──────┬───────┘
                   │
-     ┌────────────┼────────────┐
-     │            │            │
-     ▼            ▼            ▼
-git push -u   v0-mergeq    wk done {id}
-origin HEAD   --enqueue
-              fix/{id}
-                  │
-                  │ [FAIL: Push fails]
-                  │ [FAIL: wk done fails → issue open]
-                  ▼
-           ┌──────────────┐
-           │pending_merge │
-           └──────┬───────┘
-                  │
-                  ▼
-           ┌──────────────┐
+     ┌────────────┼────────────┬─────────────────┐
+     │            │            │                 │
+     │            │            │                 │ Note but no commits?
+     ▼            ▼            ▼                 ▼
+git push -u   v0-mergeq    wk done {id}   ┌──────────────┐
+origin HEAD   --enqueue                   │ Human Handoff│
+              fix/{id}                    │ worker:human │
+                  │                       └──────┬───────┘
+                  │                              │
+                  │ [FAIL: Push fails]           │ Human reviews note
+                  │ [FAIL: wk done fails]        │ and either:
+                  ▼                              │ - Fixes manually
+           ┌──────────────┐                      │ - Closes with reason
+           │pending_merge │                      │ - Reassigns to worker
+           └──────┬───────┘                      ▼
+                  │                       ┌──────────────┐
+                  ▼                       │ done/closed  │
+           ┌──────────────┐               └──────────────┘
            │   merged     │  Branch deleted from remote
            └──────────────┘
 
@@ -57,6 +59,15 @@ CRASH RECOVERY:
 │ Polling detects crash via .done-exit flag absence  │
 │ Backoff: 5s → 10s → 20s → 40s → ... → 5min cap    │
 │ Alerts on first crash, stops on second            │
+└────────────────────────────────────────────────────┘
+
+NOTE-WITHOUT-FIX HANDOFF:
+┌────────────────────────────────────────────────────┐
+│ When agent adds note (wk note) but makes no commits│
+│ → Bug reassigned to worker:human                   │
+│ → Stop hook blocks with helpful message            │
+│ → Human reviews: wk show {id} to see note          │
+│ → Human resolves: fix, close, or reassign          │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -125,6 +136,23 @@ v0 mergeq --enqueue fix/{id}
 ```bash
 # Close manually
 wk done {id}
+```
+
+### Bug assigned to worker:human (note without fix)
+```bash
+# View the bug and its notes
+wk show {id}
+
+# Options:
+# 1. Fix it manually and close
+wk done {id}
+
+# 2. Close with explanation if bug is invalid/won't fix
+wk close {id} --reason="Cannot reproduce - need more info"
+
+# 3. Reassign back to worker if issue was transient
+wk edit {id} assignee worker:fix
+wk reopen {id}
 ```
 
 ## Source Files
