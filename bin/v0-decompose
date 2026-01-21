@@ -102,6 +102,22 @@ fi
 ISSUE_PATTERN=$(v0_issue_pattern)
 EPIC_ID=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" | head -1 | tr -d '`' || true)
 
+# Auto-commit the updated plan file if it has changes (epic ID was added)
+if git -C "${V0_ROOT}" rev-parse --is-inside-work-tree &>/dev/null; then
+  if ! git -C "${V0_ROOT}" check-ignore -q "${PLAN_FILE}" 2>/dev/null; then
+    # Not gitignored - check if it has changes
+    if ! git -C "${V0_ROOT}" diff --quiet -- "${PLAN_FILE}" 2>/dev/null; then
+      # Plan file was modified (likely with Root Feature ID) - commit it
+      if git -C "${V0_ROOT}" add "${PLAN_FILE}" && \
+         git -C "${V0_ROOT}" commit -m "Update plan: ${BASENAME}" -m "Added Root Feature ID after decompose"; then
+        v0_log "decompose:commit" "Committed updated ${PLAN_FILE}"
+      else
+        v0_log "decompose:commit" "Failed to commit updated plan file"
+      fi
+    fi
+  fi
+fi
+
 # Update state based on result
 if [[ ${DECOMPOSE_EXIT} -eq 0 ]] || [[ -n "${EPIC_ID}" ]]; then
   # Update state to queued and auto-hold
