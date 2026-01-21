@@ -568,7 +568,7 @@ if [[ "\$(jq -r '.merge_queued // false' "\${STATE_FILE}")" = "true" ]]; then
   tmp=\$(mktemp)
   jq '.phase = "pending_merge"' "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
 
-  if "\${V0_DIR}/bin/v0-mergeq" --enqueue "\${OP_NAME}"; then
+  if V0_ROOT="\${BUILD_ROOT}" "\${V0_DIR}/bin/v0-mergeq" --enqueue "\${OP_NAME}"; then
     echo "Operation '\${OP_NAME}' added to merge queue"
   else
     echo "Warning: Failed to enqueue for merge"
