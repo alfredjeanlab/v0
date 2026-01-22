@@ -854,11 +854,11 @@ process_merge() {
   # Update state to show merge in progress
   update_operation_state "${op}" "merge_status" '"merging"'
 
-  # Try to merge using v0 merge - capture exit code correctly
-  # Set V0_MERGEQ_CALLER to prevent duplicate queue updates
+  # Try to merge using v0 merge --resolve - always use resolve mode to handle
+  # any conflicts automatically. Set V0_MERGEQ_CALLER to prevent duplicate queue updates.
   set +e
   local merge_output
-  merge_output=$(V0_MERGEQ_CALLER=1 "${V0_DIR}/bin/v0-merge" "${worktree}" 2>&1)
+  merge_output=$(V0_MERGEQ_CALLER=1 "${V0_DIR}/bin/v0-merge" "${worktree}" --resolve 2>&1)
   local merge_exit=$?
   set -e
 
@@ -925,90 +925,15 @@ process_merge() {
 
     return 0
   else
-    # Conflict detected - attempt automatic resolution
-    echo "[$(date +%H:%M:%S)] Merge has conflicts, attempting automatic resolution..."
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:resolving: ${op}" >> "${MERGEQ_DIR}/logs/merges.log"
-    emit_event "merge:resolving" "${op}"
-    update_operation_state "${op}" "merge_status" '"resolving"'
-
-    # Try automatic resolution with v0 merge --resolve
-    # Set V0_MERGEQ_CALLER to prevent duplicate queue updates
-    set +e
-    local resolve_output
-    resolve_output=$(V0_MERGEQ_CALLER=1 "${V0_DIR}/bin/v0-merge" "${worktree}" --resolve 2>&1)
-    local resolve_exit=$?
-    set -e
-
-    echo "${resolve_output}" | tee -a "${MERGEQ_DIR}/logs/merges.log"
-
-    if [[ ${resolve_exit} -eq 0 ]]; then
-      # v0-merge exited 0 - verify the merge actually happened
-      sleep 1
-
-      if ! v0_verify_merge_by_op "${op}" "true"; then
-        local merge_commit
-        merge_commit=$(sm_read_state "${op}" "merge_commit")
-
-        if [[ -z "${merge_commit}" ]] || [[ "${merge_commit}" = "null" ]]; then
-          echo "[$(date +%H:%M:%S)] Warning: Resolution succeeded but no merge_commit recorded"
-          update_operation_state "${op}" "merge_error" '"No merge_commit in state after resolution"'
-        else
-          echo "[$(date +%H:%M:%S)] Warning: Resolution succeeded but commit ${merge_commit:0:8} not on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
-          update_operation_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH} after resolution\""
-        fi
-
-        update_operation_state "${op}" "merge_status" '"verification_failed"'
-        update_entry "${op}" "failed"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:verification_failed: ${op} (after resolution)" >> "${MERGEQ_DIR}/logs/merges.log"
-        emit_event "merge:verification_failed" "${op}"
-        return 1
-      fi
-
-      # Verified - now mark as merged
-      # Update state.json FIRST, then queue (to prevent race conditions)
-      local merged_at
-      merged_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-      update_operation_state "${op}" "merge_status" '"merged"'
-      update_operation_state "${op}" "merged_at" "\"${merged_at}\""
-      update_operation_state "${op}" "phase" '"merged"'
-      update_entry "${op}" "completed"  # Queue last
-      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:completed: ${op} (after resolution)" >> "${MERGEQ_DIR}/logs/merges.log"
-      emit_event "merge:completed" "${op}"
-      echo "[$(date +%H:%M:%S)] Merge completed (after automatic resolution): ${op}"
-
-      # Archive the plan file
-      local plan_file
-      plan_file=$(jq -r '.plan_file // empty' "${state_file}")
-      if [[ -n "${plan_file}" ]]; then
-        if archive_plan "${plan_file}"; then
-          local archive_date
-          archive_date=$(date +%Y-%m-%d)
-          local plan_name
-          plan_name=$(basename "${plan_file}")
-          update_operation_state "${op}" "archived_plan" "\"${V0_PLANS_DIR}/archive/${archive_date}/${plan_name}\""
-          echo "[$(date +%H:%M:%S)] Archived plan: ${plan_file}"
-        fi
-      fi
-
-      # Trigger dependent operations
-      local dep_op
-      for dep_op in $(find_dependent_operations "${op}"); do
-        echo "[$(date +%H:%M:%S)] Unblocking dependent operation: ${dep_op}"
-        resume_waiting_operation "${dep_op}"
-      done
-
-      return 0
-    else
-      # Resolution failed
-      update_entry "${op}" "conflict"
-      update_operation_state "${op}" "merge_status" '"conflict"'
-      update_operation_state "${op}" "merge_error" '"Automatic resolution failed"'
-      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:conflict: ${op} (resolution failed)" >> "${MERGEQ_DIR}/logs/merges.log"
-      emit_event "merge:conflict" "${op}"
-      echo "[$(date +%H:%M:%S)] Automatic resolution failed: ${op}"
-      echo "  Manual resolution needed: v0 merge ${worktree} --resolve"
-      return 1
-    fi
+    # Merge with --resolve failed - mark as conflict
+    update_entry "${op}" "conflict"
+    update_operation_state "${op}" "merge_status" '"conflict"'
+    update_operation_state "${op}" "merge_error" '"Automatic resolution failed"'
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] merge:conflict: ${op} (resolution failed)" >> "${MERGEQ_DIR}/logs/merges.log"
+    emit_event "merge:conflict" "${op}"
+    echo "[$(date +%H:%M:%S)] Automatic resolution failed: ${op}"
+    echo "  Manual resolution needed: v0 merge ${worktree} --resolve"
+    return 1
   fi
 }
 
