@@ -808,14 +808,24 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   # Process all state files in single jq -s invocation (one process instead of many)
   # Phase 3 optimization: also calculates max_name_len in same pass (META line first)
   max_name_len=8  # Default minimum
+  # Pruning statistics (set by META line from jq)
+  pruned_open=0
+  pruned_blocked=0
+  pruned_completed=0
+  total_ops=0
   # Phase 1 optimization: cache current timestamp once for all operations
   now_epoch=$(date +%s)
   if [[ ${#state_files[@]} -gt 0 ]]; then
     while IFS=$'\t' read -r name op_type phase created machine completed merge_queued merge_status merged_at completed_at after session worker_pid held held_at merge_resumed worktree_missing created_epoch completed_epoch merged_epoch held_epoch; do
-      # Handle META line for max name length (Phase 3)
+      # Handle META line for max name length and pruning stats
       if [[ "${name}" = "META" ]]; then
         max_name_len="${op_type}"  # op_type field contains max_name_len for META
         [[ ${max_name_len} -lt 8 ]] && max_name_len=8
+        # Pruning statistics: phase=pruned_open, created=pruned_blocked, machine=pruned_completed, completed=total
+        pruned_open="${phase:-0}"
+        pruned_blocked="${created:-0}"
+        pruned_completed="${machine:-0}"
+        total_ops="${completed:-0}"
         continue
       fi
       [[ -z "${name}" ]] && continue
@@ -948,20 +958,57 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       display_time=$(format_epoch_time "${last_epoch}" "${now_epoch}")
     fi
     printf "  %-${max_name_len}s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${display_name}" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${display_time}"
-    done < <(jq -rs '
+    done < <(jq -rs --argjson limit "${V0_STATUS_LIMIT}" '
       # Phase 2: Helper function to convert ISO 8601 timestamp to epoch
       # Handles timestamps like "2026-01-22T10:30:45.123Z"
       def to_epoch:
         if . == null or . == "" or . == "null" then 0
         else (sub("\\.[0-9]+"; "") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime) // 0
         end;
-      # Phase 3: Calculate max name length in same pass (output META line first)
-      # max_name_len = max of min(name_length + 1, 40) for all ops
-      (reduce .[] as $op (0; [., ([($op.name | length) + 1, 40] | min)] | max)) as $max_len |
-      # Output META line with max_name_len
-      (["META", $max_len] | @tsv),
-      # Then output all operation data (with epoch timestamps for Phase 2)
-      (sort_by(.created_at) | .[] | [
+
+      # Priority classification for limit pruning
+      # 0 = open (highest priority: needs attention)
+      # 1 = blocked (waiting on dependencies)
+      # 2 = completed (lowest priority)
+      def priority_class:
+        if .phase == "completed" or .phase == "pending_merge" or .phase == "merged" or .phase == "cancelled"
+        then 2  # completed
+        elif .phase == "blocked"
+        then 1  # blocked phase is always priority 1
+        elif (.after != null and .after != "null") and .phase != "executing" and .phase != "failed"
+        then 1  # blocked (has unmet dependency, not yet executing)
+        else 0  # open (needs attention: init, planned, queued, executing, failed, conflict, interrupted)
+        end;
+
+      # Limit and pruning logic
+      . as $all |
+      ($all | length) as $total |
+      # $limit is passed via --argjson from V0_STATUS_LIMIT
+
+      # Add priority to each operation
+      [$all[] | . + {_priority: priority_class}] |
+
+      # Separate by priority
+      (map(select(._priority == 0)) | sort_by(.created_at)) as $open |
+      (map(select(._priority == 1)) | sort_by(.created_at)) as $blocked |
+      (map(select(._priority == 2)) | sort_by(.created_at)) as $completed |
+
+      # Build selection: open first, then blocked, then completed (up to limit)
+      ([$open[], $blocked[], $completed[]] | .[:$limit]) as $selected |
+
+      # Calculate pruning counts
+      (($open | length) - ([$selected[] | select(._priority == 0)] | length)) as $pruned_open |
+      (($blocked | length) - ([$selected[] | select(._priority == 1)] | length)) as $pruned_blocked |
+      (($completed | length) - ([$selected[] | select(._priority == 2)] | length)) as $pruned_completed |
+
+      # Calculate max name length for selected operations only
+      (reduce $selected[] as $op (0; [., ([($op.name | length) + 1, 40] | min)] | max)) as $max_len |
+
+      # Output META line with pruning statistics
+      (["META", $max_len, $pruned_open, $pruned_blocked, $pruned_completed, $total] | @tsv),
+
+      # Output selected operations in created_at order (with epoch timestamps)
+      ($selected | sort_by(.created_at) | .[] | [
         .name,
         (.type // "build"),
         .phase,
@@ -986,6 +1033,27 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         ((.held_at // "") | to_epoch)
       ] | @tsv)
     ' "${state_files[@]}")
+
+    # Show summary line for pruned operations
+    if [[ ${total_ops} -gt ${V0_STATUS_LIMIT} ]]; then
+      pruned=$((total_ops - V0_STATUS_LIMIT))
+      summary_parts=()
+      [[ ${pruned_blocked} -gt 0 ]] && summary_parts+=("${pruned_blocked} blocked")
+      [[ ${pruned_completed} -gt 0 ]] && summary_parts+=("${pruned_completed} completed")
+
+      if [[ ${#summary_parts[@]} -eq 0 ]]; then
+        # Only open operations pruned (rare)
+        echo -e "  ${C_DIM}... and ${pruned} more${C_RESET}"
+      elif [[ ${#summary_parts[@]} -eq 1 ]] && [[ ${pruned_open} -eq 0 ]]; then
+        # Only one category pruned and no open pruned - simpler message
+        # Extract category name (second word from "N blocked" or "N completed")
+        category="${summary_parts[0]#* }"
+        echo -e "  ${C_DIM}... and ${pruned} more ${category}${C_RESET}"
+      else
+        summary=$(IFS=', '; echo "${summary_parts[*]}")
+        echo -e "  ${C_DIM}... and ${pruned} more (${summary})${C_RESET}"
+      fi
+    fi
   fi
 
   # For --blocked filter: show message if operations exist but none are blocked

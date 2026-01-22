@@ -37,6 +37,10 @@ fi
 # Global standalone state directory (no project required)
 V0_STANDALONE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/v0/standalone"
 
+# Maximum operations to show in v0 status list (default: 15)
+# Set to 0 or very high number to disable limit
+V0_STATUS_LIMIT="${V0_STATUS_LIMIT:-15}"
+
 # Initialize standalone directory structure
 v0_init_standalone() {
     mkdir -p "${V0_STANDALONE_DIR}/build/chore"
