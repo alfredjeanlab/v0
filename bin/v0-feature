@@ -304,13 +304,12 @@ DONE_SCRIPT
 #!/bin/bash
 # Close all remaining plan issues before exiting
 if [[ -n "${V0_PLAN_LABEL}" ]]; then
-  # Get all open issue IDs (todo and in_progress)
-  OPEN_IDS=$(wk list --label "${V0_PLAN_LABEL}" -s todo 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+' | tr '\n' ' ')
-  IN_PROGRESS_IDS=$(wk list --label "${V0_PLAN_LABEL}" -s in_progress 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+' | tr '\n' ' ')
-  ALL_IDS="${OPEN_IDS}${IN_PROGRESS_IDS}"
-  if [[ -n "${ALL_IDS}" ]]; then
-    # shellcheck disable=SC2086
-    wk done ${ALL_IDS} --reason "Auto-closed by './done' script" 2>/dev/null || true
+  # Get all open issue IDs (todo and in_progress) as arrays
+  mapfile -t OPEN_IDS < <(wk list --label "${V0_PLAN_LABEL}" -s todo 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+')
+  mapfile -t IN_PROGRESS_IDS < <(wk list --label "${V0_PLAN_LABEL}" -s in_progress 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+')
+  ALL_IDS=("${OPEN_IDS[@]}" "${IN_PROGRESS_IDS[@]}")
+  if [[ ${#ALL_IDS[@]} -gt 0 ]]; then
+    wk done "${ALL_IDS[@]}" --reason "Auto-closed by './done' script" 2>/dev/null || true
   fi
 fi
 
