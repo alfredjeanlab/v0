@@ -967,12 +967,21 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         end;
 
       # Priority classification for limit pruning
-      # 0 = open (highest priority: needs attention)
+      # 0 = open (highest priority: needs attention, including merge issues)
       # 1 = blocked (waiting on dependencies)
-      # 2 = completed (lowest priority)
+      # 2 = truly completed (merged successfully or cancelled)
       def priority_class:
-        if .phase == "completed" or .phase == "pending_merge" or .phase == "merged" or .phase == "cancelled"
-        then 2  # completed
+        if .phase == "cancelled"
+        then 2  # cancelled
+        elif .phase == "merged" or .phase == "completed" or .phase == "pending_merge"
+        then
+          # Plan-type operations do not need merge, so completed is truly done
+          if .type == "plan" then 2
+          # Successfully merged - truly done
+          elif .merge_status == "merged" then 2
+          # All other completed states (pending merge, failed, conflict, not queued) need attention
+          else 0
+          end
         elif .phase == "blocked"
         then 1  # blocked phase is always priority 1
         elif (.after != null and .after != "null") and .phase != "executing" and .phase != "failed"

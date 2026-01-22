@@ -97,11 +97,14 @@ setup() {
     # Clear v0 state variables to ensure test isolation
     # This prevents tests from accidentally using the real project's config
     unset V0_ROOT
+    unset V0_DIR
     unset PROJECT
     unset ISSUE_PREFIX
     unset BUILD_DIR
     unset PLANS_DIR
     unset V0_STATE_DIR
+    unset V0_GIT_REMOTE
+    unset V0_DEVELOP_BRANCH
 
     # Ensure we start in the project directory
     cd "$TEST_TEMP_DIR/project"
