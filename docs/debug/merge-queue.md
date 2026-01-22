@@ -2,57 +2,72 @@
 
 ## State Diagram
 
+```mermaid
+flowchart TD
+    subgraph daemon["MAIN LOOP (30s interval)"]
+        L1["1. Clean stale entries"]
+        L2["2. Retry conflicts (once)"]
+        L3["3. Find pending + ready"]
+        L4["4. Process merge"]
+        L5["5. Resume dependents"]
+        L1 --> L2 --> L3 --> L4 --> L5
+    end
+
+    START["v0 mergeq --start"] --> daemon
+
+    subgraph queue["QUEUE ENTRY STATES"]
+        direction TB
+        NONE["(none)"] -->|enqueue| PENDING["pending"]
+        PENDING -->|"is_merge_ready()"| PROCESSING["processing"]
+        PROCESSING --> COMPLETED["completed"]
+        PROCESSING --> CONFLICT["conflict"]
+        PROCESSING --> FAILED["failed"]
+        CONFLICT -->|"auto-retry (once)"| PENDING
+    end
+
+    subgraph ready["is_merge_ready() checks"]
+        R1["merge_queued=true"]
+        R2["worktree exists"]
+        R3["tmux session exited"]
+        R4["all issues closed"]
+    end
+
+    subgraph blocked["READINESS FAILURES"]
+        direction TB
+        B1["<b>Open Issues</b><br/>1st: auto-resume (merge_resumed=true)<br/>2nd: == OPEN ISSUES == (manual)"]
+        B2["<b>Missing Worktree</b><br/>== NO WORKTREE ==<br/>worktree_missing=true<br/>needs: v0 feature NAME --resume"]
+    end
+
+    subgraph success["On completed"]
+        S1["phase=merged, merged_at set"]
+        S2["Archive plan"]
+        S3["Resume --after deps"]
+        S4["Delete remote branch"]
+    end
+
+    daemon --> queue
+    PENDING -.->|"not ready"| blocked
+    COMPLETED --> success
+
+    linkStyle default stroke:#888
 ```
-v0 mergeq --start
-       │
-       ▼
-┌────────────────────────────────────────────────────┐
-│              MAIN LOOP (30s interval)              │
-│  1. Clean stale entries (already merged)           │
-│  2. Retry conflict entries (once only)             │
-│  3. Find first pending + ready entry               │
-│  4. Process merge                                  │
-│  5. Trigger dependent operations                   │
-└────────────────────────────────────────────────────┘
-       │
-       ▼
-ENTRY STATES:
 
-         enqueue
-(none) ─────────▶ pending
-                     │
-                     │ is_merge_ready() checks:
-                     │   - merge_queued=true
-                     │   - worktree exists
-                     │   - tmux session exited
-                     │   - all issues closed
-                     ▼
-                processing
-                     │
-        ┌────────────┼────────────┐
-        │            │            │
-        ▼            ▼            ▼
-   completed     conflict     failed
-        │            │
-        │            │ One auto-retry
-        ▼            ▼ then stuck
+### Readiness Check Flow
 
-On completed:
-  - Update state: merged=true, phase=merged
-  - Archive plan to .v0/plans/completed/
-  - Resume dependent operations (--after)
-  - Delete remote branch (fix/chore only)
+| Check | Failure | Status Icon | Recovery |
+|-------|---------|-------------|----------|
+| `merge_queued=true` | Not queued | — | `v0 mergeq --enqueue NAME` |
+| Worktree exists | Missing | `== NO WORKTREE ==` | `v0 feature NAME --resume` |
+| tmux session exited | Still running | `(active)` | Wait or detach |
+| All issues closed | Open issues | `== OPEN ISSUES ==` | Close issues manually |
 
-READINESS FAILURES:
-┌────────────────────────────────────────────────────┐
-│ Issues still open:                                 │
-│   First: Auto-resume feature (merge_resumed=true)  │
-│   Second: Stuck forever (manual intervention)      │
-│                                                    │
-│ Worktree missing:                                  │
-│   status=failed, no retry, branch orphaned         │
-└────────────────────────────────────────────────────┘
-```
+### State Flags
+
+| Flag | Set When | Effect |
+|------|----------|--------|
+| `merge_resumed` | Auto-resume triggered once | Prevents second auto-resume; shows `== OPEN ISSUES ==` |
+| `worktree_missing` | Worktree not found | Shows `== NO WORKTREE ==` in status |
+| `conflict_retried` | Conflict auto-retry attempted | Prevents infinite retry loop |
 
 ## Queue File Format
 
@@ -181,6 +196,8 @@ rm BUILD_DIR/.merge.lock
 
 ## Source Files
 
-- `bin/v0-mergeq:804-946` — Merge processing
-- `bin/v0-mergeq:475-523` — Readiness checks (is_merge_ready)
-- `bin/v0-mergeq:991-1129` — Daemon loop
+- `bin/v0-mergeq:521-552` — Readiness checks (`is_merge_ready`)
+- `bin/v0-mergeq:820-980` — Merge processing (`process_merge`)
+- `bin/v0-mergeq:983-1135` — Daemon loop (`process_watch`)
+- `bin/v0-mergeq:1070-1116` — Open issues / worktree missing handling
+- `lib/state-machine.sh:953-1041` — Status display formatting (`_sm_format_phase_display`)
