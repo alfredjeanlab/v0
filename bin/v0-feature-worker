@@ -227,16 +227,25 @@ EOF
 
   IDLE_COUNT=0
   IDLE_THRESHOLD=6
-  LAST_OUTPUT=""
+  LAST_MTIME=""
   while tmux has-session -t "${PLAN_SESSION}" 2>/dev/null; do
     if [[ -f "${STATE_DIR}/logs/plan.exit" ]]; then
       tmux kill-session -t "${PLAN_SESSION}" 2>/dev/null || true
       break
     fi
     sleep 2
-    if [[ -f "${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md" ]] || [[ -f "${WORKTREE}/${V0_PLANS_DIR}/${NAME}.md" ]] || [[ -f "${PLANS_DIR}/${NAME}.md" ]]; then
-      CURRENT_OUTPUT=$(tmux capture-pane -t "${PLAN_SESSION}" -p 2>/dev/null | tail -5 | md5sum)
-      if [[ "${CURRENT_OUTPUT}" = "${LAST_OUTPUT}" ]]; then
+    # Find which plan file exists for mtime check
+    PLAN_FILE=""
+    if [[ -f "${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md" ]]; then
+      PLAN_FILE="${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md"
+    elif [[ -f "${WORKTREE}/${V0_PLANS_DIR}/${NAME}.md" ]]; then
+      PLAN_FILE="${WORKTREE}/${V0_PLANS_DIR}/${NAME}.md"
+    elif [[ -f "${PLANS_DIR}/${NAME}.md" ]]; then
+      PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+    fi
+    if [[ -n "${PLAN_FILE}" ]]; then
+      CURRENT_MTIME=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null || echo "0")
+      if [[ "${CURRENT_MTIME}" = "${LAST_MTIME}" ]]; then
         IDLE_COUNT=$((IDLE_COUNT + 1))
         if [[ ${IDLE_COUNT} -ge ${IDLE_THRESHOLD} ]]; then
           emit_event "plan:idle_complete" "Plan file exists and agent idle, terminating session"
@@ -247,7 +256,7 @@ EOF
       else
         IDLE_COUNT=0
       fi
-      LAST_OUTPUT="${CURRENT_OUTPUT}"
+      LAST_MTIME="${CURRENT_MTIME}"
     fi
   done
 
@@ -361,7 +370,7 @@ EOF
 
   IDLE_COUNT=0
   IDLE_THRESHOLD=6
-  LAST_OUTPUT=""
+  LAST_MTIME=""
   ISSUE_PATTERN=$(v0_issue_pattern)
   PLAN_HAS_FEATURE=""
   grep -qE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" 2>/dev/null && PLAN_HAS_FEATURE=1
@@ -374,8 +383,8 @@ EOF
     PLAN_MTIME_NOW=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null)
     if [[ "${PLAN_MTIME_NOW}" != "${PLAN_MTIME_BEFORE}" ]] || [[ -n "${PLAN_HAS_FEATURE}" ]]; then
       if grep -qE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" 2>/dev/null; then
-        CURRENT_OUTPUT=$(tmux capture-pane -t "${FEATURE_SESSION}" -p 2>/dev/null | tail -5 | md5sum)
-        if [[ "${CURRENT_OUTPUT}" = "${LAST_OUTPUT}" ]]; then
+        CURRENT_MTIME=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null || echo "0")
+        if [[ "${CURRENT_MTIME}" = "${LAST_MTIME}" ]]; then
           IDLE_COUNT=$((IDLE_COUNT + 1))
           if [[ ${IDLE_COUNT} -ge ${IDLE_THRESHOLD} ]]; then
             emit_event "feature:idle_complete" "Plan has feature ID and agent idle, terminating session"
@@ -386,7 +395,7 @@ EOF
         else
           IDLE_COUNT=0
         fi
-        LAST_OUTPUT="${CURRENT_OUTPUT}"
+        LAST_MTIME="${CURRENT_MTIME}"
       fi
     fi
   done

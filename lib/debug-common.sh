@@ -102,13 +102,13 @@ include_log_file() {
 }
 
 # Filter out debug report YAML frontmatter from log content
-# This prevents tmux captures containing debug output from being included in logs
+# This prevents debug report YAML from being included when logs contain other debug output
 filter_debug_frontmatter() {
     grep -v -E '^(---|v0-debug-report:|operation:|type:|phase:|status:|machine:|generated_at:)' 2>/dev/null || cat
 }
 
 # Filter out ANSI escape sequences from log content
-# This removes terminal color codes and cursor controls from tmux captures
+# This removes terminal color codes and cursor controls from log content
 filter_ansi_sequences() {
     # Use perl for comprehensive ANSI/terminal escape sequence removal:
     # - CSI sequences: ESC[ followed by parameters and command
