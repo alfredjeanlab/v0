@@ -22,7 +22,7 @@ PROJECT_COMMANDS="plan tree decompose merge mergeq status feature resume fix att
 STANDALONE_COMMANDS="chore"
 
 # Commands that never need config
-NO_CONFIG_COMMANDS="init help version coffee talk"
+NO_CONFIG_COMMANDS="init help version coffee talk prime"
 
 # Source common functions for standalone mode checking
 source "${V0_DIR}/lib/v0-common.sh"
@@ -88,6 +88,7 @@ Commands:
   prune         Remove completed/cancelled operation state
   monitor       Monitor worker queues for auto-shutdown
 
+  prime         Quick-start guide (run after context loss)
   talk          Open claude with haiku model for quick conversations
   coffee        Keep computer awake
   issue         Alias for 'wk' issue tracker (see 'wk --help')
@@ -221,7 +222,7 @@ case "${CMD}" in
     exec "${V0_DIR}/bin/v0-${CMD}" "$@"
     ;;
   # No-config commands
-  talk|coffee)
+  talk|coffee|prime)
     exec "${V0_DIR}/bin/v0-${CMD}" "$@"
     ;;
   self-debug)

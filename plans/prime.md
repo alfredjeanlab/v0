@@ -1,5 +1,7 @@
 # Implementation Plan: v0 prime
 
+**Root Feature:** `v0-99e9`
+
 ## Overview
 
 Add a new `v0 prime` command that outputs a minimal, focused quick-start guide for v0. This is analogous to `wk prime` vs `wk help` - it shows core use cases with concise examples and references where to get more information, rather than the full help text.

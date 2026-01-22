@@ -1,0 +1,54 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-prime - Quick-start guide for v0
+# Usage: v0 prime
+
+cat <<'EOF'
+# v0 Quick Start
+
+> **Context Recovery**: Run `v0 prime` after compaction, clear, or new session
+
+## Core Workflows
+
+**Fix a bug:**
+```bash
+v0 fix "Description of the bug"    # Submit bug to fix worker
+v0 attach fix                       # Watch progress
+```
+
+**Run a feature pipeline:**
+```bash
+v0 feature auth "Add JWT auth"      # Full pipeline: plan → decompose → execute → merge
+v0 status                           # Check progress
+v0 attach feature/auth              # Watch specific feature
+```
+
+**Just create a plan:**
+```bash
+v0 plan api "Build REST API"        # Create plan only
+v0 decompose api                    # Then decompose to issues
+```
+
+**Process chores:**
+```bash
+v0 chore "Update dependencies"      # Submit chore (works without project)
+v0 attach chore                     # Watch progress
+```
+
+## Essential Commands
+- `v0 status` - Show all operations
+- `v0 watch` - Continuous status monitoring
+- `v0 attach <type>` - Attach to worker tmux session
+- `v0 cancel <name>` - Cancel a running operation
+
+## Getting Started
+```bash
+v0 init                             # Initialize project (creates .v0.rc)
+v0 startup                          # Start background workers
+```
+
+## More Info
+- `v0 --help` - Full command reference
+- `v0 <command> --help` - Command-specific help
+EOF
