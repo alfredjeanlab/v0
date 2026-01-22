@@ -1,0 +1,21 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# scripts/install - Symlink v0 for local development
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+mkdir -p ~/.local/bin
+ln -sf "${PROJECT_ROOT}/bin/v0" ~/.local/bin/v0
+
+echo "Symlinked ~/.local/bin/v0 -> ${PROJECT_ROOT}/bin/v0"
+
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+  echo ""
+  echo "Note: ~/.local/bin is not in your PATH"
+  echo "Add this to your shell profile:"
+  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi

@@ -9,11 +9,14 @@ BATS_LIB_PATH := $(MAKEFILE_DIR)tests/bats
 
 TEST_FILES := $(wildcard tests/unit/*.bats)
 
-.PHONY: test test-unit test-debug test-file test-init lint lint-tests lint-policy check help license test-fixtures
+.PHONY: test test-unit test-debug test-file test-init lint lint-tests lint-policy check help license test-fixtures install
 
 # Default target
 help:
-	@echo "v0 Test Targets:"
+	@echo "v0 Development Targets:"
+	@echo "  make install         Symlink v0 to ~/.local/bin for development"
+	@echo ""
+	@echo "Testing:"
 	@echo "  make test            Run all unit tests"
 	@echo "  make test-debug      Run tests with verbose output"
 	@echo "  make test-file FILE=tests/unit/foo.bats"
@@ -111,3 +114,7 @@ test-fixtures:
 		echo "Generating test fixtures..."; \
 		bash tests/fixtures/create-git-fixture.sh; \
 	fi
+
+# Symlink v0 to ~/.local/bin for local development
+install:
+	@scripts/install
