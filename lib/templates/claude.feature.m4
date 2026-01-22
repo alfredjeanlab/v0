@@ -72,4 +72,12 @@ git push V0_GIT_REMOTE
 ./done  # or ../done from repo dir
 ```
 
-**IMPORTANT**: Call `./done` (or `../done` from repo dir) to signal completion. Do not just say "done" - actually run the script.
+**IMPORTANT**: Call `./done` to signal completion. This auto-closes remaining issues and exits.
+
+If you cannot complete the work (blocked, need help, etc.), use `./incomplete` instead:
+
+```bash
+./incomplete  # Generates debug report and exits without closing issues
+```
+
+This creates a debug report and preserves issue state for the next session.
