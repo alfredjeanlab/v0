@@ -1,5 +1,7 @@
 # Optimize v0 Status List View
 
+**Root Feature:** `v0-bf24`
+
 ## Overview
 
 Optimize the `v0 status` list view performance for large operation counts (~200 operations). The current implementation spawns hundreds of subprocess calls (date, grep) in the display loop, causing noticeable latency. This plan eliminates per-operation subprocess spawning by moving timestamp calculations into jq and using awk for batch formatting.
