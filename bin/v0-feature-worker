@@ -432,6 +432,29 @@ EOF
     done
   fi
 
+  # Auto-commit plan file changes from decompose (unless gitignored)
+  # Log whether feature ID is present in plan file for debugging
+  if [[ -n "${FEATURE_ID}" ]]; then
+    if grep -qF "${FEATURE_ID}" "${V0_ROOT}/${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+      emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} found in plan file"
+    else
+      emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} NOT in plan file (may not have been written)"
+    fi
+  fi
+
+  if git -C "${V0_ROOT}" diff --quiet -- "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+    emit_event "decompose:commit" "No changes to commit (plan file unchanged)"
+  elif git -C "${V0_ROOT}" check-ignore -q "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+    emit_event "decompose:commit" "Skipped (gitignored)"
+  elif git -C "${V0_ROOT}" add "${V0_PLANS_DIR}/${NAME}.md" && \
+       git -C "${V0_ROOT}" commit -m "Update plan: ${NAME}" -m "Auto-committed by v0 decompose"; then
+    emit_event "decompose:commit" "Committed ${V0_PLANS_DIR}/${NAME}.md"
+  else
+    # Capture more details about why commit failed
+    git_status=$(git -C "${V0_ROOT}" status --porcelain -- "${V0_PLANS_DIR}/${NAME}.md" 2>&1 || true)
+    emit_event "decompose:commit" "Failed to commit (status: ${git_status:-empty})"
+  fi
+
   rm -f "${STATE_DIR}/done"
 
   # Use state machine transition to queued phase
