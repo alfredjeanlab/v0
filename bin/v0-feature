@@ -1173,7 +1173,8 @@ WRAPPER
     write_session_marker "${TREE_DIR}" "${SESSION}"
 
     tmux new-session -d -s "${SESSION}" -c "${TREE_DIR}" \
-      "V0_OP='${NAME}' V0_PLAN_LABEL='plan:${NAME}' V0_WORKTREE='${TREE_DIR}/${REPO_NAME}' V0_ROOT='${V0_ROOT}' claude ${CLAUDE_ARGS} 'Implement the plan. See CLAUDE.md and PLAN.md for details.'; \
+      "export V0_OP='${NAME}'; export V0_PLAN_LABEL='plan:${NAME}'; export V0_WORKTREE='${TREE_DIR}/${REPO_NAME}'; export V0_ROOT='${V0_ROOT}'; \
+       claude ${CLAUDE_ARGS} 'Implement the plan. See CLAUDE.md and PLAN.md for details.'; \
        '${TREE_DIR}/.claude/on-complete.sh'; \
        echo ''; echo 'Session complete. Closing in 5 seconds...'; sleep 5"
 
