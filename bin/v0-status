@@ -1125,6 +1125,11 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
 
       # Merges section
       mergeq_pid_file="${BUILD_DIR}/mergeq/.daemon.pid"
+      # Check if a merge-resolve session is running (manual conflict resolution)
+      merge_resolve_running=false
+      if [[ -n "${all_sessions}" ]] && echo "${all_sessions}" | grep -q "merge-resolve"; then
+        merge_resolve_running=true
+      fi
       if [[ -f "${mergeq_pid_file}" ]] && kill -0 "$(cat "${mergeq_pid_file}" 2>/dev/null)" 2>/dev/null; then
         # Derive counts from pre-fetched mergeq_entries (Phase 2 optimization)
         processing=$(echo "${mergeq_entries}" | grep -c "^processing" 2>/dev/null || true)
@@ -1136,6 +1141,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         else
           echo -e "Merges: ${C_YELLOW}Polling${C_RESET}"
         fi
+      elif [[ "${merge_resolve_running}" = true ]]; then
+        echo -e "Merges: ${C_CYAN}Active${C_RESET}"
       elif [[ "${merges_empty}" = true ]]; then
         echo -e "Merges: ${C_DIM}None${C_RESET}"
       else
