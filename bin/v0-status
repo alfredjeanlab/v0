@@ -189,9 +189,11 @@ format_elapsed() {
 # Format operation timestamp for display
 # Shows relative time for recent operations (< 12 hours), date for older ones
 # Args: $1 = ISO 8601 timestamp (UTC with Z suffix)
+#       $2 = (optional) cached now_epoch to avoid repeated date calls
 format_operation_time() {
   local ts="$1"
-  local ts_epoch now_epoch elapsed
+  local now_epoch="${2:-$(date +%s)}"  # Use cached if provided
+  local ts_epoch elapsed
 
   ts_epoch=$(timestamp_to_epoch "${ts}")
   if [[ -z "${ts_epoch}" ]]; then
@@ -200,7 +202,6 @@ format_operation_time() {
     return
   fi
 
-  now_epoch=$(date +%s)
   elapsed=$((now_epoch - ts_epoch))
 
   # 12 hours = 43200 seconds
@@ -319,6 +320,112 @@ get_last_updated_timestamp() {
       echo "${created_at}"
       ;;
   esac
+}
+
+# Get the most relevant epoch for display based on current state (Phase 2 optimization)
+# Arguments: phase, created_epoch, completed_epoch, merged_epoch, held_epoch
+# Output: The most appropriate epoch timestamp for display
+get_last_updated_epoch() {
+  local phase="$1"
+  local created_epoch="$2"
+  local completed_epoch="$3"
+  local merged_epoch="$4"
+  local held_epoch="$5"
+
+  case "${phase}" in
+    merged)
+      # Prefer merged_epoch, fall back to completed_epoch, then created_epoch
+      if [[ -n "${merged_epoch}" ]] && [[ "${merged_epoch}" -gt 0 ]]; then
+        echo "${merged_epoch}"
+      elif [[ -n "${completed_epoch}" ]] && [[ "${completed_epoch}" -gt 0 ]]; then
+        echo "${completed_epoch}"
+      else
+        echo "${created_epoch}"
+      fi
+      ;;
+    completed|pending_merge)
+      # Show when it was completed
+      if [[ -n "${completed_epoch}" ]] && [[ "${completed_epoch}" -gt 0 ]]; then
+        echo "${completed_epoch}"
+      else
+        echo "${created_epoch}"
+      fi
+      ;;
+    held)
+      # Show when it was put on hold
+      if [[ -n "${held_epoch}" ]] && [[ "${held_epoch}" -gt 0 ]]; then
+        echo "${held_epoch}"
+      else
+        echo "${created_epoch}"
+      fi
+      ;;
+    *)
+      # For init, planned, queued, executing, etc. - use created_epoch
+      echo "${created_epoch}"
+      ;;
+  esac
+}
+
+# Format epoch timestamp for display (Phase 2 optimization)
+# Shows relative time for recent operations (< 12 hours), date for older ones
+# Args: $1 = epoch timestamp, $2 = current epoch (now_epoch)
+format_epoch_time() {
+  local ts_epoch="$1"
+  local now_epoch="$2"
+
+  if [[ -z "${ts_epoch}" ]] || [[ "${ts_epoch}" -eq 0 ]]; then
+    echo "unknown"
+    return
+  fi
+
+  local elapsed=$((now_epoch - ts_epoch))
+
+  # 12 hours = 43200 seconds
+  if [[ "${elapsed}" -lt 43200 ]]; then
+    format_elapsed "${elapsed}"
+  else
+    # Convert epoch to local date
+    date -r "${ts_epoch}" +%Y-%m-%d 2>/dev/null || echo "unknown"
+  fi
+}
+
+# Phase 3-4 optimization: Get queue entry status using bash string matching
+# Args: $1 = operation name, $2 = queue_cache_data variable
+# Output: status field or empty string
+# Uses pure bash - no subprocess spawns
+get_queue_entry_status() {
+  local op_name="$1"
+  local cache_data="$2"
+  local line rest
+  # Match line starting with operation name followed by tab
+  while IFS= read -r line; do
+    if [[ "${line}" == "${op_name}"$'\t'* ]]; then
+      # Extract second field using bash parameter expansion
+      rest="${line#*$'\t'}"      # Remove first field (operation)
+      echo "${rest%%$'\t'*}"     # Return second field (status), remove rest
+      return
+    fi
+  done <<< "${cache_data}"
+}
+
+# Phase 3-4 optimization: Get queue completed timestamp using bash string matching
+# Args: $1 = operation name, $2 = queue_cache_data variable
+# Output: updated_at field for completed entries, or empty string
+# Uses pure bash - no subprocess spawns
+get_queue_completed_timestamp() {
+  local op_name="$1"
+  local cache_data="$2"
+  local line rest
+  # Match line: operation<tab>completed<tab>timestamp
+  while IFS= read -r line; do
+    if [[ "${line}" == "${op_name}"$'\t'"completed"$'\t'* ]]; then
+      # Extract third field using bash parameter expansion
+      rest="${line#*$'\t'}"      # Remove first field
+      rest="${rest#*$'\t'}"      # Remove second field
+      echo "${rest}"             # Return third field (timestamp)
+      return
+    fi
+  done <<< "${cache_data}"
 }
 
 # Get recently merged operations (features/builds)
@@ -684,19 +791,27 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   mergeq_file="${BUILD_DIR}/mergeq/queue.json"
 
   # Pre-fetch queue data for O(1) lookups in loop (Phase 1 optimization)
-  # Format: operation\tstatus\tupdated_at
+  # Format: operation\tstatus\tupdated_at (one per line)
   queue_cache=$(mktemp)
   # shellcheck disable=SC2064  # Intentional: capture temp file path at trap time
   trap "rm -f '${queue_cache}'" EXIT
   if [[ -f "${mergeq_file}" ]]; then
     jq -r '.entries[] | [.operation, .status, (.updated_at // "")] | @tsv' "${mergeq_file}" > "${queue_cache}" 2>/dev/null || true
   fi
+  # Phase 3-4 optimization: Load queue cache into variable for bash string matching
+  # This eliminates grep subprocess spawns per operation in the display loop
+  queue_cache_data=""
+  if [[ -s "${queue_cache}" ]]; then
+    queue_cache_data=$(<"${queue_cache}")
+  fi
 
   # Process all state files in single jq -s invocation (one process instead of many)
   # Phase 3 optimization: also calculates max_name_len in same pass (META line first)
   max_name_len=8  # Default minimum
+  # Phase 1 optimization: cache current timestamp once for all operations
+  now_epoch=$(date +%s)
   if [[ ${#state_files[@]} -gt 0 ]]; then
-    while IFS=$'\t' read -r name op_type phase created machine completed merge_queued merge_status merged_at completed_at after session worker_pid held held_at merge_resumed worktree_missing; do
+    while IFS=$'\t' read -r name op_type phase created machine completed merge_queued merge_status merged_at completed_at after session worker_pid held held_at merge_resumed worktree_missing created_epoch completed_epoch merged_epoch held_epoch; do
       # Handle META line for max name length (Phase 3)
       if [[ "${name}" = "META" ]]; then
         max_name_len="${op_type}"  # op_type field contains max_name_len for META
@@ -747,10 +862,10 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     fi
 
     # Get queue entry status for merge display (only needed when merge_queued)
-    # Uses pre-fetched queue_cache for O(1) lookup instead of jq per operation
+    # Phase 3-4 optimization: uses bash string matching instead of grep subprocess
     queue_entry_status=""
-    if [[ "${merge_queued}" = "true" ]] && [[ -s "${queue_cache}" ]]; then
-      queue_entry_status=$(grep "^${name}"$'\t' "${queue_cache}" 2>/dev/null | cut -f2 || true)
+    if [[ "${merge_queued}" = "true" ]] && [[ -n "${queue_cache_data}" ]]; then
+      queue_entry_status=$(get_queue_entry_status "${name}" "${queue_cache_data}")
     fi
 
     # Use shared helper for phase display formatting
@@ -817,25 +932,35 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     if [[ ${#display_name} -gt ${max_name_display} ]]; then
       display_name="${name:0:$((max_name_display - 4))}...:"
     fi
-    # Get the most relevant timestamp based on operation phase
-    last_updated=$(get_last_updated_timestamp "${phase}" "${created}" "${completed_at}" "${merged_at}" "${held_at}")
-    # Override with merge queue timestamp if available and operation is merged
-    # Uses pre-fetched queue_cache for O(1) lookup instead of jq per operation
-    if [[ "${phase}" == "merged" ]] && [[ -s "${queue_cache}" ]]; then
-      mq_updated=$(grep "^${name}"$'\t'"completed"$'\t' "${queue_cache}" 2>/dev/null | cut -f3 || true)
-      if [[ -n "${mq_updated}" ]]; then
-        last_updated="${mq_updated}"
-      fi
+    # Phase 2 optimization: Use pre-computed epochs instead of calling timestamp_to_epoch
+    # Check for merge queue override first (rare case - only for merged ops)
+    # Phase 3-4 optimization: uses bash string matching instead of grep subprocess
+    mq_updated=""
+    if [[ "${phase}" == "merged" ]] && [[ -n "${queue_cache_data}" ]]; then
+      mq_updated=$(get_queue_completed_timestamp "${name}" "${queue_cache_data}")
     fi
-    display_time=$(format_operation_time "${last_updated}")
+    if [[ -n "${mq_updated}" ]]; then
+      # Fallback to timestamp path for queue override (rare)
+      display_time=$(format_operation_time "${mq_updated}" "${now_epoch}")
+    else
+      # Fast path: use pre-computed epoch values (eliminates N date -j calls)
+      last_epoch=$(get_last_updated_epoch "${phase}" "${created_epoch}" "${completed_epoch}" "${merged_epoch}" "${held_epoch}")
+      display_time=$(format_epoch_time "${last_epoch}" "${now_epoch}")
+    fi
     printf "  %-${max_name_len}s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${display_name}" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${display_time}"
     done < <(jq -rs '
+      # Phase 2: Helper function to convert ISO 8601 timestamp to epoch
+      # Handles timestamps like "2026-01-22T10:30:45.123Z"
+      def to_epoch:
+        if . == null or . == "" or . == "null" then 0
+        else (sub("\\.[0-9]+"; "") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime) // 0
+        end;
       # Phase 3: Calculate max name length in same pass (output META line first)
       # max_name_len = max of min(name_length + 1, 40) for all ops
       (reduce .[] as $op (0; [., ([($op.name | length) + 1, 40] | min)] | max)) as $max_len |
       # Output META line with max_name_len
       (["META", $max_len] | @tsv),
-      # Then output all operation data
+      # Then output all operation data (with epoch timestamps for Phase 2)
       (sort_by(.created_at) | .[] | [
         .name,
         (.type // "build"),
@@ -853,7 +978,12 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
         (.held // false),
         (.held_at // "null"),
         (.merge_resumed // false),
-        (.worktree_missing // false)
+        (.worktree_missing // false),
+        # Phase 2: Pre-computed epoch values (eliminates N date -j calls)
+        (.created_at | to_epoch),
+        ((.completed_at // "") | to_epoch),
+        ((.merged_at // "") | to_epoch),
+        ((.held_at // "") | to_epoch)
       ] | @tsv)
     ' "${state_files[@]}")
   fi
