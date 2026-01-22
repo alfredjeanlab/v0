@@ -1,5 +1,7 @@
 # Implementation Plan: v0 goal Command
 
+**Root Feature:** `v0-41ed`
+
 ## Overview
 
 Add a new `v0 goal` command that automatically orchestrates work to achieve a stated goal. The command launches an agent that:
