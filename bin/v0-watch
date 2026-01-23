@@ -123,6 +123,11 @@ show_header() {
 # Main watch loop
 trap 'echo; exit 0' INT TERM
 
+# Set terminal title for easy identification
+# Format: "Watch: projectdir/"
+project_name=$(basename "$(pwd)")
+v0_set_terminal_title "Watch: ${project_name}/"
+
 iteration=0
 while true; do
   # Only clear screen if stdout is a terminal

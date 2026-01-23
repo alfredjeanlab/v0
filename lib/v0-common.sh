@@ -955,3 +955,35 @@ v0_prune_mergeq() {
     fi
   fi
 }
+
+# ============================================================================
+# Terminal Title Functions
+# ============================================================================
+
+# v0_terminal_supports_title
+# Check if terminal supports title setting via OSC escape sequences
+# Returns 0 if supported, 1 if not
+v0_terminal_supports_title() {
+    # Must be a TTY
+    [[ -t 1 ]] || return 1
+
+    # Check for known unsupported terminals
+    case "${TERM:-}" in
+        dumb|"") return 1 ;;
+    esac
+
+    return 0
+}
+
+# v0_set_terminal_title <title>
+# Set terminal window/tab title using OSC 0 escape sequence
+# Usage: v0_set_terminal_title "My Title"
+# Silently does nothing if terminal doesn't support title setting
+v0_set_terminal_title() {
+    local title="$1"
+    v0_terminal_supports_title || return 0
+
+    # OSC 0 sets both icon name and window title (most compatible)
+    # Format: ESC ] 0 ; <title> BEL
+    printf '\033]0;%s\007' "${title}"
+}
