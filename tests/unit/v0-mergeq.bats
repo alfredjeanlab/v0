@@ -58,83 +58,33 @@ source_mergeq() {
     # Source v0-common first
     source "${PROJECT_ROOT}/lib/v0-common.sh"
 
-    # Define functions from v0-mergeq that we want to test
-    # These are extracted from the script for testing
+    # Source the new modular mergeq libraries
+    source "${PROJECT_ROOT}/lib/mergeq/rules.sh"
+    source "${PROJECT_ROOT}/lib/mergeq/io.sh"
+    source "${PROJECT_ROOT}/lib/mergeq/locking.sh"
+    source "${PROJECT_ROOT}/lib/mergeq/daemon.sh"
+    source "${PROJECT_ROOT}/lib/mergeq/display.sh"
 
-    atomic_queue_update() {
-        local jq_filter="$1"
-        local tmp
-        tmp=$(mktemp)
-
-        if ! jq "${jq_filter}" "${QUEUE_FILE}" > "${tmp}" 2>/dev/null; then
-            rm -f "${tmp}"
-            echo "Error: Failed to update queue" >&2
-            return 1
-        fi
-
-        mv "${tmp}" "${QUEUE_FILE}"
-    }
-
-    acquire_queue_lock() {
-        if [ -f "${QUEUE_LOCK}" ]; then
-            local holder_pid
-            holder_pid=$(grep -oE 'pid [0-9]+' "${QUEUE_LOCK}" 2>/dev/null | grep -oE '[0-9]+' || true)
-            if [ -n "${holder_pid}" ] && ! kill -0 "${holder_pid}" 2>/dev/null; then
-                rm -f "${QUEUE_LOCK}"
-            else
-                local holder
-                holder=$(cat "${QUEUE_LOCK}" 2>/dev/null || echo "unknown")
-                echo "Error: Queue lock held by: ${holder}" >&2
-                return 1
-            fi
-        fi
-        echo "mergeq (pid $$)" > "${QUEUE_LOCK}"
-        trap 'rm -f "${QUEUE_LOCK}"' EXIT
-    }
-
-    release_queue_lock() {
-        rm -f "${QUEUE_LOCK}"
-        trap - EXIT
-    }
+    # Compatibility aliases for existing tests
+    # These map old function names to new mq_* prefixed functions
+    atomic_queue_update() { mq_atomic_queue_update "$@"; }
+    acquire_queue_lock() { mq_acquire_lock "$@"; }
+    release_queue_lock() { mq_release_lock "$@"; }
 
     dequeue_merge() {
         local next
-        next=$(jq -r '[.entries[] | select(.status == "pending")] | sort_by(.priority, .enqueued_at) | .[0].operation // empty' "${QUEUE_FILE}")
-
+        next=$(mq_get_next_pending)
         if [ -z "${next}" ]; then
             return 1
         fi
-
         echo "${next}"
     }
 
-    update_entry() {
-        local operation="$1"
-        local status="$2"
-
-        if [ -z "${operation}" ] || [ -z "${status}" ]; then
-            echo "Error: Operation and status required" >&2
-            return 1
-        fi
-
-        local exists
-        exists=$(jq -r ".entries[] | select(.operation == \"${operation}\") | .operation" "${QUEUE_FILE}")
-        if [ -z "${exists}" ]; then
-            echo "Error: Operation '${operation}' not found in queue" >&2
-            return 1
-        fi
-
-        local updated_at
-        updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-        atomic_queue_update "(.entries[] | select(.operation == \"${operation}\")) |= . + {
-            \"status\": \"${status}\",
-            \"updated_at\": \"${updated_at}\"
-        }"
-    }
+    update_entry() { mq_update_entry_status "$@"; }
 
     # is_stale - Check if a queue entry is stale and should be auto-cleaned
     # Returns 0 if stale, 1 if not stale
+    # NOTE: This function uses git and state files - will be moved to readiness.sh in Phase 4
     is_stale() {
         local op="$1"
         local state_file="${BUILD_DIR}/operations/${op}/state.json"
@@ -152,7 +102,7 @@ source_mergeq() {
         fi
 
         # No state file - check if it looks like a branch
-        if [[ "${op}" == */* ]]; then
+        if mq_is_branch_pattern "${op}"; then
             # Branch name pattern - check if branch exists on remote
             # IMPORTANT: Must distinguish between "branch doesn't exist" and "git command failed"
             local ls_output ls_exit
@@ -178,18 +128,8 @@ source_mergeq() {
         return 1
     }
 
-    # daemon_running - Check if daemon is running
-    daemon_running() {
-        if [ ! -f "${DAEMON_PID_FILE}" ]; then
-            return 1
-        fi
-        local pid
-        pid=$(cat "${DAEMON_PID_FILE}" 2>/dev/null)
-        if [ -z "${pid}" ]; then
-            return 1
-        fi
-        kill -0 "${pid}" 2>/dev/null
-    }
+    # Compatibility alias for daemon function
+    daemon_running() { mq_daemon_running "$@"; }
 }
 
 # ============================================================================

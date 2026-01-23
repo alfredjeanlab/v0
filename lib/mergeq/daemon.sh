@@ -1,0 +1,104 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# mergeq/daemon.sh - Daemon process control
+#
+# Depends on: io.sh (for mq_ensure_queue_exists)
+# IMPURE: Uses process management, nohup, file system operations
+
+# Expected environment variables:
+# V0_DIR - Path to v0 installation
+# MAIN_REPO - Path to main git repository
+# MERGEQ_DIR - Directory for merge queue state
+# DAEMON_PID_FILE - Path to daemon PID file (typically ${MERGEQ_DIR}/.daemon.pid)
+# DAEMON_LOG_FILE - Path to daemon log file (typically ${MERGEQ_DIR}/logs/daemon.log)
+# C_GREEN, C_DIM, C_BOLD, C_RESET - Color codes from v0-common.sh
+
+# mq_daemon_running
+# Check if daemon is running (background process)
+# Returns 0 if running, 1 if not
+mq_daemon_running() {
+    if [[ -f "${DAEMON_PID_FILE}" ]]; then
+        local pid
+        pid=$(cat "${DAEMON_PID_FILE}")
+        if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+            return 0
+        fi
+        # Stale PID file
+        rm -f "${DAEMON_PID_FILE}"
+    fi
+    return 1
+}
+
+# mq_get_daemon_pid
+# Get the PID of the running daemon
+# Outputs: PID if running, empty if not
+mq_get_daemon_pid() {
+    if [[ -f "${DAEMON_PID_FILE}" ]]; then
+        cat "${DAEMON_PID_FILE}"
+    fi
+}
+
+# mq_start_daemon
+# Start the daemon as background process
+# Returns 0 on success, 1 on failure
+mq_start_daemon() {
+    if mq_daemon_running; then
+        echo "Worker already running (pid: $(cat "${DAEMON_PID_FILE}"))"
+        return 0
+    fi
+
+    mq_ensure_queue_exists
+    echo "Starting merge queue worker..."
+
+    # Start the daemon from the main repo (not a worktree)
+    # The daemon must be able to checkout the main branch, which is only
+    # possible from the main repo (worktrees can't checkout branches that are
+    # already checked out elsewhere)
+    local old_pwd="${PWD}"
+    cd "${MAIN_REPO}"
+    nohup "${V0_DIR}/bin/v0-mergeq" --watch >> "${DAEMON_LOG_FILE}" 2>&1 &
+    local daemon_pid=$!
+    cd "${old_pwd}"
+
+    # Write PID file
+    echo "${daemon_pid}" > "${DAEMON_PID_FILE}"
+
+    # Wait briefly to ensure daemon started
+    sleep 0.5
+    if ! mq_daemon_running; then
+        echo "Error: Daemon failed to start"
+        rm -f "${DAEMON_PID_FILE}"
+        return 1
+    fi
+
+    echo -e "${C_GREEN}Worker started${C_RESET} ${C_DIM}(pid: ${daemon_pid})${C_RESET}"
+    echo ""
+    echo -e "Check status: ${C_BOLD}v0 mergeq --status${C_RESET}"
+    echo -e "View logs:    ${C_BOLD}tail -f ${DAEMON_LOG_FILE}${C_RESET}"
+}
+
+# mq_stop_daemon
+# Stop the running daemon
+mq_stop_daemon() {
+    if ! mq_daemon_running; then
+        echo "Worker not running"
+        return 0
+    fi
+
+    local pid
+    pid=$(cat "${DAEMON_PID_FILE}")
+    echo "Stopping merge queue worker (pid: ${pid})..."
+    kill "${pid}" 2>/dev/null || true
+    rm -f "${DAEMON_PID_FILE}"
+    echo "Worker stopped"
+}
+
+# mq_ensure_daemon_running
+# Ensure daemon is running, start if not
+mq_ensure_daemon_running() {
+    if mq_daemon_running; then
+        return 0
+    fi
+    mq_start_daemon
+}

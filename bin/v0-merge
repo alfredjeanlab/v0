@@ -1,6 +1,10 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Alfred Jean LLC
+# v0 merge - Merge a worktree branch to main
+#
+# This script provides the CLI interface for merge operations.
+# Helper functions are implemented in lib/merge/ modules.
 set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,10 +14,11 @@ v0_load_config
 # Find main repo - git merge operations must run from main repo, not worktrees
 MAIN_REPO=$(v0_find_main_repo "${V0_ROOT}")
 
-LOCKFILE="${BUILD_DIR}/.merge.lock"
+# Source the merge modules
+source "${V0_DIR}/lib/merge/merge.sh"
 
 usage() {
-  cat <<EOF
+    cat <<EOF
 Usage: v0 merge <operation> [--resolve]
        v0 merge <tree-dir> [--resolve]
 
@@ -28,7 +33,7 @@ Examples:
   v0 merge my-feature --resolve
   v0 merge ~/.local/state/v0/\$PROJECT/tree/my-feature
 EOF
-  exit 1
+    exit 1
 }
 
 [[ -z "$1" ]] && usage
@@ -37,601 +42,130 @@ INPUT="$1"
 RESOLVE=false
 [[ "$2" = "--resolve" ]] && RESOLVE=true
 
-# Resolve operation name to tree directory if needed
-# If input doesn't look like a path (no leading / or .), treat it as an operation name
-if [[ "${INPUT}" != /* ]] && [[ "${INPUT}" != .* ]]; then
-  # Input is an operation name
-  OP_NAME="${INPUT}"
-  STATE_FILE="${BUILD_DIR}/operations/${OP_NAME}/state.json"
-
-  if [[ ! -f "${STATE_FILE}" ]]; then
-    echo "Error: No operation found for '${OP_NAME}'" >&2
-    echo "" >&2
-    echo "List operations with: v0 status" >&2
-    exit 1
-  fi
-
-  # Get worktree path from state
-  WORKTREE=$(sm_read_state "${OP_NAME}" "worktree")
-  if [[ -z "${WORKTREE}" ]] || [[ "${WORKTREE}" = "null" ]]; then
-    echo "Error: Operation '${OP_NAME}' has no worktree" >&2
-    exit 1
-  fi
-
-  if [[ ! -d "${WORKTREE}" ]]; then
-    echo "Error: Worktree not found: ${WORKTREE}" >&2
-    echo "The worktree may have been removed." >&2
-    exit 1
-  fi
-
-  # Auto-correct if state.json stored tree dir instead of worktree path
-  # (worktree should be tree_dir/REPO_NAME and contain a .git file/dir)
-  if ! git -C "${WORKTREE}" rev-parse --git-dir &>/dev/null; then
-    # Not a git repo - check if REPO_NAME subdirectory is the actual worktree
-    if [[ -d "${WORKTREE}/${REPO_NAME}" ]] && git -C "${WORKTREE}/${REPO_NAME}" rev-parse --git-dir &>/dev/null; then
-      WORKTREE="${WORKTREE}/${REPO_NAME}"
-    fi
-  fi
-
-  # Tree dir is the parent of the worktree
-  TREE_DIR="$(dirname "${WORKTREE}")"
+# Resolve input to worktree and tree_dir
+if mg_is_input_path "${INPUT}"; then
+    mg_resolve_path_to_worktree "${INPUT}"
 else
-  # Input is a path - could be tree_dir or worktree path
-  # Check if input is already a git worktree (has .git file/dir)
-  if git -C "${INPUT}" rev-parse --git-dir &>/dev/null; then
-    # Input is already a worktree path
-    WORKTREE="${INPUT}"
-    TREE_DIR="$(dirname "${WORKTREE}")"
-  else
-    # Input is a tree dir, append REPO_NAME to get worktree
-    TREE_DIR="${INPUT}"
-    WORKTREE="${TREE_DIR}/${REPO_NAME}"
-  fi
+    MG_OP_NAME="${INPUT}"
+    mg_resolve_operation_to_worktree "${INPUT}"
 fi
 
-if [[ ! -d "${TREE_DIR}" ]]; then
-  echo "Error: Tree directory not found: ${TREE_DIR}"
-  exit 1
-fi
+WORKTREE="${MG_WORKTREE}"
+TREE_DIR="${MG_TREE_DIR}"
+OP_NAME="${MG_OP_NAME:-}"
 
-if [[ ! -d "${WORKTREE}" ]]; then
-  echo "Error: Worktree not found: ${WORKTREE}"
-  exit 1
-fi
+# Validate worktree
+mg_validate_worktree "${WORKTREE}"
 
-# Verify worktree is a valid git repository
-if ! git -C "${WORKTREE}" rev-parse --git-dir &>/dev/null; then
-  echo "Error: ${WORKTREE} is not a valid git repository" >&2
-  echo "" >&2
-  echo "The directory exists but is not a git worktree. This can happen if:" >&2
-  echo "  - The main repository was moved or deleted" >&2
-  echo "  - The worktree was not properly created" >&2
-  echo "" >&2
-  echo "To fix: remove the directory and re-create the worktree" >&2
-  exit 1
-fi
-
-# Get actual branch name from the worktree (handles nested paths like feature/name)
-BRANCH="$(git -C "${WORKTREE}" rev-parse --abbrev-ref HEAD)"
-
-# Locking
-acquire_lock() {
-  if [[ -f "${LOCKFILE}" ]]; then
-    local holder
-    holder=$(cat "${LOCKFILE}")
-    echo "Error: Merge lock held by: ${holder}"
-    echo "If stale, remove: rm ${LOCKFILE}"
-    exit 1
-  fi
-  mkdir -p "${BUILD_DIR}"
-  echo "${BRANCH} (pid $$)" > "${LOCKFILE}"
-  trap release_lock EXIT
-}
-
-release_lock() {
-  rm -f "${LOCKFILE}"
-}
-
-# Check if merge would have conflicts (run from main repo)
-has_conflicts() {
-  ! git merge-tree --write-tree HEAD "${BRANCH}" >/dev/null 2>&1
-}
-
-# Check if worktree has unresolved conflicts
-worktree_has_conflicts() {
-  git -C "${WORKTREE}" status --porcelain | grep -q '^UU\|^AA\|^DD'
-}
-
-# Get commits on main since merge base
-commits_on_main() {
-  local base
-  base=$(git merge-base HEAD "${BRANCH}")
-  git log --oneline "${base}..HEAD"
-}
-
-# Get commits on branch since merge base
-commits_on_branch() {
-  local base
-  base=$(git merge-base HEAD "${BRANCH}")
-  git log --oneline "${base}..${BRANCH}"
-}
-
-# Update merge queue entry to reflect successful merge
-# Called when merge completes (directly or after resolution)
-# Tries both operation name (if available) and branch name
-update_merge_queue_entry() {
-  # Try to update by operation name first (if we have one)
-  if [[ -n "${OP_NAME:-}" ]]; then
-    "${V0_DIR}/bin/v0-mergeq" --update "${OP_NAME}" "completed" 2>/dev/null || true
-  fi
-  # Also try by branch name (handles branch merges like fix/xxx)
-  "${V0_DIR}/bin/v0-mergeq" --update "${BRANCH}" "completed" 2>/dev/null || true
-}
-
-# Update operation state to reflect successful merge
-# Called when merge completes (directly or after resolution)
-update_operation_state() {
-  # Try full branch name first (e.g., "my-feature")
-  local op_name="${BRANCH}"
-  if ! sm_state_exists "${op_name}"; then
-    # Branch may have prefix like "feature/my-feature" - try just the basename
-    op_name=$(basename "${BRANCH}")
-    if ! sm_state_exists "${op_name}"; then
-      return 0  # No operation state to update
-    fi
-  fi
-
-  # Use state machine transition to merged state
-  sm_transition_to_merged "${op_name}"
-}
-
-# Resolve uncommitted changes by launching claude agent
-resolve_uncommitted_changes() {
-  local session_name
-  session_name=$(v0_session_name "$(echo "${BRANCH}" | tr '/' '-')" "uncommitted")
-
-  # Kill existing session if any
-  tmux kill-session -t "${session_name}" 2>/dev/null || true
-
-  # Gather context
-  local plan_label=""
-  local op_state_file="${BUILD_DIR}/operations/${BRANCH}/state.json"
-  if [[ ! -f "${op_state_file}" ]]; then
-    # Branch may have prefix like "feature/my-feature" - try just the basename
-    op_state_file="${BUILD_DIR}/operations/$(basename "${BRANCH}")/state.json"
-  fi
-  if [[ -f "${op_state_file}" ]]; then
-    plan_label=$(jq -r '.plan_label // empty' "${op_state_file}" 2>/dev/null || echo "")
-  fi
-
-  local wk_context=""
-  if [[ -n "${plan_label}" ]]; then
-    wk_context="Related wk issues (label: ${plan_label}):
-$(wk list --label "${plan_label}" --status in_progress 2>/dev/null || echo "  (none in progress)")
-$(wk list --label "${plan_label}" --status todo 2>/dev/null | head -5 || echo "  (none todo)")"
-  fi
-
-  local v0_context=""
-  if [[ -f "${op_state_file}" ]]; then
-    v0_context="v0 operation state:
-$(jq -r '"  Phase: \(.phase // "unknown")\n  Epic: \(.epic_id // "none")"' "${op_state_file}" 2>/dev/null || echo "  (no state)")"
-  fi
-
-  # Create done script
-  cat > "${TREE_DIR}/done" <<'DONE_SCRIPT'
-#!/bin/bash
-find_claude() {
-  local pid=$1
-  while [[ -n "${pid}" ]] && [[ "${pid}" != "1" ]]; do
-    local cmd
-    cmd=$(ps -o comm= -p "${pid}" 2>/dev/null)
-    if [[ "${cmd}" == *"claude"* ]]; then
-      echo "${pid}"
-      return
-    fi
-    pid=$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')
-  done
-}
-CLAUDE_PID=$(find_claude $$)
-if [[ -n "${CLAUDE_PID}" ]]; then
-  kill -TERM "${CLAUDE_PID}" 2>/dev/null || true
-fi
-exit 0
-DONE_SCRIPT
-  chmod +x "${TREE_DIR}/done"
-
-  # Create settings with stop hook
-  local hook_script="${V0_DIR}/lib/hooks/stop-uncommitted.sh"
-  mkdir -p "${TREE_DIR}/.claude"
-  cat > "${TREE_DIR}/.claude/settings.local.json" <<SETTINGS_EOF
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "UNCOMMITTED_WORKTREE='${WORKTREE}' ${hook_script}"
-          }
-        ]
-      }
-    ]
-  }
-}
-SETTINGS_EOF
-
-  # Build prompt
-  local prompt_file
-  prompt_file=$(mktemp)
-  cat > "${prompt_file}" <<PROMPT_EOF
-$(sed "s/__V0_GIT_REMOTE__/${V0_GIT_REMOTE}/g" "${V0_DIR}/lib/prompts/uncommitted.md")
-
-## Current Situation
-
-Worktree: ${REPO_NAME}/
-Branch: ${BRANCH}
-
-Current git status:
-$(git -C "${WORKTREE}" status)
-
-${wk_context}
-
-${v0_context}
-
-Start by reviewing: cd ${REPO_NAME} && git diff
-PROMPT_EOF
-
-  # Create wrapper script
-  local resolve_script
-  resolve_script=$(mktemp)
-  local resolve_log="${TREE_DIR}/.uncommitted-resolve.log"
-  cat > "${resolve_script}" <<RESOLVE_EOF
-#!/bin/bash
-set -e
-cd "${TREE_DIR}"
-{
-  echo "=== Uncommitted changes resolution started at \$(date) ==="
-} >> "${resolve_log}" 2>&1
-claude --model opus --dangerously-skip-permissions --allow-dangerously-skip-permissions "\$(cat '${prompt_file}')" 2>> "${resolve_log}"
-EXIT_CODE=\$?
-echo "=== Claude exited with code \$EXIT_CODE at \$(date) ===" >> "${resolve_log}" 2>&1
-rm -f "${prompt_file}"
-exit \$EXIT_CODE
-RESOLVE_EOF
-  chmod +x "${resolve_script}"
-
-  # Launch agent
-  echo ""
-  echo "=== Launching claude in tmux session: ${session_name} ==="
-  echo ""
-  echo "Attach to monitor: tmux attach -t ${session_name}"
-  echo "Log file: ${resolve_log}"
-  echo ""
-
-  if ! tmux new-session -d -s "${session_name}" -c "${TREE_DIR}" "${resolve_script}"; then
-    echo "Error: Failed to create tmux session"
-    rm -f "${prompt_file}" "${resolve_script}"
-    exit 1
-  fi
-
-  # Wait for completion
-  echo "Waiting for claude to handle uncommitted changes..."
-  while tmux has-session -t "${session_name}" 2>/dev/null; do
-    sleep 2
-  done
-
-  # Cleanup
-  rm -f "${prompt_file}" "${resolve_script}" "${TREE_DIR}/done"
-  rm -f "${resolve_log}"
-}
-
-do_merge() {
-  # Try fast-forward first
-  if git merge --ff-only "${BRANCH}" 2>/dev/null; then
-    echo "Fast-forward merge successful"
-  else
-    # Rebase branch onto develop branch to enable fast-forward
-    echo "Rebasing ${BRANCH} onto ${V0_DEVELOP_BRANCH}..."
-    git -C "${WORKTREE}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
-    if git -C "${WORKTREE}" rebase "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}" 2>/dev/null; then
-      if git merge --ff-only "${BRANCH}"; then
-        echo "Fast-forward merge successful (after rebase)"
-        return 0
-      fi
-    fi
-    git -C "${WORKTREE}" rebase --abort 2>/dev/null || true
-    # Fallback to regular merge
-    if git merge --no-edit "${BRANCH}"; then
-      echo "Merge successful"
-    else
-      git merge --abort 2>/dev/null || true
-      echo
-      echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge would have conflicts. To resolve:"
-      echo -e "  ${C_BOLD}v0 merge ${TREE_DIR} --resolve${C_RESET}"
-      return 1
-    fi
-  fi
-  return 0
-}
-
-cleanup() {
-  git worktree remove "${WORKTREE}" --force
-  git branch -d "${BRANCH}" 2>/dev/null || git branch -D "${BRANCH}"
-  rm -rf "${TREE_DIR}"
-  echo "Removed worktree, branch, and tree dir: ${BRANCH}"
-}
+# Get actual branch name from the worktree
+BRANCH="$(mg_get_branch "${WORKTREE}")"
 
 # All git operations must run from main repo (not a worktree)
 cd "${MAIN_REPO}"
 
 # Check for and clean up mid-rebase state
-WORKTREE_GIT_DIR=$(git -C "${WORKTREE}" rev-parse --git-dir 2>/dev/null)
-if [[ -d "${WORKTREE_GIT_DIR}/rebase-merge" ]] || [[ -d "${WORKTREE_GIT_DIR}/rebase-apply" ]]; then
-  echo "Detected incomplete rebase, aborting..."
-  git -C "${WORKTREE}" rebase --abort 2>/dev/null || true
-fi
+mg_abort_incomplete_rebase "${WORKTREE}"
 
 # Check worktree is clean (ignore untracked files)
-if git -C "${WORKTREE}" status --porcelain | grep -qv '^??'; then
-  if [[ "${RESOLVE}" = true ]]; then
-    echo "Uncommitted changes detected. Starting claude to resolve..."
-    resolve_uncommitted_changes
-    # Re-check after resolution
-    if git -C "${WORKTREE}" status --porcelain | grep -qv '^??'; then
-      echo "Error: Uncommitted changes still exist after resolution"
-      exit 1
+if mg_worktree_has_uncommitted "${WORKTREE}"; then
+    if [[ "${RESOLVE}" = true ]]; then
+        echo "Uncommitted changes detected. Starting claude to resolve..."
+        mg_resolve_uncommitted_changes "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
+        # Re-check after resolution
+        if mg_worktree_has_uncommitted "${WORKTREE}"; then
+            echo "Error: Uncommitted changes still exist after resolution"
+            exit 1
+        fi
+    else
+        echo "Error: Worktree has uncommitted changes"
+        echo "  cd ${WORKTREE} && git status"
+        echo ""
+        echo "To resolve with agent assistance:"
+        echo "  v0 merge ${TREE_DIR} --resolve"
+        exit 1
     fi
-  else
-    echo "Error: Worktree has uncommitted changes"
-    echo "  cd ${WORKTREE} && git status"
-    echo ""
-    echo "To resolve with agent assistance:"
-    echo "  v0 merge ${TREE_DIR} --resolve"
-    exit 1
-  fi
 fi
 
 # Acquire lock before any merge operations
-acquire_lock
+mg_acquire_lock "${BRANCH}"
 
-if has_conflicts; then
-  if [[ "${RESOLVE}" = true ]]; then
-    echo "Conflicts detected. Starting claude to resolve..."
+if mg_has_conflicts "${BRANCH}"; then
+    if [[ "${RESOLVE}" = true ]]; then
+        echo "Conflicts detected. Starting claude to resolve..."
 
-    # Get context: commits since divergence
-    MAIN_COMMITS=$(commits_on_main)
-    BRANCH_COMMITS=$(commits_on_branch)
+        mg_launch_resolve_session "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
+        mg_wait_for_resolve_session "${MG_RESOLVE_SESSION}"
+        mg_cleanup_resolve_session "${TREE_DIR}"
 
-    # Start rebase to trigger conflicts (from root, targeting worktree)
-    git -C "${WORKTREE}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
-    git -C "${WORKTREE}" rebase "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}" || true
+        cd "${MAIN_REPO}"
 
-    # Create resolve session name
-    RESOLVE_SESSION=$(v0_session_name "$(echo "${BRANCH}" | tr '/' '-')" "merge-resolve")
-
-    # Kill existing session if any
-    tmux kill-session -t "${RESOLVE_SESSION}" 2>/dev/null || true
-
-    # Create done script that terminates the claude process
-    cat > "${TREE_DIR}/done" <<'DONE_SCRIPT'
-#!/bin/bash
-# Signal clean exit - terminates claude process
-find_claude() {
-  local pid=$1
-  while [[ -n "${pid}" ]] && [[ "${pid}" != "1" ]]; do
-    local cmd
-    cmd=$(ps -o comm= -p "${pid}" 2>/dev/null)
-    if [[ "${cmd}" == *"claude"* ]]; then
-      echo "${pid}"
-      return
-    fi
-    pid=$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')
-  done
-}
-CLAUDE_PID=$(find_claude $$)
-if [[ -n "${CLAUDE_PID}" ]]; then
-  kill -TERM "${CLAUDE_PID}" 2>/dev/null || true
-fi
-exit 0
-DONE_SCRIPT
-    chmod +x "${TREE_DIR}/done"
-
-    # Create settings.local.json with Stop hook for merge resolution
-    HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-merge.sh"
-    mkdir -p "${TREE_DIR}/.claude"
-    cat > "${TREE_DIR}/.claude/settings.local.json" <<SETTINGS_EOF
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "MERGE_WORKTREE='${WORKTREE}' ${HOOK_SCRIPT}"
-          }
-        ]
-      }
-    ]
-  }
-}
-SETTINGS_EOF
-
-    # Write prompt to temp file to avoid quoting issues
-    PROMPT_FILE=$(mktemp)
-    cat > "${PROMPT_FILE}" <<PROMPT_EOF
-$(cat "${V0_DIR}/lib/prompts/merge.md")
-
-Resolve the merge conflicts in ${REPO_NAME}/.
-
-Commits on main since divergence:
-${MAIN_COMMITS}
-
-Commits on this branch:
-${BRANCH_COMMITS}
-
-Run: cd ${REPO_NAME} && git status
-PROMPT_EOF
-
-    # Create resolve script with logging
-    RESOLVE_SCRIPT=$(mktemp)
-    RESOLVE_LOG="${TREE_DIR}/.merge-resolve.log"
-    cat > "${RESOLVE_SCRIPT}" <<RESOLVE_EOF
-#!/bin/bash
-set -e
-cd "${TREE_DIR}"
-{
-  echo "=== Merge resolve started at \$(date) ==="
-  echo "Working directory: \$(pwd)"
-  echo "Claude command: claude -p <prompt>"
-  echo ""
-} >> "${RESOLVE_LOG}" 2>&1
-
-if ! command -v claude >/dev/null 2>&1; then
-  echo "Error: claude command not found" >> "${RESOLVE_LOG}" 2>&1
-  exit 1
-fi
-
-claude --model opus --dangerously-skip-permissions --allow-dangerously-skip-permissions "\$(cat '${PROMPT_FILE}')" 2>> "${RESOLVE_LOG}"
-EXIT_CODE=\$?
-echo "=== Claude exited with code \$EXIT_CODE at \$(date) ===" >> "${RESOLVE_LOG}" 2>&1
-rm -f "${PROMPT_FILE}"
-exit \$EXIT_CODE
-RESOLVE_EOF
-    chmod +x "${RESOLVE_SCRIPT}"
-
-    # Launch claude in tmux session
-    echo ""
-    echo "=== Launching claude in tmux session: ${RESOLVE_SESSION} ==="
-    echo ""
-    echo "Attach to monitor/assist:"
-    echo "  tmux attach -t ${RESOLVE_SESSION}"
-    echo "  (Ctrl-B D to detach)"
-    echo ""
-    echo "Log file: ${RESOLVE_LOG}"
-    echo ""
-    if ! tmux new-session -d -s "${RESOLVE_SESSION}" -c "${TREE_DIR}" "${RESOLVE_SCRIPT}"; then
-      echo "Error: Failed to create tmux session"
-      echo "Check if tmux is installed and working"
-      rm -f "${PROMPT_FILE}" "${RESOLVE_SCRIPT}"
-      exit 1
-    fi
-
-    # Verify session was actually created
-    sleep 0.5
-    if ! tmux has-session -t "${RESOLVE_SESSION}" 2>/dev/null; then
-      echo "Error: tmux session failed to start"
-      echo "Check log file: ${RESOLVE_LOG}"
-      if [[ -f "${RESOLVE_LOG}" ]]; then
-        echo ""
-        echo "=== Log contents ==="
-        cat "${RESOLVE_LOG}"
-      fi
-      rm -f "${PROMPT_FILE}" "${RESOLVE_SCRIPT}"
-      exit 1
-    fi
-
-    # Wait for resolution (poll for session completion)
-    echo "Waiting for claude to resolve conflicts..."
-    while tmux has-session -t "${RESOLVE_SESSION}" 2>/dev/null; do
-      sleep 2
-    done
-
-    # Cleanup temp files
-    rm -f "${PROMPT_FILE}" "${RESOLVE_SCRIPT}" "${TREE_DIR}/done"
-
-    cd "${MAIN_REPO}"
-
-    # Check success by outcome, not exit code (claude may exit non-zero but complete work)
-    # Check if worktree still has conflicts
-    if worktree_has_conflicts; then
-      echo "Error: Conflicts still exist after resolution attempt"
-      if [[ -f "${RESOLVE_LOG}" ]]; then
-        echo "Check log file: ${RESOLVE_LOG}"
-      fi
-      exit 1
-    fi
-
-    # Check if rebase is still in progress (claude didn't complete it)
-    # Use WORKTREE_GIT_DIR since worktrees have a .git file, not directory
-    if [[ -d "${WORKTREE_GIT_DIR}/rebase-merge" ]] || [[ -d "${WORKTREE_GIT_DIR}/rebase-apply" ]]; then
-      echo "Error: Rebase not completed. Claude should have run 'git rebase --continue'"
-      if [[ -f "${RESOLVE_LOG}" ]]; then
-        echo "Check log file: ${RESOLVE_LOG}"
-      fi
-      exit 1
-    fi
-
-    # After successful resolution, merge using do_merge which handles rebase retry
-    do_merge && {
-      # Record the merge commit hash BEFORE cleanup deletes the branch
-      merge_commit=$(git rev-parse HEAD)
-
-      rm -f "${RESOLVE_LOG}" && cleanup && git push "${V0_GIT_REMOTE}" && {
-        # Verify commit is on local main (sanity check)
-        # git push returning 0 is authoritative - remote has the commit
-        if ! v0_verify_push "${merge_commit}"; then
-          echo "Error: Merge commit not found on main after push" >&2
-          exit 1
+        # Check success by outcome
+        if mg_worktree_has_conflicts "${WORKTREE}"; then
+            echo "Error: Conflicts still exist after resolution attempt"
+            if [[ -f "${MG_RESOLVE_LOG:-}" ]]; then
+                echo "Check log file: ${MG_RESOLVE_LOG}"
+            fi
+            exit 1
         fi
 
-        # Record merge commit in state, then update status
-        op_to_update="${OP_NAME:-}"
-        if [[ -z "${op_to_update}" ]]; then
-          op_to_update=$(basename "${BRANCH}")
-        fi
-        if sm_state_exists "${op_to_update}"; then
-          sm_update_state "${op_to_update}" "merge_commit" "\"${merge_commit}\""
-        fi
-
-        # Update operation state and queue entry (unless called by mergeq)
-        update_operation_state
-        if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
-          update_merge_queue_entry
+        # Check if rebase is still in progress
+        worktree_git_dir=$(mg_get_worktree_git_dir "${WORKTREE}")
+        if [[ -d "${worktree_git_dir}/rebase-merge" ]] || [[ -d "${worktree_git_dir}/rebase-apply" ]]; then
+            echo "Error: Rebase not completed. Claude should have run 'git rebase --continue'"
+            if [[ -f "${MG_RESOLVE_LOG:-}" ]]; then
+                echo "Check log file: ${MG_RESOLVE_LOG}"
+            fi
+            exit 1
         fi
 
-        sm_trigger_dependents "$(basename "${BRANCH}")"
-        v0_notify "${PROJECT}: merged" "${BRANCH} (after resolution)"
-        git push "${V0_GIT_REMOTE}" --delete "${BRANCH}" 2>/dev/null || true
-      }
-    }
-  else
-    echo
-    echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge would have conflicts. To resolve:"
-    echo -e "  ${C_BOLD}v0 merge ${TREE_DIR} --resolve${C_RESET}"
-    exit 1
-  fi
-else
-  do_merge && {
-    # Record the merge commit hash BEFORE cleanup deletes the branch
-    merge_commit=$(git rev-parse HEAD)
+        # After successful resolution, merge using mg_do_merge
+        if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
+            merge_commit=$(mg_get_merge_commit)
+            rm -f "${MG_RESOLVE_LOG:-}"
+            mg_cleanup_worktree "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
 
-    cleanup && git push "${V0_GIT_REMOTE}" && {
-      # Verify commit is on local main (sanity check)
-      # git push returning 0 is authoritative - remote has the commit
-      if ! v0_verify_push "${merge_commit}"; then
-        echo "Error: Merge commit not found on main after push" >&2
+            if mg_push_and_verify "${merge_commit}"; then
+                op_to_update=$(mg_resolve_op_name "${OP_NAME}" "${BRANCH}")
+                if [[ -n "${op_to_update}" ]]; then
+                    mg_record_merge_commit "${op_to_update}" "${merge_commit}"
+                fi
+
+                mg_update_operation_state "${BRANCH}"
+                if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
+                    mg_update_queue_entry "${OP_NAME}" "${BRANCH}"
+                fi
+
+                mg_trigger_dependents "${BRANCH}"
+                mg_notify_merge "${PROJECT}" "${BRANCH}" "(after resolution)"
+                mg_delete_remote_branch "${BRANCH}"
+            fi
+        fi
+    else
+        echo
+        echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge would have conflicts. To resolve:"
+        echo -e "  ${C_BOLD}v0 merge ${TREE_DIR} --resolve${C_RESET}"
         exit 1
-      fi
+    fi
+else
+    # No conflicts - direct merge
+    if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
+        merge_commit=$(mg_get_merge_commit)
+        mg_cleanup_worktree "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
 
-      # Record merge commit in state, then update status
-      # Try operation name first (if available), then basename of branch
-      op_to_update="${OP_NAME:-}"
-      if [[ -z "${op_to_update}" ]]; then
-        op_to_update=$(basename "${BRANCH}")
-      fi
-      if sm_state_exists "${op_to_update}"; then
-        sm_update_state "${op_to_update}" "merge_commit" "\"${merge_commit}\""
-      fi
+        if mg_push_and_verify "${merge_commit}"; then
+            op_to_update=$(mg_resolve_op_name "${OP_NAME}" "${BRANCH}")
+            if [[ -n "${op_to_update}" ]]; then
+                mg_record_merge_commit "${op_to_update}" "${merge_commit}"
+            fi
 
-      # Update operation state and queue entry (unless called by mergeq)
-      update_operation_state
-      if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
-        update_merge_queue_entry
-      fi
+            mg_update_operation_state "${BRANCH}"
+            if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
+                mg_update_queue_entry "${OP_NAME}" "${BRANCH}"
+            fi
 
-      sm_trigger_dependents "$(basename "${BRANCH}")"
-      v0_notify "${PROJECT}: merged" "${BRANCH}"
-      git push "${V0_GIT_REMOTE}" --delete "${BRANCH}" 2>/dev/null || true
-    }
-  }
+            mg_trigger_dependents "${BRANCH}"
+            mg_notify_merge "${PROJECT}" "${BRANCH}"
+            mg_delete_remote_branch "${BRANCH}"
+        fi
+    fi
 fi
