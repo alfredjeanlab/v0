@@ -317,38 +317,3 @@ EOF
     '
     assert_output --partial "bar_length_valid=true"
 }
-
-# ============================================================================
-# Terminal title tests
-# ============================================================================
-
-@test "watch sets terminal title" {
-    local project_dir
-    project_dir=$(setup_isolated_project)
-
-    # Use script command to create a pseudo-TTY, which is needed because
-    # v0_set_terminal_title checks [[ -t 1 ]] before emitting escape sequences
-    local output_file="$TEST_TEMP_DIR/script_output"
-    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT TERM=xterm bash -c '
-        cd "'"$project_dir"'"
-        # script -q creates a pseudo-TTY; output goes to file
-        script -q "'"$output_file"'" "'"$PROJECT_ROOT"'/bin/v0-watch" --max-iterations 1 2>&1
-        # Convert output to visible escape sequences
-        cat -v "'"$output_file"'"
-    '
-    # Should contain OSC title escape sequence
-    # ^[]0;Watch^G (cat -v representation)
-    assert_output --partial "]0;Watch"
-}
-
-@test "watch skips terminal title with dumb TERM" {
-    local project_dir
-    project_dir=$(setup_isolated_project)
-
-    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT TERM=dumb bash -c '
-        cd "'"$project_dir"'"
-        "'"$PROJECT_ROOT"'/bin/v0-watch" --max-iterations 1 2>&1 | cat -v
-    '
-    # Should NOT contain OSC escape sequence start (^[ is ESC in cat -v)
-    refute_output --partial "^[]0;"
-}

@@ -123,9 +123,6 @@ show_header() {
 # Main watch loop
 trap 'echo; exit 0' INT TERM
 
-# Set terminal title for easy identification
-v0_set_terminal_title "Watch"
-
 iteration=0
 while true; do
   # Only clear screen if stdout is a terminal
