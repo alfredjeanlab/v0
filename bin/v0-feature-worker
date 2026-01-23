@@ -183,6 +183,7 @@ check_hold_before_phase() {
 
 run_plan_phase() {
   log "Starting plan phase"
+  ensure_nudge_running
 
   local PROMPT
   PROMPT=$(get_state prompt)
@@ -224,6 +225,9 @@ EOF
   fi
 
   update_state "tmux_session" "\"${PLAN_SESSION}\""
+  # Write session marker and project root for nudge to find this session
+  echo "${V0_ROOT}" > "${TREE_DIR}/.worker-project-root"
+  write_session_marker "${TREE_DIR}" "${PLAN_SESSION}"
 
   IDLE_COUNT=0
   IDLE_THRESHOLD=6
@@ -322,6 +326,7 @@ EOF
 
 run_decompose_phase() {
   log "Starting decompose phase"
+  ensure_nudge_running
 
   local SAFE
   SAFE=$(get_state safe)
@@ -368,6 +373,9 @@ EOF
   fi
 
   update_state "tmux_session" "\"${FEATURE_SESSION}\""
+  # Write session marker and project root for nudge to find this session
+  echo "${V0_ROOT}" > "${TREE_DIR}/.worker-project-root"
+  write_session_marker "${TREE_DIR}" "${FEATURE_SESSION}"
 
   PLAN_MTIME_BEFORE=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null)
 
