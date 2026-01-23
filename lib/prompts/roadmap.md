@@ -81,21 +81,20 @@ v0 feature auth-postcheck-verify "Run full test suite and fix any regressions" -
 Queue all features sequentially using `--after`:
 
 ```bash
-# First feature has no --after
-v0 feature <first-epic> "<description>" --enqueue
+# First feature starts immediately
+v0 feature <first-epic> "<description>"
 
-# All subsequent features depend on the previous
-v0 feature <epic-2> "<description>" --after <first-epic> --enqueue
-v0 feature <milestone-1-precheck> "<description>" --after <epic-2> --enqueue
-v0 feature <milestone-1> "<description>" --after <milestone-1-precheck> --enqueue
-v0 feature <milestone-1-postcheck> "<description>" --after <milestone-1> --enqueue
+# All subsequent features depend on the previous (--after blocks until dependency merges)
+v0 feature <epic-2> "<description>" --after <first-epic>
+v0 feature <milestone-1-precheck> "<description>" --after <epic-2>
+v0 feature <milestone-1> "<description>" --after <milestone-1-precheck>
+v0 feature <milestone-1-postcheck> "<description>" --after <milestone-1>
 # ... continue the chain
 ```
 
 **Important:**
 - Add `--label roadmap:<roadmap-name>` to all features (use the roadmap name from CLAUDE.md)
-- Use `--enqueue` to plan without immediately executing
-- Chain all features with `--after` to ensure sequential execution
+- Chain all features with `--after` to ensure sequential execution (each waits for its dependency to merge)
 
 ## Completion
 
