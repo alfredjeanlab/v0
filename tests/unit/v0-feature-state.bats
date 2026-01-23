@@ -484,3 +484,148 @@ check_circular_dependency() {
     run get_state "after"
     assert_output "parent-feature"
 }
+
+# ============================================================================
+# on-complete.sh issue closing tests
+# ============================================================================
+
+# Helper to create on-complete.sh script for testing
+create_on_complete_script() {
+    local op_name="$1"
+    local state_file="$2"
+    local script_path="${TEST_TEMP_DIR}/on-complete.sh"
+
+    cat > "${script_path}" <<WRAPPER
+#!/bin/bash
+STATE_FILE="${state_file}"
+OP_NAME="${op_name}"
+
+# Safety net: Close any remaining open issues (handles bypassed stop hooks)
+OPEN_IDS=\$(wk list --label "plan:\${OP_NAME}" --status todo 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+' || true)
+IN_PROGRESS_IDS=\$(wk list --label "plan:\${OP_NAME}" --status in_progress 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+' || true)
+ALL_OPEN_IDS="\${OPEN_IDS} \${IN_PROGRESS_IDS}"
+ALL_OPEN_IDS=\$(echo "\${ALL_OPEN_IDS}" | xargs)  # Trim whitespace
+if [[ -n "\${ALL_OPEN_IDS}" ]]; then
+  echo "Closing remaining issues: \${ALL_OPEN_IDS}"
+  # shellcheck disable=SC2086
+  wk done \${ALL_OPEN_IDS} --reason "Auto-closed by on-complete handler" 2>/dev/null || true
+fi
+
+COMPLETED_JSON=\$(wk list --format json --label "plan:\${OP_NAME}" --status done 2>/dev/null | jq '[.issues[].id]' || echo '[]')
+if [[ "\${COMPLETED_JSON}" != "[]" ]]; then
+  tmp=\$(mktemp)
+  jq ".completed = \${COMPLETED_JSON}" "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
+fi
+
+tmp=\$(mktemp)
+jq '.phase = "completed" | .completed_at = "'\$(date -u +%Y-%m-%dT%H:%M:%SZ)'"' "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
+WRAPPER
+    chmod +x "${script_path}"
+    echo "${script_path}"
+}
+
+@test "on-complete closes remaining todo issues before recording" {
+    local NAME="test-feature"
+    source_state_functions "${NAME}"
+
+    mkdir -p "${STATE_DIR}"
+    echo '{"name": "test-feature", "phase": "executing"}' > "${STATE_FILE}"
+
+    # Create mock wk that tracks calls and returns issues
+    mkdir -p "${TEST_TEMP_DIR}/bin"
+    cat > "${TEST_TEMP_DIR}/bin/wk" <<'EOF'
+#!/bin/bash
+echo "$@" >> "$TEST_TEMP_DIR/wk.log"
+if [[ "$1" == "list" ]] && [[ "$*" == *"--status todo"* ]]; then
+    echo "testp-1234 - Open task"
+fi
+if [[ "$1" == "list" ]] && [[ "$*" == *"--status in_progress"* ]]; then
+    echo "testp-5678 - In progress task"
+fi
+if [[ "$1" == "list" ]] && [[ "$*" == *"--status done"* ]]; then
+    echo '{"issues":[{"id":"testp-1234"},{"id":"testp-5678"}]}'
+fi
+if [[ "$1" == "done" ]]; then
+    echo "Marking done: $*" >> "$TEST_TEMP_DIR/wk.log"
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/bin/wk"
+    export PATH="${TEST_TEMP_DIR}/bin:${PATH}"
+
+    # Create and run on-complete script
+    local script
+    script=$(create_on_complete_script "${NAME}" "${STATE_FILE}")
+    run bash "${script}"
+    assert_success
+
+    # Verify wk done was called with both issue IDs
+    run cat "${TEST_TEMP_DIR}/wk.log"
+    assert_output --partial "done testp-1234 testp-5678"
+    assert_output --partial "Auto-closed by on-complete handler"
+}
+
+@test "on-complete handles no remaining issues gracefully" {
+    local NAME="test-feature"
+    source_state_functions "${NAME}"
+
+    mkdir -p "${STATE_DIR}"
+    echo '{"name": "test-feature", "phase": "executing"}' > "${STATE_FILE}"
+
+    # Create mock wk that returns no issues
+    mkdir -p "${TEST_TEMP_DIR}/bin"
+    cat > "${TEST_TEMP_DIR}/bin/wk" <<'EOF'
+#!/bin/bash
+echo "$@" >> "$TEST_TEMP_DIR/wk.log"
+if [[ "$1" == "list" ]] && [[ "$*" == *"--status done"* ]]; then
+    echo '{"issues":[]}'
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/bin/wk"
+    export PATH="${TEST_TEMP_DIR}/bin:${PATH}"
+
+    # Create and run on-complete script
+    local script
+    script=$(create_on_complete_script "${NAME}" "${STATE_FILE}")
+    run bash "${script}"
+    assert_success
+
+    # Verify wk done was NOT called (no issues to close)
+    run cat "${TEST_TEMP_DIR}/wk.log"
+    refute_output --partial "done testp"
+}
+
+@test "on-complete updates phase to completed" {
+    local NAME="test-feature"
+    source_state_functions "${NAME}"
+
+    mkdir -p "${STATE_DIR}"
+    echo '{"name": "test-feature", "phase": "executing"}' > "${STATE_FILE}"
+
+    # Create mock wk that returns no issues
+    mkdir -p "${TEST_TEMP_DIR}/bin"
+    cat > "${TEST_TEMP_DIR}/bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "list" ]] && [[ "$*" == *"--status done"* ]]; then
+    echo '{"issues":[]}'
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/bin/wk"
+    export PATH="${TEST_TEMP_DIR}/bin:${PATH}"
+
+    # Create and run on-complete script
+    local script
+    script=$(create_on_complete_script "${NAME}" "${STATE_FILE}")
+    run bash "${script}"
+    assert_success
+
+    # Verify phase was updated
+    run jq -r '.phase' "${STATE_FILE}"
+    assert_output "completed"
+
+    # Verify completed_at was set
+    run jq -r '.completed_at' "${STATE_FILE}"
+    refute_output "null"
+}

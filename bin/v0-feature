@@ -302,16 +302,7 @@ DONE_SCRIPT
   else
     cat > "${target_dir}/done" <<'DONE_SCRIPT'
 #!/bin/bash
-# Close all remaining plan issues before exiting
-if [[ -n "${V0_PLAN_LABEL}" ]]; then
-  # Get all open issue IDs (todo and in_progress) as arrays
-  mapfile -t OPEN_IDS < <(wk list --label "${V0_PLAN_LABEL}" -s todo 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+')
-  mapfile -t IN_PROGRESS_IDS < <(wk list --label "${V0_PLAN_LABEL}" -s in_progress 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+')
-  ALL_IDS=("${OPEN_IDS[@]}" "${IN_PROGRESS_IDS[@]}")
-  if [[ ${#ALL_IDS[@]} -gt 0 ]]; then
-    wk done "${ALL_IDS[@]}" --reason "Auto-closed by './done' script" 2>/dev/null || true
-  fi
-fi
+# Signal session completion - issues are closed by on-complete.sh
 
 find_claude() {
   local pid=$1
@@ -1148,6 +1139,17 @@ BUILD_ROOT="${V0_ROOT}"
 OP_NAME="${NAME}"
 V0_DIR="${V0_DIR}"
 PROJECT="${PROJECT}"
+
+# Safety net: Close any remaining open issues (handles bypassed stop hooks)
+OPEN_IDS=\$(wk list --label "plan:\${OP_NAME}" --status todo 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+' || true)
+IN_PROGRESS_IDS=\$(wk list --label "plan:\${OP_NAME}" --status in_progress 2>/dev/null | grep -oE '[a-zA-Z]+-[a-z0-9]+' || true)
+ALL_OPEN_IDS="\${OPEN_IDS} \${IN_PROGRESS_IDS}"
+ALL_OPEN_IDS=\$(echo "\${ALL_OPEN_IDS}" | xargs)  # Trim whitespace
+if [[ -n "\${ALL_OPEN_IDS}" ]]; then
+  echo "Closing remaining issues: \${ALL_OPEN_IDS}"
+  # shellcheck disable=SC2086
+  wk done \${ALL_OPEN_IDS} --reason "Auto-closed by on-complete handler" 2>/dev/null || true
+fi
 
 COMPLETED_JSON=\$(wk list --format json --label "plan:\${OP_NAME}" --status done 2>/dev/null | jq '[.issues[].id]' || echo '[]')
 if [[ "\${COMPLETED_JSON}" != "[]" ]]; then
