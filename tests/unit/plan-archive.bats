@@ -142,3 +142,79 @@ EOF
     assert_file_exists "${PLANS_DIR}/archive/${archive_date}/plan-a.md"
     assert_file_exists "${PLANS_DIR}/archive/${archive_date}/plan-b.md"
 }
+
+# ============================================================================
+# archive_plan() auto-commit tests
+# ============================================================================
+
+@test "archive_plan commits the archived plan" {
+    create_v0rc
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    source_lib "v0-common.sh"
+    v0_load_config
+
+    # Initialize git repo
+    git init
+    git config user.email "test@test.com"
+    git config user.name "Test"
+
+    mkdir -p "${PLANS_DIR}"
+    echo "# Test Plan" > "${PLANS_DIR}/test-feature.md"
+    git add "${PLANS_DIR}/test-feature.md"
+    git commit -m "Initial commit"
+
+    archive_plan "plans/test-feature.md"
+
+    # Check commit was made
+    run git log --oneline -1
+    assert_success
+    assert_output --partial "Archive plan: test-feature"
+}
+
+@test "archive_plan commits deletion and addition" {
+    create_v0rc
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    source_lib "v0-common.sh"
+    v0_load_config
+
+    git init
+    git config user.email "test@test.com"
+    git config user.name "Test"
+
+    mkdir -p "${PLANS_DIR}"
+    echo "# Test Plan" > "${PLANS_DIR}/commit-test.md"
+    git add "${PLANS_DIR}/commit-test.md"
+    git commit -m "Initial commit"
+
+    archive_plan "plans/commit-test.md"
+
+    # Verify archived file is tracked
+    local archive_date
+    archive_date=$(date +%Y-%m-%d)
+    run git ls-files "${PLANS_DIR}/archive/${archive_date}/commit-test.md"
+    assert_success
+    assert_output --partial "commit-test.md"
+
+    # Verify original file is no longer tracked
+    run git ls-files "${PLANS_DIR}/commit-test.md"
+    assert_success
+    assert_output ""
+}
+
+@test "archive_plan works outside git repo (no commit)" {
+    create_v0rc
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    source_lib "v0-common.sh"
+    v0_load_config
+
+    # No git init - not a repo
+    mkdir -p "${PLANS_DIR}"
+    echo "# Test Plan" > "${PLANS_DIR}/no-repo.md"
+
+    run archive_plan "plans/no-repo.md"
+    assert_success
+
+    local archive_date
+    archive_date=$(date +%Y-%m-%d)
+    assert_file_exists "${PLANS_DIR}/archive/${archive_date}/no-repo.md"
+}

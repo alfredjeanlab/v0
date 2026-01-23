@@ -266,6 +266,20 @@ archive_plan() {
 
   # Move plan to archive
   mv "${source_path}" "${archive_dir}/${plan_name}"
+
+  # Auto-commit the archived plan
+  if git -C "${V0_ROOT}" rev-parse --is-inside-work-tree &>/dev/null; then
+    local relative_path="${V0_PLANS_DIR}/archive/${archive_date}/${plan_name}"
+
+    # Stage both the deletion (from original location) and addition (to archive)
+    if git -C "${V0_ROOT}" add -A "${V0_PLANS_DIR}/" && \
+       git -C "${V0_ROOT}" commit -m "Archive plan: ${plan_name%.md}" \
+         -m "Auto-committed by v0"; then
+      v0_log "archive:commit" "Committed archived plan: ${relative_path}"
+    else
+      v0_log "archive:commit" "Failed to commit archived plan"
+    fi
+  fi
 }
 
 # ============================================================================
