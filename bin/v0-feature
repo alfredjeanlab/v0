@@ -1147,8 +1147,8 @@ ALL_OPEN_IDS="\${OPEN_IDS} \${IN_PROGRESS_IDS}"
 ALL_OPEN_IDS=\$(echo "\${ALL_OPEN_IDS}" | xargs)  # Trim whitespace
 if [[ -n "\${ALL_OPEN_IDS}" ]]; then
   echo "Closing remaining issues: \${ALL_OPEN_IDS}"
-  # shellcheck disable=SC2086
-  wk done \${ALL_OPEN_IDS} --reason "Auto-closed by on-complete handler" 2>/dev/null || true
+  read -ra IDS_ARRAY <<< "\${ALL_OPEN_IDS}"
+  wk done "\${IDS_ARRAY[@]}" --reason "Auto-closed by on-complete handler" 2>/dev/null || true
 fi
 
 COMPLETED_JSON=\$(wk list --format json --label "plan:\${OP_NAME}" --status done 2>/dev/null | jq '[.issues[].id]' || echo '[]')
