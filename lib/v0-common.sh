@@ -633,6 +633,34 @@ v0_capture_error_context() {
 }
 
 # ============================================================================
+# Log Cleaning
+# ============================================================================
+
+# v0_clean_log_file <log_file>
+# Remove ANSI escape sequences from a log file in place
+# This cleans terminal color codes, cursor controls, and other escape sequences
+# that get captured when using `script` to log tmux session output
+v0_clean_log_file() {
+  local log_file="$1"
+  [[ -z "${log_file}" ]] && return 0
+  [[ ! -f "${log_file}" ]] && return 0
+
+  local tmp_file
+  tmp_file=$(mktemp)
+
+  # Use perl for comprehensive ANSI/terminal escape sequence removal
+  perl -pe '
+    s/\e\[[0-9;?]*[A-Za-z]//g;           # CSI sequences (colors, cursor, etc)
+    s/\e\][^\a\e]*(?:\a|\e\\)//g;        # OSC sequences (title, etc)
+    s/\e\[[\x20-\x3f]*[\x40-\x7e]//g;    # Other CSI
+    s/\e[PX^_].*?\e\\//g;                # DCS, SOS, PM, APC sequences
+    s/\e.//g;                            # Any remaining ESC+char
+  ' "${log_file}" > "${tmp_file}" 2>/dev/null && mv "${tmp_file}" "${log_file}"
+
+  rm -f "${tmp_file}" 2>/dev/null || true
+}
+
+# ============================================================================
 # Log Pruning
 # ============================================================================
 

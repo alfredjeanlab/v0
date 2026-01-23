@@ -913,3 +913,43 @@ EOF
     run v0_diagnose_push_verification "${fake_commit}" "origin/${branch}"
     assert_output --partial "NOT FOUND locally"
 }
+
+# ============================================================================
+# v0_clean_log_file() tests
+# ============================================================================
+
+@test "v0_clean_log_file removes ANSI escape sequences" {
+    source_lib "v0-common.sh"
+
+    local log_file="${TEST_TEMP_DIR}/test.log"
+    # Create log with ANSI escape codes
+    printf 'Normal line\n\x1b[38;2;255;107;128mcolored text\x1b[39m\nAnother line\n' > "${log_file}"
+
+    v0_clean_log_file "${log_file}"
+
+    # Should contain text without escape codes
+    assert [ -f "${log_file}" ]
+    run cat "${log_file}"
+    assert_output "Normal line
+colored text
+Another line"
+}
+
+@test "v0_clean_log_file handles missing file gracefully" {
+    source_lib "v0-common.sh"
+
+    # Should not fail for non-existent file
+    run v0_clean_log_file "/nonexistent/file.log"
+    assert_success
+}
+
+@test "v0_clean_log_file handles empty file" {
+    source_lib "v0-common.sh"
+
+    local log_file="${TEST_TEMP_DIR}/empty.log"
+    touch "${log_file}"
+
+    run v0_clean_log_file "${log_file}"
+    assert_success
+    assert [ -f "${log_file}" ]
+}

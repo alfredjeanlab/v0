@@ -806,6 +806,9 @@ EOF
       fi
     done
 
+    # Clean ANSI escape sequences from plan.log
+    v0_clean_log_file "${STATE_DIR}/logs/plan.log"
+
     if [[ -f "${STATE_DIR}/logs/plan.exit" ]]; then
       PLAN_EXIT=$(cat "${STATE_DIR}/logs/plan.exit")
       rm -f "${STATE_DIR}/logs/plan.exit"
@@ -960,6 +963,9 @@ EOF
         fi
       fi
     done
+
+    # Clean ANSI escape sequences from feature.log
+    v0_clean_log_file "${STATE_DIR}/logs/feature.log"
 
     if [[ -f "${STATE_DIR}/logs/feature.exit" ]]; then
       FEATURE_EXIT=$(cat "${STATE_DIR}/logs/feature.exit")

@@ -272,6 +272,9 @@ while tmux has-session -t "${PLAN_SESSION}" 2>/dev/null; do
   sleep 2
 done
 
+# Clean ANSI escape sequences from plan.log
+v0_clean_log_file "${STATE_DIR}/logs/plan.log"
+
 # Read exit code
 if [[ -f "${STATE_DIR}/logs/plan.exit" ]]; then
   PLAN_EXIT=$(cat "${STATE_DIR}/logs/plan.exit")
