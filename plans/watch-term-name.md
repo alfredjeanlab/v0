@@ -1,5 +1,7 @@
 # Set Terminal Name in v0 watch
 
+**Root Feature:** `v0-822e`
+
 ## Overview
 
 Set the terminal/window title to "Watch: dirbasename/" when running `v0 watch` in supported environments. This helps users identify v0 watch sessions in their terminal tabs, tmux panes, or window managers. The title will be set when the watch loop starts and optionally restored when exiting.
