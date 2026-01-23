@@ -1,5 +1,7 @@
 # Plan: Auto-commit Archived Plans
 
+**Root Feature:** `v0-5ec3`
+
 ## Overview
 
 Implement auto-commit for archived plans to match the existing auto-commit behavior for:
