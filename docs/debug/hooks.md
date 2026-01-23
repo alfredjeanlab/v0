@@ -124,14 +124,16 @@ git worktree list
 
 ### 4. Partial Completion Script Failure
 
-The `fixed` and `done` scripts do multiple things:
+**Fix workers:** The `./fixed` script does multiple things:
 1. `git push`
 2. `v0-mergeq --enqueue`
 3. `wk done {id}`
 
 If script fails mid-way, work is partially complete.
 
-**Failure scenarios:**
+**Feature workers:** The `./done` script only terminates Claude. Issue closing is handled by `on-complete.sh`, which runs after Claude exits and closes any remaining open issues as a safety net.
+
+**Failure scenarios (fix workers):**
 
 | Push | Enqueue | wk done | Result |
 |------|---------|---------|--------|
