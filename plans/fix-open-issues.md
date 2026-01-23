@@ -1,5 +1,7 @@
 # Fix Open Issues After Feature Workflow
 
+**Root Feature:** `v0-864c`
+
 ## Overview
 
 After the `v0 feature` workflow completes, issues remain unclosed almost without exception. This plan identifies the root cause and fixes it by simplifying the issue-closing architecture.
