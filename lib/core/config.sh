@@ -212,7 +212,7 @@ v0_ensure_agent_branch() {
     return 1
   }
 
-  echo "Created 'agent' branch from '${base_branch}'"
+  echo -e "Created branch ${C_CYAN}agent${C_RESET}"
 }
 
 # Create .v0.rc template in specified directory
@@ -282,6 +282,9 @@ v0_init_config() {
   if [[ "${develop_branch}" == "agent" ]]; then
     v0_ensure_agent_branch "${git_remote}"
   fi
+
+  # Always show where agents will merge
+  echo -e "Agents will merge into \`${C_CYAN}${develop_branch}${C_RESET}\`"
 
   # Only create or update .v0.rc if it doesn't exist
   if [[ -f "${config_file}" ]]; then
