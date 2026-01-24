@@ -4,13 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-01-24
+
 ### Added
+
+- **`v0 roadmap` command**: Autonomous goal orchestration for multi-step workflows.
+
+- **`v0 prime` command**: Quick-start guide for new users.
+
+- **Terminal title in `v0 watch`**: Sets terminal window title for easier identification.
+
+- **Auto-commit for archived plans**: Plan files are automatically committed when archived.
 
 - **`make install` target**: Install v0 locally for development.
 
 ### Changed
 
 - **CI**: Bump actions/checkout from 4 to 6.
+
+- **`v0 status` shows all operations**: Full operation list in status view; `v0 watch` retains 15-entry limit with intelligent pruning.
+
+- **Refactored merge and status modules**: Split state-machine.sh, v0-merge, and v0-mergeq into focused, modular libraries.
+
+### Performance
+
+- **Optimized test suite**: Faster test execution with reduced overhead.
+
+- **Optimized `v0 status` list view**: Improved performance for status display.
+
+### Fixed
+
+- Feature worktrees now link to shared `.wok` workspace.
+- Nudge daemon finding plan/decompose sessions.
+- ANSI escape sequences cleaned from plan.log after session ends.
+- Terminal width defaults to 80 when COLUMNS is invalid.
+- Active merge-resolve sessions detected correctly in `v0 status`.
+- Mergeq daemon always uses `--resolve` mode.
+- Plan file auto-committed in decompose phase.
+- `./done` script auto-closes plan issues before exiting.
+- `V0_PLAN_LABEL` exported so `./done` can close issues.
+- `v0-merge` path handling when worktree path is passed.
 
 ## [0.2.1] - 2026-01-21
 
