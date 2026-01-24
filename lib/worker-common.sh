@@ -223,6 +223,37 @@ link_to_workspace() {
   wk init --workspace "${root_dir}/.wok" --path "${tree_dir}" 2>/dev/null || true
 }
 
+# Reset worktree to latest develop branch
+# Tries to fetch from remote first, falls back to local branch if remote doesn't exist
+# Args: $1 = git_dir (path to run git commands in, optional - uses cwd if not provided)
+v0_reset_to_develop() {
+  local git_dir="${1:-}"
+  local git_cmd=(git)
+  if [[ -n "${git_dir}" ]]; then
+    git_cmd=(git -C "${git_dir}")
+  fi
+
+  if "${git_cmd[@]}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
+    "${git_cmd[@]}" reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+  else
+    echo "Note: Remote branch '${V0_DEVELOP_BRANCH}' not found, using local" >&2
+    "${git_cmd[@]}" reset --hard "${V0_DEVELOP_BRANCH}"
+  fi
+}
+
+# Save worker state markers to worktree directory
+# Args: $1 = tree_dir, $2 = git_dir, $3 = branch_name, $4 = project_root (optional, defaults to pwd)
+setup_worker_markers() {
+  local tree_dir="$1"
+  local git_dir="$2"
+  local branch_name="$3"
+  local project_root="${4:-$(pwd)}"
+
+  echo "${git_dir}" > "${tree_dir}/.worker-git-dir"
+  echo "${branch_name}" > "${tree_dir}/.worker-branch"
+  echo "${project_root}" > "${tree_dir}/.worker-project-root"
+}
+
 # Create polling loop with exponential backoff
 # Args: $1 = tree_dir, $2 = item_type (bug/chore), $3 = polling_log
 create_polling_loop() {

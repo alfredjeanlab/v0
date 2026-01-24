@@ -111,20 +111,14 @@ start_worker() {
   local tree_dir="${WORKER_TREE_DIR}"  # Alias for readability in this function
 
   # Save git dir, branch name, and current directory for later cleanup and reset
-  # This allows stopping the worker from any directory and resetting between runs
-  echo "${WORKER_GIT_DIR}" > "${WORKER_TREE_DIR}/.worker-git-dir"
-  echo "${WORKER_BRANCH}" > "${WORKER_TREE_DIR}/.worker-branch"
-  pwd > "${WORKER_TREE_DIR}/.worker-project-root"
+  setup_worker_markers "${tree_dir}" "${WORKER_GIT_DIR}" "${WORKER_BRANCH}"
 
   # Fast-forward worktree to latest develop branch
-  git -C "${WORKER_GIT_DIR}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}"
-  git -C "${WORKER_GIT_DIR}" reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+  v0_reset_to_develop "${WORKER_GIT_DIR}"
 
   # Link worktree to main repo's shared workspace
-  # Remove any local .wok database first (if it exists)
   rm -rf "${tree_dir}/.wok"
-  # Now initialize with the shared workspace
-  wk init --workspace "${ROOT_DIR}/.wok" --path "${tree_dir}"
+  link_to_workspace "${tree_dir}" "${ROOT_DIR}"
 
   # Write worker assignee role for this worktree
   mkdir -p "${tree_dir}/.wok/current"
@@ -195,8 +189,12 @@ WORKTREE_ROOT="\$(pwd)"
 cd ${REPO_NAME}
 
 # Reset worktree to latest develop branch
-git fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}"
-git reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+if git fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
+  git reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+else
+  echo "Note: Remote branch '${V0_DEVELOP_BRANCH}' not found, using local" >&2
+  git reset --hard "${V0_DEVELOP_BRANCH}"
+fi
 
 # Record branch state for recovery
 mkdir -p "\${STATE_DIR}"
@@ -268,8 +266,12 @@ echo "Closing \${CHORE_ID}..."
 
 # Reset worktree to latest develop branch
 echo "Resetting to latest ${V0_DEVELOP_BRANCH}..."
-git fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}"
-git reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+if git fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
+  git reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+else
+  echo "Note: Remote branch '${V0_DEVELOP_BRANCH}' not found, using local" >&2
+  git reset --hard "${V0_DEVELOP_BRANCH}"
+fi
 
 echo ""
 echo "Completed \${CHORE_ID}"
