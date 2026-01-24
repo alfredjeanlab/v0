@@ -144,10 +144,11 @@ setup_git_project_with_branches() {
     local project_dir="${TEST_TEMP_DIR}/gitproject"
     mkdir -p "${project_dir}/.v0/build/operations"
 
-    # Create .v0.rc
+    # Create .v0.rc with explicit main branch (tests use main for merge checks)
     cat > "${project_dir}/.v0.rc" <<EOF
 PROJECT="testshutdown"
 ISSUE_PREFIX="ts"
+V0_DEVELOP_BRANCH="main"
 EOF
 
     # Initialize git repo with explicit main branch

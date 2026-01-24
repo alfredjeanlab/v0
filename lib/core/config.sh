@@ -96,7 +96,7 @@ v0_load_config() {
   # Defaults (can be overridden in .v0.rc)
   V0_BUILD_DIR=".v0/build"
   V0_PLANS_DIR="plans"
-  V0_DEVELOP_BRANCH="main"
+  V0_DEVELOP_BRANCH="agent"
   V0_FEATURE_BRANCH="feature/{name}"
   V0_BUGFIX_BRANCH="fix/{id}"
   V0_CHORE_BRANCH="chore/{id}"
@@ -177,8 +177,42 @@ v0_detect_develop_branch() {
     return 0
   fi
 
-  # Fallback to main
-  echo "main"
+  # Fallback to agent
+  echo "agent"
+}
+
+# Ensure agent branch exists, creating from current HEAD if needed
+v0_ensure_agent_branch() {
+  local remote="${1:-origin}"
+
+  # Skip if not in a git repository
+  if ! git rev-parse --git-dir &>/dev/null; then
+    return 0
+  fi
+
+  # Check if agent branch exists locally
+  if git branch --list agent 2>/dev/null | grep -q agent; then
+    return 0
+  fi
+
+  # Check if agent branch exists on remote
+  if git ls-remote --heads "${remote}" agent 2>/dev/null | grep -q agent; then
+    # Fetch and create local tracking branch
+    git fetch "${remote}" agent 2>/dev/null || true
+    git branch agent "${remote}/agent" 2>/dev/null || true
+    return 0
+  fi
+
+  # Create new agent branch from current HEAD (typically main)
+  local base_branch
+  base_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
+
+  git branch agent "${base_branch}" 2>/dev/null || {
+    echo "Warning: Could not create agent branch" >&2
+    return 1
+  }
+
+  echo "Created 'agent' branch from '${base_branch}'"
 }
 
 # Create .v0.rc template in specified directory
@@ -244,17 +278,19 @@ v0_init_config() {
     develop_branch="$(v0_detect_develop_branch "${git_remote}")"
   fi
 
+  # Create agent branch if it doesn't exist (only for 'agent' branch)
+  if [[ "${develop_branch}" == "agent" ]]; then
+    v0_ensure_agent_branch "${git_remote}"
+  fi
+
   # Only create or update .v0.rc if it doesn't exist
   if [[ -f "${config_file}" ]]; then
     echo ".v0.rc already exists in ${target_dir}"
   else
     # Generate config with conditional commenting based on defaults
     local branch_line remote_line
-    if [[ "${develop_branch}" != "main" ]]; then
-      branch_line="V0_DEVELOP_BRANCH=\"${develop_branch}\"     # Target branch for merges"
-    else
-      branch_line="# V0_DEVELOP_BRANCH=\"main\"      # Target branch for merges (default: main)"
-    fi
+    # Always write branch explicitly (self-documenting config)
+    branch_line="V0_DEVELOP_BRANCH=\"${develop_branch}\"     # Target branch for merges"
 
     if [[ "${git_remote}" != "origin" ]]; then
       remote_line="V0_GIT_REMOTE=\"${git_remote}\"        # Git remote for push/fetch"

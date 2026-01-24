@@ -253,14 +253,14 @@ EOF
     refute_output --partial "Error"
 }
 
-@test "v0_load_config sets V0_DEVELOP_BRANCH default to main" {
+@test "v0_load_config sets V0_DEVELOP_BRANCH default to agent" {
     create_v0rc
     cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
-    assert_equal "${V0_DEVELOP_BRANCH}" "main"
+    assert_equal "${V0_DEVELOP_BRANCH}" "agent"
 }
 
 @test "v0_load_config allows V0_DEVELOP_BRANCH override" {
@@ -283,7 +283,7 @@ EOF
 
     # Verify it's exported by checking in subshell
     run bash -c 'echo "${V0_DEVELOP_BRANCH}"'
-    assert_output "main"
+    assert_output "agent"
 }
 
 # ============================================================================
@@ -634,7 +634,7 @@ EOF
     assert_output "develop"
 }
 
-@test "v0_detect_develop_branch returns main when develop does not exist" {
+@test "v0_detect_develop_branch returns agent when develop does not exist" {
     init_mock_git_repo "${TEST_TEMP_DIR}/project"
     cd "${TEST_TEMP_DIR}/project" || return 1
 
@@ -642,7 +642,7 @@ EOF
 
     run v0_detect_develop_branch
     assert_success
-    assert_output "main"
+    assert_output "agent"
 }
 
 @test "v0_detect_develop_branch checks remote when local branch not found" {
@@ -706,18 +706,19 @@ EOF
     assert_success
 }
 
-@test "v0_init_config uses commented defaults when main/origin specified" {
+@test "v0_init_config always writes V0_DEVELOP_BRANCH explicitly" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     mkdir -p "${test_dir}"
 
     source_lib_with_mocks "v0-common.sh"
 
-    # Explicitly pass main/origin to test commented defaults
+    # Even with main specified, branch should be written explicitly
     v0_init_config "${test_dir}" "main" "origin"
 
-    # Should be commented when using defaults (use regex for flexible whitespace)
-    run grep -E '^# V0_DEVELOP_BRANCH=' "${test_dir}/.v0.rc"
+    # Branch should always be explicit (not commented)
+    run grep '^V0_DEVELOP_BRANCH="main"' "${test_dir}/.v0.rc"
     assert_success
+    # Remote should be commented when using default origin
     run grep -E '^# V0_GIT_REMOTE=' "${test_dir}/.v0.rc"
     assert_success
 }
@@ -727,13 +728,85 @@ EOF
     mkdir -p "${test_dir}"
     source_lib_with_mocks "v0-common.sh"
 
-    v0_init_config "${test_dir}" "agent" "upstream"
+    v0_init_config "${test_dir}" "staging" "upstream"
 
     # Should be uncommented when using non-defaults
-    run grep '^V0_DEVELOP_BRANCH="agent"' "${test_dir}/.v0.rc"
+    run grep '^V0_DEVELOP_BRANCH="staging"' "${test_dir}/.v0.rc"
     assert_success
     run grep '^V0_GIT_REMOTE="upstream"' "${test_dir}/.v0.rc"
     assert_success
+}
+
+@test "v0_init_config creates agent branch if missing" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    init_mock_git_repo "${test_dir}"
+    cd "${test_dir}" || return 1
+
+    # Mock wk to avoid actual wk initialization
+    wk() { echo "mock wk $*"; return 0; }
+    export -f wk
+
+    source_lib "v0-common.sh"
+
+    # Verify agent branch does not exist initially
+    run git branch --list agent
+    refute_output --partial "agent"
+
+    # Run init (should auto-detect agent and create branch)
+    v0_init_config "${test_dir}"
+
+    # Verify agent branch was created
+    run git branch --list agent
+    assert_output --partial "agent"
+}
+
+@test "v0_init_config writes explicit agent branch to .v0.rc" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    init_mock_git_repo "${test_dir}"
+    cd "${test_dir}" || return 1
+
+    # Mock wk to avoid actual wk initialization
+    wk() { echo "mock wk $*"; return 0; }
+    export -f wk
+
+    source_lib "v0-common.sh"
+
+    v0_init_config "${test_dir}"
+
+    # Should contain explicit V0_DEVELOP_BRANCH="agent"
+    run grep 'V0_DEVELOP_BRANCH="agent"' "${test_dir}/.v0.rc"
+    assert_success
+    # Should NOT be commented
+    run grep -E '^# V0_DEVELOP_BRANCH=' "${test_dir}/.v0.rc"
+    assert_failure
+}
+
+@test "v0_init_config preserves existing agent branch" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    init_mock_git_repo "${test_dir}"
+    cd "${test_dir}" || return 1
+
+    # Create agent branch with a different commit
+    git checkout -b agent
+    echo "agent content" > agent.txt
+    git add agent.txt
+    git commit -m "Agent commit"
+    local agent_commit
+    agent_commit=$(git rev-parse HEAD)
+    git checkout main
+
+    # Mock wk to avoid actual wk initialization
+    wk() { echo "mock wk $*"; return 0; }
+    export -f wk
+
+    source_lib "v0-common.sh"
+
+    # Run init
+    v0_init_config "${test_dir}"
+
+    # Verify agent branch still points to same commit (was preserved)
+    run git rev-parse agent
+    assert_output "${agent_commit}"
 }
 
 # ============================================================================
