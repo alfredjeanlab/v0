@@ -9,7 +9,7 @@ BATS_LIB_PATH := $(MAKEFILE_DIR)tests/bats
 
 TEST_FILES := $(wildcard tests/unit/*.bats)
 
-.PHONY: test test-unit test-debug test-file test-init lint lint-tests lint-policy check help license test-fixtures install
+.PHONY: help check test test-file test-init test-fixtures lint lint-scripts lint-tests lint-quality license install
 
 # Default target
 help:
@@ -18,65 +18,28 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test            Run all unit tests"
-	@echo "  make test-debug      Run tests with verbose output"
 	@echo "  make test-file FILE=tests/unit/foo.bats"
 	@echo "  make test-fixtures   Generate test fixtures (cached git repo)"
 	@echo ""
 	@echo "Linting:"
 	@echo "  make lint            Run ShellCheck on scripts"
-	@echo "  make lint-tests      Run ShellCheck on test files"
 	@echo "  make check           Run lint and all tests"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make license         Add license headers to source files"
 
-# Check if local BATS/libraries need installation
-.PHONY: test-init
-test-init:
-	@if [ ! -d "tests/bats/bats-support" ] && echo "$(BATS_LIB_PATH)" | grep -q "tests/bats"; then \
-		echo "Installing BATS testing libraries..."; \
-		./tests/bats/install.sh; \
-	elif [ ! -x "$(BATS)" ] && [ ! -x "$(LOCAL_BATS)" ]; then \
-		echo "Installing BATS testing libraries..."; \
-		./tests/bats/install.sh; \
-	fi
-
-# Run all tests
-test: test-unit
-
-# Run unit tests
-test-unit: test-init
-	@if [ ! -x "$(BATS)" ]; then \
-		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
-		exit 1; \
-	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing --print-output-on-failure tests/unit/
-
-# Run tests with verbose output (for debugging)
-test-debug: test-init
-	@if [ ! -x "$(BATS)" ]; then \
-		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
-		exit 1; \
-	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing --verbose-run --print-output-on-failure tests/unit/
-
-# Run a specific test file
-test-file: test-init
-	@if [ -z "$(FILE)" ]; then \
-		echo "Usage: make test-file FILE=tests/unit/foo.bats"; \
-		exit 1; \
-	fi
-	@if [ ! -x "$(BATS)" ]; then \
-		echo "Error: BATS not found. Run 'make test-init' or install bats-core."; \
-		exit 1; \
-	fi
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing $(FILE)
-
-# Run all tests
-test-all: test-unit
+# Run lint and all tests
+check: lint test
 
 # Lint scripts with ShellCheck
-lint:
+lint: lint-scripts lint-tests lint-quality
+
+# Enforce LOC limits, suppress rules, etc
+lint-quality:
+	quench check
+
+# Lint bin and lib files with ShellCheck
+lint-scripts:
 	@if ! command -v shellcheck >/dev/null 2>&1; then \
 		echo "Error: shellcheck not found. Install with: brew install shellcheck"; \
 		exit 1; \
@@ -97,16 +60,15 @@ lint-tests:
 	@shellcheck -x -S warning -e SC1090,SC2155,SC2164,SC2178 tests/unit/*.bats tests/helpers/*.bash
 	@echo "All test files pass ShellCheck!"
 
-# Check policy compliance (shellcheck disables, etc.)
-lint-policy:
-	@scripts/lint-policy
-
-# Run lint and all tests
-check: lint lint-policy test-all
-
-# Add license headers to source files
-license:
-	@scripts/license
+# Check if local BATS/libraries need installation
+test-init:
+	@if [ ! -d "tests/bats/bats-support" ] && echo "$(BATS_LIB_PATH)" | grep -q "tests/bats"; then \
+		echo "Installing BATS testing libraries..."; \
+		./tests/bats/install.sh; \
+	elif [ ! -x "$(BATS)" ] && [ ! -x "$(LOCAL_BATS)" ]; then \
+		echo "Installing BATS testing libraries..."; \
+		./tests/bats/install.sh; \
+	fi
 
 # Generate test fixtures (cached git repo, etc.)
 test-fixtures:
@@ -114,6 +76,23 @@ test-fixtures:
 		echo "Generating test fixtures..."; \
 		bash tests/fixtures/create-git-fixture.sh; \
 	fi
+
+# Run all tests
+test: test-init
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing --print-output-on-failure tests/unit/
+
+# Run a specific test file
+test-file: test-init
+	@if [ -z "$(FILE)" ]; then \
+		echo "Usage: make test-file FILE=tests/unit/foo.bats"; \
+		exit 1; \
+	fi
+	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing $(FILE)
+
+
+# Add license headers to source files
+license:
+	@scripts/license
 
 # Symlink v0 to ~/.local/bin for local development
 install:

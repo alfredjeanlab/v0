@@ -408,16 +408,24 @@ if [[ -n "${RESUME}" ]]; then
     if [[ "${MERGE_STATUS}" = "conflict" ]]; then
       echo "Retrying merge after conflict..."
       emit_event "merge:retry" "Retrying merge from pending_merge with conflict"
-      "${V0_DIR}/bin/v0-mergeq" --enqueue "${NAME}" 2>/dev/null || true
-      echo "Operation '${NAME}' re-added to merge queue"
+      if "${V0_DIR}/bin/v0-mergeq" --enqueue "${NAME}" 2>/dev/null; then
+        echo "Operation '${NAME}' re-added to merge queue"
+      else
+        echo "Warning: Failed to enqueue for merge"
+        echo "Run manually: v0 startup mergeq"
+      fi
       echo ""
       echo "Monitor merge queue:"
       echo "  v0 mergeq --status"
       echo "  v0 attach mergeq"
       exit 0
     else
-      "${V0_DIR}/bin/v0-mergeq" --enqueue "${NAME}" 2>/dev/null || true
-      echo "Operation '${NAME}' is pending merge (status: ${MERGE_STATUS})"
+      if "${V0_DIR}/bin/v0-mergeq" --enqueue "${NAME}" 2>/dev/null; then
+        echo "Operation '${NAME}' is pending merge (status: ${MERGE_STATUS})"
+      else
+        echo "Warning: Failed to enqueue for merge"
+        echo "Run manually: v0 startup mergeq"
+      fi
       echo ""
       echo "Monitor merge queue:"
       echo "  v0 mergeq --status"

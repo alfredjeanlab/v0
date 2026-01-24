@@ -1,15 +1,25 @@
 version = 1
 
 [project]
-name = "v0"
 source = ["bin/*", "lib/**/*.sh", "scripts/*"]
 tests = ["tests/**/*.bats", "tests/**/*_test.sh"]
 ignore = ["tests/bats/bats-*/**"]
 
-# Shell suppress: allow with justification comment
+[check.cloc]
+advice_test = """
+Can tests be refactored to reduce duplication?
+Consider using bats helpers or setup functions.
+"""
+exclude = [
+    # ONLY for intentionally large fixture/test data
+    # NEVER for tests or source files
+    "tests/bats/bats-*/**",  # vendored bats libraries
+]
+
+# Shell suppress: require justification comment for shellcheck disables
 [shell.suppress]
 check = "comment"
 
-# These shellcheck codes are allowed without comment
+# These shellcheck codes are allowed without comment in source
 [shell.suppress.source]
-allow = ["SC2012", "SC2090"]
+allow = ["SC2012", "SC2064", "SC2090"]

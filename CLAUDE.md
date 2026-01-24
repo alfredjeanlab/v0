@@ -19,20 +19,18 @@ tests/          # Bats unit tests
 
 ## Common Commands
 
-- `make test` - Run all unit tests
-- `make test-verbose` - Run tests with verbose output and print failures
+- `make check` - Run all lints and all tests
+- `make lint` - Run all lints
+- `make test` - Run all tests
 - `make test-file FILE=tests/unit/v0-common.bats` - Run a specific test file
-- `make lint` - Run ShellCheck on scripts
-- `make lint-tests` - Run ShellCheck on test files
-- `make check` - Run linter and all tests
 
-## Landing the plane
+## Landing the Plane
 
 Before committing changes:
 
-- [ ] Run linter: `make lint`
-- [ ] Run tests: `make test`
-  - All tests must pass
-  - New features need corresponding tests in `tests/unit/`
-  - If a test is not yet implemented, tag it: `# bats test_tags=todo:implement`
-- [ ] Commit with descriptive message: `git add <files> && git commit -m "..."`
+- [ ] Run `make check` which will
+  - `make lint` (ShellCheck on scripts and tests)
+  - `make test` (bats unit tests)
+  - `quench check` (shellcheck policy, cloc, etc.)
+- [ ] New features need corresponding tests in `tests/unit/`
+- [ ] If a test is not yet implemented, tag it: `# bats test_tags=todo:implement`

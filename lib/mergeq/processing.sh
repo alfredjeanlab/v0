@@ -142,6 +142,7 @@ mq_process_branch_merge() {
     fi
 
     # Try to merge
+    # OK: Capture exit code without aborting script
     set +e
     local merge_output
     merge_output=$(git merge --no-edit "${V0_GIT_REMOTE}/${branch}" 2>&1)
@@ -243,6 +244,7 @@ mq_process_merge() {
     sm_update_state "${op}" "merge_status" '"merging"'
 
     # Try to merge using v0 merge --resolve
+    # OK: Capture exit code without aborting script
     set +e
     local merge_output
     merge_output=$(V0_MERGEQ_CALLER=1 "${V0_DIR}/bin/v0-merge" "${worktree}" --resolve 2>&1)

@@ -65,12 +65,6 @@ source_mergeq() {
     source "${PROJECT_ROOT}/lib/mergeq/daemon.sh"
     source "${PROJECT_ROOT}/lib/mergeq/display.sh"
 
-    # Compatibility aliases for existing tests
-    # These map old function names to new mq_* prefixed functions
-    atomic_queue_update() { mq_atomic_queue_update "$@"; }
-    acquire_queue_lock() { mq_acquire_lock "$@"; }
-    release_queue_lock() { mq_release_lock "$@"; }
-
     dequeue_merge() {
         local next
         next=$(mq_get_next_pending)
@@ -133,50 +127,50 @@ source_mergeq() {
 }
 
 # ============================================================================
-# atomic_queue_update() tests
+# mq_atomic_queue_update() tests
 # ============================================================================
 
-@test "atomic_queue_update modifies queue file" {
+@test "mq_atomic_queue_update modifies queue file" {
     source_mergeq
 
     # Add an entry using atomic update
-    atomic_queue_update '.entries += [{"operation": "test-op", "priority": 0, "status": "pending"}]'
+    mq_atomic_queue_update '.entries += [{"operation": "test-op", "priority": 0, "status": "pending"}]'
 
     run jq -r '.entries[0].operation' "${QUEUE_FILE}"
     assert_success
     assert_output "test-op"
 }
 
-@test "atomic_queue_update preserves existing data" {
+@test "mq_atomic_queue_update preserves existing data" {
     source_mergeq
 
     # Add first entry
-    atomic_queue_update '.entries += [{"operation": "op1", "priority": 0, "status": "pending"}]'
+    mq_atomic_queue_update '.entries += [{"operation": "op1", "priority": 0, "status": "pending"}]'
 
     # Add second entry
-    atomic_queue_update '.entries += [{"operation": "op2", "priority": 1, "status": "pending"}]'
+    mq_atomic_queue_update '.entries += [{"operation": "op2", "priority": 1, "status": "pending"}]'
 
     run jq '.entries | length' "${QUEUE_FILE}"
     assert_success
     assert_output "2"
 }
 
-@test "atomic_queue_update handles invalid jq filter" {
+@test "mq_atomic_queue_update handles invalid jq filter" {
     source_mergeq
 
-    run atomic_queue_update 'invalid jq filter {'
+    run mq_atomic_queue_update 'invalid jq filter {'
     assert_failure
     assert_output --partial "Error"
 }
 
-@test "atomic_queue_update is atomic - temp file pattern" {
+@test "mq_atomic_queue_update is atomic - temp file pattern" {
     source_mergeq
 
     # Start with known state
     echo '{"version":1,"entries":[{"operation":"existing"}]}' > "${QUEUE_FILE}"
 
     # Update should preserve version and add entry
-    atomic_queue_update '.entries += [{"operation": "new"}]'
+    mq_atomic_queue_update '.entries += [{"operation": "new"}]'
 
     run jq '.version' "${QUEUE_FILE}"
     assert_output "1"
@@ -186,54 +180,54 @@ source_mergeq() {
 }
 
 # ============================================================================
-# acquire_queue_lock() / release_queue_lock() tests
+# mq_acquire_lock() / mq_release_lock() tests
 # ============================================================================
 
-@test "acquire_queue_lock creates lock file" {
+@test "mq_acquire_lock creates lock file" {
     source_mergeq
 
-    acquire_queue_lock
+    mq_acquire_lock
 
     assert_file_exists "${QUEUE_LOCK}"
 }
 
-@test "acquire_queue_lock writes PID to lock file" {
+@test "mq_acquire_lock writes PID to lock file" {
     source_mergeq
 
-    acquire_queue_lock
+    mq_acquire_lock
 
     run cat "${QUEUE_LOCK}"
     assert_output --partial "pid $$"
 }
 
-@test "acquire_queue_lock fails when lock held by running process" {
+@test "mq_acquire_lock fails when lock held by running process" {
     source_mergeq
 
     # Create lock with current PID (simulating another holder)
     echo "other-process (pid $$)" > "${QUEUE_LOCK}"
 
-    run acquire_queue_lock
+    run mq_acquire_lock
     assert_failure
     assert_output --partial "lock held by"
 }
 
-@test "acquire_queue_lock removes stale lock from dead process" {
+@test "mq_acquire_lock removes stale lock from dead process" {
     source_mergeq
 
     # Create lock with non-existent PID
     echo "dead-process (pid 99999999)" > "${QUEUE_LOCK}"
 
-    run acquire_queue_lock
+    run mq_acquire_lock
     assert_success
 }
 
-@test "release_queue_lock removes lock file" {
+@test "mq_release_lock removes lock file" {
     source_mergeq
 
-    acquire_queue_lock
+    mq_acquire_lock
     assert_file_exists "${QUEUE_LOCK}"
 
-    release_queue_lock
+    mq_release_lock
     assert_file_not_exists "${QUEUE_LOCK}"
 }
 
