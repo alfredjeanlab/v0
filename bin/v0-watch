@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/v0-common.sh"
+v0_load_config
 
 # Default configuration
 REFRESH_INTERVAL=5
@@ -129,9 +130,9 @@ while true; do
   [[ -t 1 ]] && clear
   show_header
   if [[ -n "${OPERATION_NAME}" ]]; then
-    "${SCRIPT_DIR}/v0-status" "${OPERATION_NAME}" --no-hints ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
+    "${SCRIPT_DIR}/v0-status" "${OPERATION_NAME}" --no-hints --max-ops "${V0_STATUS_LIMIT}" ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
   else
-    "${SCRIPT_DIR}/v0-status" --no-hints ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
+    "${SCRIPT_DIR}/v0-status" --no-hints --max-ops "${V0_STATUS_LIMIT}" ${FILTER_ARGS[@]+"${FILTER_ARGS[@]}"} 2>&1 || true
   fi
 
   # Check iteration limit (for testing)

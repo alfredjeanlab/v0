@@ -170,6 +170,7 @@ WATCH=""
 JSON=""
 RECENT=""
 NO_HINTS=""
+MAX_OPS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -183,6 +184,7 @@ while [[ $# -gt 0 ]]; do
     --json) JSON=1; shift ;;
     --recent) RECENT=1; shift ;;
     --no-hints) NO_HINTS=1; shift ;;
+    --max-ops) MAX_OPS="$2"; shift 2 ;;
     --prune|--prune-all)
       echo "Warning: $1 is deprecated. Use 'v0 prune' instead." >&2
       exec "${V0_DIR}/bin/v0-prune" "$@"
@@ -290,6 +292,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   total_ops=0
   # Phase 1 optimization: cache current timestamp once for all operations
   now_epoch=$(date +%s)
+  # Determine effective limit: --max-ops overrides, otherwise show all (use very high number)
+  effective_limit="${MAX_OPS:-99999}"
   if [[ ${#state_files[@]} -gt 0 ]]; then
     while IFS=$'\t' read -r name op_type phase created machine completed merge_queued merge_status merged_at completed_at after session worker_pid held held_at merge_resumed worktree_missing created_epoch completed_epoch merged_epoch held_epoch; do
       # Handle META line for max name length and pruning stats
@@ -433,7 +437,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       display_time=$(format_epoch_time "${last_epoch}" "${now_epoch}")
     fi
     printf "  %-${max_name_len}s %b%b%b%b%b ${C_DIM}(%s)${C_RESET}\n" "${display_name}" "${display_phase}" "${status_icon}" "${after_icon}" "${hold_icon}" "${merge_icon}" "${display_time}"
-    done < <(jq -rs --argjson limit "${V0_STATUS_LIMIT}" '
+    done < <(jq -rs --argjson limit "${effective_limit}" '
       # Phase 2: Helper function to convert ISO 8601 timestamp to epoch
       # Handles timestamps like "2026-01-22T10:30:45.123Z"
       def to_epoch:
@@ -519,8 +523,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     ' "${state_files[@]}")
 
     # Show summary line for pruned operations
-    if [[ ${total_ops} -gt ${V0_STATUS_LIMIT} ]]; then
-      pruned=$((total_ops - V0_STATUS_LIMIT))
+    if [[ ${total_ops} -gt ${effective_limit} ]]; then
+      pruned=$((total_ops - effective_limit))
       summary_parts=()
       [[ ${pruned_blocked} -gt 0 ]] && summary_parts+=("${pruned_blocked} blocked")
       [[ ${pruned_completed} -gt 0 ]] && summary_parts+=("${pruned_completed} completed")

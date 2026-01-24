@@ -833,12 +833,29 @@ EOF
     done
 }
 
-@test "status list limits to 15 operations by default" {
+@test "status list shows all operations by default" {
     # Create 20 operations
     create_numbered_operations 20 "executing"
 
-    # Run v0-status
+    # Run v0-status without --max-ops (should show all)
     run "$PROJECT_ROOT/bin/v0-status" --list --no-hints
+
+    assert_success
+    # Should show all 20 operation lines (each line starts with "  op")
+    local op_count
+    op_count=$(echo "$output" | grep -c "^  op" || true)
+    assert_equal "$op_count" "20"
+
+    # Should NOT show summary line (all shown)
+    [[ "$output" != *"... and"*"more"* ]]
+}
+
+@test "status list limits operations with --max-ops" {
+    # Create 20 operations
+    create_numbered_operations 20 "executing"
+
+    # Run v0-status with --max-ops 15
+    run "$PROJECT_ROOT/bin/v0-status" --list --no-hints --max-ops 15
 
     assert_success
     # Should show exactly 15 operation lines (each line starts with "  op")
@@ -927,19 +944,19 @@ EOF
     create_numbered_operations 7 "completed" "completed"
     create_numbered_operations 5 "merged" "merged"
 
-    run "$PROJECT_ROOT/bin/v0-status" --list --no-hints
+    run "$PROJECT_ROOT/bin/v0-status" --list --no-hints --max-ops 15
 
     assert_success
     # Should show summary line with pruned count
     [[ "$output" == *"... and 5 more"* ]]
 }
 
-@test "status list respects V0_STATUS_LIMIT env var" {
+@test "status list respects --max-ops argument" {
     # Create 10 operations
     create_numbered_operations 10 "executing"
 
-    # Run with V0_STATUS_LIMIT=5
-    V0_STATUS_LIMIT=5 run "$PROJECT_ROOT/bin/v0-status" --list --no-hints
+    # Run with --max-ops 5
+    run "$PROJECT_ROOT/bin/v0-status" --list --no-hints --max-ops 5
 
     assert_success
     # Should show exactly 5 operation lines
@@ -1006,7 +1023,7 @@ EOF
     done
 
     # Set limit to show 8 operations (should show all open: 7, plus 1 blocked)
-    V0_STATUS_LIMIT=8 run "$PROJECT_ROOT/bin/v0-status" --list --no-hints
+    run "$PROJECT_ROOT/bin/v0-status" --list --no-hints --max-ops 8
 
     assert_success
 
