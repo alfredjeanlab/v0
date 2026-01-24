@@ -144,7 +144,7 @@ echo "Checking for in-progress issues to reopen..."
 for worker in "worker:fix" "worker:chore"; do
   if [[ -n "${DRY_RUN}" ]]; then
     # Show what would be reopened
-    issues=$(wk list --status in_progress --assignee "${worker}" -f json 2>/dev/null | jq -r '.issues[].id' || true)
+    issues=$(wk list --status in_progress --assignee "${worker}" -o json 2>/dev/null | jq -r '.issues[].id' || true)
     while IFS= read -r issue_id; do
       [[ -z "${issue_id}" ]] && continue
       echo "Would reopen: ${issue_id} (was assigned to ${worker})"

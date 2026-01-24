@@ -30,7 +30,7 @@ fi
 
 # Check for abandoned work (in_progress bugs indicate work started but not finished)
 # Note: Ready bugs are expected - the workflow is one bug per session
-IN_PROGRESS_BUGS=$(wk list --type bug --status in_progress -f json 2>/dev/null | jq -r '.issues[].id' 2>/dev/null || true)
+IN_PROGRESS_BUGS=$(wk list --type bug --status in_progress -o json 2>/dev/null | jq -r '.issues[].id' 2>/dev/null || true)
 # Count non-empty lines properly
 if [[ -z "$(echo "$IN_PROGRESS_BUGS" | tr -d '[:space:]')" ]]; then
   IN_PROGRESS=0

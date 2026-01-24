@@ -43,14 +43,14 @@ get_completed_bugs() {
   local json_output limit_arg=""
   [[ -n "${limit}" ]] && limit_arg="--limit ${limit}"
   # Use wk list filter to efficiently get only recently updated bugs
-  json_output=$(wk list --type bug --status "done" --format json -q "updated < ${since_hours}h" ${limit_arg:+"${limit_arg}"} 2>/dev/null) || return
+  json_output=$(wk list --type bug --status "done" --output json -q "updated < ${since_hours}h" ${limit_arg:+"${limit_arg}"} 2>/dev/null) || return
   [[ -z "${json_output}" ]] && return
 
   # wk list --format json doesn't include updated_at, so we fetch from wk show for display
   echo "${json_output}" | jq -r '.issues[] | .id' 2>/dev/null | while read -r id; do
     [[ -z "${id}" ]] && continue
     local issue_json title updated_at _fields
-    issue_json=$(wk show "${id}" --format json 2>/dev/null) || continue
+    issue_json=$(wk show "${id}" --output json 2>/dev/null) || continue
     # Batch read title and updated_at in single jq call
     _fields=$(echo "${issue_json}" | jq -r '[.title // .summary // "Untitled", .updated_at // .closed_at // ""] | join("|")' 2>/dev/null)
     IFS='|' read -r title updated_at <<< "${_fields}"
@@ -68,14 +68,14 @@ get_completed_chores() {
   local json_output limit_arg=""
   [[ -n "${limit}" ]] && limit_arg="--limit ${limit}"
   # Use wk list filter to efficiently get only recently updated chores
-  json_output=$(wk list --type chore --status "done" --format json -q "updated < ${since_hours}h" ${limit_arg:+"${limit_arg}"} 2>/dev/null) || return
+  json_output=$(wk list --type chore --status "done" --output json -q "updated < ${since_hours}h" ${limit_arg:+"${limit_arg}"} 2>/dev/null) || return
   [[ -z "${json_output}" ]] && return
 
   # wk list --format json doesn't include updated_at, so we fetch from wk show for display
   echo "${json_output}" | jq -r '.issues[] | .id' 2>/dev/null | while read -r id; do
     [[ -z "${id}" ]] && continue
     local issue_json title updated_at _fields
-    issue_json=$(wk show "${id}" --format json 2>/dev/null) || continue
+    issue_json=$(wk show "${id}" --output json 2>/dev/null) || continue
     # Batch read title and updated_at in single jq call
     _fields=$(echo "${issue_json}" | jq -r '[.title // .summary // "Untitled", .updated_at // .closed_at // ""] | join("|")' 2>/dev/null)
     IFS='|' read -r title updated_at <<< "${_fields}"

@@ -48,7 +48,7 @@ sm_is_merge_ready() {
   # if ! sm_all_issues_closed "${op}"; then
   #   return 1
   # fi
-  wk done $(wk list --label "plan:${op}" -f ids 2>/dev/null) 2>/dev/null || true
+  wk done $(wk list --label "plan:${op}" -o ids 2>/dev/null) 2>/dev/null || true
 
   return 0
 }
@@ -106,7 +106,7 @@ sm_merge_ready_reason() {
   #   echo "open_issues:${total}"
   #   return
   # fi
-  wk done $(wk list --label "plan:${op}" -f ids 2>/dev/null) 2>/dev/null || true
+  wk done $(wk list --label "plan:${op}" -o ids 2>/dev/null) 2>/dev/null || true
 
   echo "ready"
 }

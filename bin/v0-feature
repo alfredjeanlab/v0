@@ -557,7 +557,7 @@ else
     ISSUE_PATTERN=$(v0_issue_pattern)
     EXISTING_FEATURE=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE_ARG}" | head -1 | tr -d '`' || true)
     if [[ -n "${EXISTING_FEATURE}" ]]; then
-      FEATURE_STATUS=$(wk show "${EXISTING_FEATURE}" --format json 2>/dev/null | jq -r '.status // "unknown"' || echo "unknown")
+      FEATURE_STATUS=$(wk show "${EXISTING_FEATURE}" --output json 2>/dev/null | jq -r '.status // "unknown"' || echo "unknown")
       if [[ "${FEATURE_STATUS}" = "open" ]] || [[ "${FEATURE_STATUS}" = "in_progress" ]]; then
         update_state "epic_id" "\"${EXISTING_FEATURE}\""
         update_state "phase" '"queued"'

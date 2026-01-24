@@ -583,7 +583,7 @@ detect_note_without_fix() {
 
   # Check for notes on the bug (wk show returns JSON with notes array)
   local notes_count
-  notes_count=$(wk show "${bug_id}" -f json 2>/dev/null | jq '.notes | length' 2>/dev/null || echo "0")
+  notes_count=$(wk show "${bug_id}" -o json 2>/dev/null | jq '.notes | length' 2>/dev/null || echo "0")
 
   if [[ "${notes_count}" -eq 0 ]]; then
     return 1  # No notes, normal exit
@@ -607,7 +607,7 @@ reopen_worker_issues() {
 
   # Find in-progress issues assigned to this worker
   local issues
-  issues=$(wk list --status in_progress --assignee "${worker_assignee}" -f json 2>/dev/null | jq -r '.issues[].id' || true)
+  issues=$(wk list --status in_progress --assignee "${worker_assignee}" -o json 2>/dev/null | jq -r '.issues[].id' || true)
 
   if [[ -z "${issues}" ]]; then
     return 0
