@@ -621,6 +621,9 @@ if [[ "${PHASE}" = "init" ]]; then
   fi
   { read -r TREE_DIR; read -r WORKTREE; } <<< "${tree_output}"
 
+  # Link worktree to main repo's shared workspace
+  wk init --workspace "${V0_ROOT}/.wok" --path "${TREE_DIR}" 2>/dev/null || true
+
   PLAN_SESSION=$(v0_session_name "${NAME}" "plan")
 
   if [[ -n "${DRY_RUN}" ]]; then
@@ -901,6 +904,9 @@ if [[ "${PHASE}" = "queued" ]] && [[ -z "${ENQUEUE_ONLY}" ]]; then
       exit 1
     fi
     { read -r TREE_DIR; read -r _WORKTREE; } <<< "${tree_output}"
+
+    # Link worktree to main repo's shared workspace
+    wk init --workspace "${V0_ROOT}/.wok" --path "${TREE_DIR}" 2>/dev/null || true
 
     FEATURE_ID=$(get_state epic_id)
 
