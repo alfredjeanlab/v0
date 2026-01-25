@@ -23,7 +23,7 @@ POLLING_LOG="/tmp/v0-${PROJECT}-fix-polling.log"
 
 usage() {
   cat <<'EOF'
-Usage: v0 fix <bug description>
+Usage: v0 fix [options] <bug description>
        v0 fix --start
        v0 fix --stop
        v0 fix --status
@@ -41,12 +41,17 @@ Commands:
   --history       Show completed bugs and their fix details
 
 Options:
+  --after <ids>   Block this bug until specified issues complete
+                  Accepts comma-separated IDs (e.g., v0-123,v0-456)
+                  Can be specified multiple times to add more blockers
   --history       Show last 10 completed bugs
   --history=N     Show last N completed bugs
   --history=all   Show all completed bugs
 
 Examples:
   v0 fix "Login button doesn't work on mobile"
+  v0 fix --after v0-123 "Bug that depends on v0-123"
+  v0 fix --after v0-1,v0-2 "Bug blocked by multiple issues"
   v0 fix --start
   v0 fix --status
   v0 fix --logs
@@ -525,6 +530,15 @@ report_bug() {
     exit 1
   fi
 
+  # Add blocked-by dependencies if --after was specified
+  if [[ ${#AFTER_IDS[@]} -gt 0 ]]; then
+    if ! wk dep "${id}" blocked-by "${AFTER_IDS[@]}" 2>/dev/null; then
+      echo "Warning: Failed to add dependencies"
+    else
+      echo "  Blocked by: ${AFTER_IDS[*]}"
+    fi
+  fi
+
   echo -e "${C_GREEN}Created bug:${C_RESET} ${C_CYAN}${id}${C_RESET}"
   echo "  Title:"
   echo "${title}" | fmt -w 76 | sed 's/^/    /'
@@ -627,65 +641,123 @@ show_history() {
   done <<< "${bugs}"
 }
 
-# Main
-case "${1:-}" in
-  --start)
+# Parse arguments
+AFTER_IDS=()
+ACTION=""
+POSITIONAL=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --after)
+      # Split comma-separated IDs and add to array
+      IFS=',' read -ra ids <<< "$2"
+      AFTER_IDS+=("${ids[@]}")
+      shift 2
+      ;;
+    --after=*)
+      IFS=',' read -ra ids <<< "${1#--after=}"
+      AFTER_IDS+=("${ids[@]}")
+      shift
+      ;;
+    --start)
+      ACTION="start"
+      shift
+      ;;
+    --stop)
+      ACTION="stop"
+      shift
+      ;;
+    --status)
+      ACTION="status"
+      shift
+      ;;
+    --logs)
+      ACTION="logs"
+      shift
+      ;;
+    --err)
+      ACTION="err"
+      shift
+      ;;
+    --history)
+      ACTION="history"
+      HISTORY_LIMIT=10
+      shift
+      ;;
+    --history=*)
+      ACTION="history"
+      arg="${1#--history=}"
+      if [[ "${arg}" = "all" ]]; then
+        HISTORY_LIMIT=999999
+      else
+        HISTORY_LIMIT="${arg}"
+      fi
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    --)
+      echo "Error: Invalid argument '--'. Did you mean '--status'?"
+      usage
+      ;;
+    --*)
+      echo "Error: Unknown flag '$1'"
+      echo "Run 'v0 fix --help' for usage"
+      exit 1
+      ;;
+    -*)
+      echo "Error: Unknown flag '$1'"
+      echo "Run 'v0 fix --help' for usage"
+      exit 1
+      ;;
+    attach)
+      # Handle 'v0 fix attach' as alias for 'v0 attach fix'
+      exec "${SCRIPT_DIR}/v0-attach" fix
+      ;;
+    status)
+      # Auto-correct 'v0 fix status' to 'v0 fix --status'
+      ACTION="status"
+      shift
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Main dispatch
+case "${ACTION}" in
+  start)
     start_worker
     ;;
-  --stop)
+  stop)
     stop_worker
     ;;
-  --status)
+  status)
     show_status
-    ;;
-  --logs)
-    show_logs
-    ;;
-  --err)
-    show_errors
-    ;;
-  --history)
-    show_history 10
-    ;;
-  --history=*)
-    arg="${1#--history=}"
-    if [[ "${arg}" = "all" ]]; then
-      show_history 999999
-    else
-      show_history "${arg}"
+    if [[ ${#POSITIONAL[@]} -eq 0 ]]; then
+      echo ""
+      echo "Run with --help for more options"
     fi
     ;;
-  -h|--help)
-    usage
+  logs)
+    show_logs
+    ;;
+  err)
+    show_errors
+    ;;
+  history)
+    show_history "${HISTORY_LIMIT}"
     ;;
   "")
-    show_status
-    echo ""
-    echo "Run with --help for more options"
-    ;;
-  --)
-    echo "Error: Invalid argument '--'. Did you mean '--status'?"
-    usage
-    ;;
-  --*)
-    echo "Error: Unknown flag '$1'"
-    echo "Run 'v0 fix --help' for usage"
-    exit 1
-    ;;
-  -*)
-    echo "Error: Unknown flag '$1'"
-    echo "Run 'v0 fix --help' for usage"
-    exit 1
-    ;;
-  attach)
-    # Handle 'v0 fix attach' as alias for 'v0 attach fix'
-    exec "${SCRIPT_DIR}/v0-attach" fix
-    ;;
-  status)
-    # Auto-correct 'v0 fix status' to 'v0 fix --status'
-    show_status
-    ;;
-  *)
-    report_bug "$@"
+    if [[ ${#POSITIONAL[@]} -gt 0 ]]; then
+      report_bug "${POSITIONAL[*]}"
+    else
+      show_status
+      echo ""
+      echo "Run with --help for more options"
+    fi
     ;;
 esac

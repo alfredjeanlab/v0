@@ -178,3 +178,129 @@ teardown() {
         assert_output --partial "testproject" || true
     fi
 }
+
+# ============================================================================
+# --after Flag Tests
+# ============================================================================
+
+@test "v0-chore: --after flag appears in help" {
+    run "${V0_CHORE}" --help 2>&1 || true
+    assert_output --partial "--after"
+    assert_output --partial "Block this chore"
+}
+
+@test "v0-chore: --after with single ID creates chore with dependency" {
+    # Create mock wk that tracks calls
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_CHORE}" --after test-123 "Chore blocked by task" 2>&1 || true
+
+    # Verify wk dep was called with blocked-by
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "dep"
+        assert_output --partial "blocked-by"
+        assert_output --partial "test-123"
+    fi
+}
+
+@test "v0-chore: --after accepts comma-separated IDs" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_CHORE}" --after test-1,test-2 "Chore with multiple blockers" 2>&1 || true
+
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "test-1"
+        assert_output --partial "test-2"
+    fi
+}
+
+@test "v0-chore: multiple --after flags are merged" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_CHORE}" --after test-1 --after test-2 "Chore with merged blockers" 2>&1 || true
+
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "test-1"
+        assert_output --partial "test-2"
+    fi
+}
+
+@test "v0-chore: --after=value syntax works" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_CHORE}" --after=test-123 "Chore with equals syntax" 2>&1 || true
+
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "test-123"
+    fi
+}
+
+@test "v0-chore: shows 'Blocked by' when --after succeeds" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_CHORE}" --after test-123 "Blocked chore" 2>&1 || true
+    assert_output --partial "Blocked by"
+}
