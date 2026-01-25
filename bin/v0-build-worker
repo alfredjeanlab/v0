@@ -18,11 +18,11 @@
 set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
 # Source nudge functions for idle session monitoring
-source "${V0_DIR}/lib/nudge-common.sh"
+source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 usage() {
   cat <<EOF
