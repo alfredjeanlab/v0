@@ -71,9 +71,15 @@ pp_do_push() {
     agent_branch=$(pp_get_agent_branch)
     source_commit=$(git rev-parse "${source_branch}")
 
-    # Push with force to reset agent branch
+    # Push with force to reset remote agent branch
     if git push "${remote}" "${source_branch}:${agent_branch}" --force; then
         pp_set_last_push_commit "${source_commit}"
+
+        # Also update local agent branch if it exists
+        if git rev-parse --verify "${agent_branch}" >/dev/null 2>&1; then
+            git branch -f "${agent_branch}" "${source_commit}"
+        fi
+
         echo "Agent branch ${agent_branch} reset to ${source_branch}"
         return 0
     fi
