@@ -113,11 +113,6 @@ Examples:
 Tmux sessions:
   Workers run in tmux sessions. Use 'v0 attach <type>' to connect.
   Ctrl-B D to detach, Ctrl-B [ to scroll (q to exit scroll mode).
-
-Configuration:
-  Each project needs a .v0.rc file at its root. Run 'v0 init' to create one.
-
-For more information, see: https://github.com/alfredjeanlab/v0
 EOF
 }
 
