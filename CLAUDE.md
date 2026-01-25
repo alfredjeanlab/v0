@@ -7,17 +7,16 @@ Orchestrates Claude workers in tmux sessions for planning, feature development, 
 ## Directory Structure
 
 ```
-bin/                    # CLI commands (v0, v0-plan, v0-feature, v0-fix, etc.)
+bin/                    # CLI commands (v0, v0-plan, v0-build, v0-fix, etc.)
 packages/               # Modular shell library packages
   core/                 #   Foundation: config, logging, git-verify
   state/                #   State machine for operation lifecycle
   mergeq/               #   Merge queue management
   merge/                #   Merge conflict resolution
   worker/               #   Worker utilities: nudge, coffee, try-catch
-  feature/              #   Feature workflow orchestration
   hooks/                #   Claude Code hooks (stop-*.sh, notify-progress.sh)
   status/               #   Status display formatting
-  cli/                  #   Entry point, templates, prompts
+  cli/                  #   Entry point, templates, prompts, build workflow
   test-support/         #   Test helpers, fixtures, mocks
 tests/                  # Integration tests (v0-cancel.bats, v0-merge.bats, etc.)
 vendor/                 # Third-party tools (bats)
@@ -30,8 +29,8 @@ Packages follow a layered dependency model (see `packages/CLAUDE.md`):
 - **Layer 0**: core
 - **Layer 1**: state, mergeq
 - **Layer 2**: merge, worker
-- **Layer 3**: feature, hooks, status
-- **Layer 4**: cli
+- **Layer 3**: hooks, status
+- **Layer 4**: cli (includes build workflow)
 
 ## Running Tests
 
@@ -41,6 +40,11 @@ scripts/test core cli           # Run specific packages
 scripts/test v0-cancel          # Run specific integration test
 scripts/test --bust v0-merge    # Clear cache for one target
 ```
+
+## Commits
+
+Use conventional commit format: `type(scope): description`
+Types: feat, fix, chore, docs, test, refactor
 
 ## Common Commands
 
@@ -54,10 +58,3 @@ scripts/test --bust v0-merge    # Clear cache for one target
 - [ ] New lib code needs unit tests in `packages/<pkg>/tests/`
 - [ ] New bin commands need integration tests in `tests/`
 - [ ] Tag unimplemented tests: `# bats test_tags=todo:implement`
-
-## Commits
-
-Use conventional commit format: `type(scope): description`
-Types: feat, fix, chore, docs, test, refactor
-
-

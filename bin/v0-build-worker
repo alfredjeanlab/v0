@@ -1,0 +1,706 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-build-worker - Background worker for v0 build pipeline
+#
+# This script runs the plan -> decompose -> build pipeline in the background.
+# It is launched by v0-build and handles all phase transitions autonomously.
+#
+# Key responsibilities:
+# - Execute plan phase (launch v0-plan in tmux, wait for completion)
+# - Execute decompose phase (launch v0-decompose in tmux, wait for completion)
+# - Execute build phase (launch Claude worker in tmux)
+# - Update state after each phase transition
+# - Handle errors gracefully (update state to 'failed' with error message)
+# - Handle signals (update state to 'interrupted' on SIGTERM/SIGINT)
+# - Log all output to worker.log
+
+set -e
+
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${V0_DIR}/lib/v0-common.sh"
+v0_load_config
+
+# Source nudge functions for idle session monitoring
+source "${V0_DIR}/lib/nudge-common.sh"
+
+usage() {
+  cat <<EOF
+Usage: v0-build-worker <name>
+
+Background worker for v0 build pipeline (plan -> decompose -> build).
+This script is launched by v0-build and should not be called directly.
+
+Arguments:
+  name    Name of the operation to process
+EOF
+  exit 1
+}
+
+NAME="$1"
+[[ -z "${NAME}" ]] && usage
+
+STATE_DIR="${BUILD_DIR}/operations/${NAME}"
+STATE_FILE="${STATE_DIR}/state.json"
+LOG_FILE="${STATE_DIR}/logs/worker.log"
+
+if [[ ! -f "${STATE_FILE}" ]]; then
+  echo "Error: No operation found for '${NAME}'"
+  exit 1
+fi
+
+mkdir -p "${STATE_DIR}/logs"
+
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+log() { echo "[$(date '+%H:%M:%S')] $*"; }
+
+get_state() {
+  jq -r ".$1 // empty" "${STATE_FILE}"
+}
+
+update_state() {
+  local key="$1"
+  local value="$2"
+  local tmp
+  tmp=$(mktemp)
+  jq ".${key} = ${value}" "${STATE_FILE}" > "${tmp}" && mv "${tmp}" "${STATE_FILE}"
+}
+
+emit_event() {
+  local event="$1"
+  local details="$2"
+  log "${event}: ${details}"
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ${event}: ${details}" >> "${STATE_DIR}/logs/events.log"
+}
+
+is_after_op_merged() {
+  local op="$1"
+  local phase
+  phase=$(sm_get_phase "${op}")
+  [[ "${phase}" = "merged" ]]
+}
+
+get_blocker_phase() {
+  local op="$1"
+  local phase
+  phase=$(sm_get_phase "${op}")
+  echo "${phase:-unknown}"
+}
+
+create_done_script() {
+  local target_dir="$1"
+  local exit_file="${2:-}"
+
+  if [[ -n "${exit_file}" ]]; then
+    cat > "${target_dir}/done" <<DONE_SCRIPT
+#!/bin/bash
+echo "0" > '${exit_file}'
+find_claude() {
+  local pid=\$1
+  while [[ -n "\${pid}" ]] && [[ "\${pid}" != "1" ]]; do
+    local cmd=\$(ps -o comm= -p \${pid} 2>/dev/null)
+    if [[ "\${cmd}" == *"claude"* ]]; then
+      echo "\${pid}"
+      return
+    fi
+    pid=\$(ps -o ppid= -p \${pid} 2>/dev/null | tr -d ' ')
+  done
+}
+CLAUDE_PID=\$(find_claude \$\$)
+if [[ -n "\${CLAUDE_PID}" ]]; then
+  kill -TERM "\${CLAUDE_PID}" 2>/dev/null || true
+fi
+exit 0
+DONE_SCRIPT
+  else
+    cat > "${target_dir}/done" <<'DONE_SCRIPT'
+#!/bin/bash
+find_claude() {
+  local pid=$1
+  while [[ -n "${pid}" ]] && [[ "${pid}" != "1" ]]; do
+    local cmd=$(ps -o comm= -p ${pid} 2>/dev/null)
+    if [[ "${cmd}" == *"claude"* ]]; then
+      echo "${pid}"
+      return
+    fi
+    pid=$(ps -o ppid= -p ${pid} 2>/dev/null | tr -d ' ')
+  done
+}
+CLAUDE_PID=$(find_claude $$)
+if [[ -n "${CLAUDE_PID}" ]]; then
+  kill -TERM "${CLAUDE_PID}" 2>/dev/null || true
+fi
+exit 0
+DONE_SCRIPT
+  fi
+  chmod +x "${target_dir}/done"
+}
+
+ERROR_MSG=""
+INTERRUPTED=""
+
+handle_signal() {
+  log "Received termination signal"
+  INTERRUPTED=1
+  ERROR_MSG=""
+}
+trap handle_signal SIGTERM SIGINT
+
+cleanup() {
+  sm_update_state "${NAME}" "worker_pid" "null"
+  if [[ -n "${INTERRUPTED}" ]]; then
+    # Use state machine transition for interrupted state
+    sm_transition_to_interrupted "${NAME}" 2>/dev/null || {
+      # Fall back to direct update if transition fails (e.g., from terminal state)
+      sm_update_state "${NAME}" "phase" '"interrupted"'
+      sm_emit_event "${NAME}" "worker:interrupted" "Worker was terminated by signal"
+    }
+    log "Worker interrupted"
+  elif [[ -n "${ERROR_MSG}" ]]; then
+    # Use state machine transition for failed state
+    sm_transition_to_failed "${NAME}" "${ERROR_MSG}" 2>/dev/null || {
+      # Fall back to direct update if transition fails
+      sm_update_state "${NAME}" "phase" '"failed"'
+      sm_update_state "${NAME}" "error" "$(printf '%s' "${ERROR_MSG}" | jq -Rs .)"
+      sm_emit_event "${NAME}" "worker:failed" "${ERROR_MSG}"
+    }
+  fi
+  log "Background worker cleanup complete"
+}
+trap cleanup EXIT
+
+# Check hold before starting new phases
+# Returns 0 if can proceed, 1 if held
+check_hold_before_phase() {
+  if sm_is_held "${NAME}"; then
+    log "Operation is held, pausing worker"
+    sm_emit_event "${NAME}" "hold:paused" "Worker paused due to hold"
+    return 1
+  fi
+  return 0
+}
+
+run_plan_phase() {
+  log "Starting plan phase"
+  ensure_nudge_running
+
+  local PROMPT
+  PROMPT=$(get_state prompt)
+  local SAFE
+  SAFE=$(get_state safe)
+
+  FEATURE_BRANCH=$(v0_expand_branch "${V0_FEATURE_BRANCH}" "${NAME}")
+  if ! tree_output=$("${V0_DIR}/bin/v0-tree" "${FEATURE_BRANCH}"); then
+    ERROR_MSG="Failed to create worktree for ${FEATURE_BRANCH}"
+    return 1
+  fi
+  { read -r TREE_DIR; read -r WORKTREE; } <<< "${tree_output}"
+
+  PLAN_SESSION=$(v0_session_name "${NAME}" "plan")
+
+  if tmux has-session -t "${PLAN_SESSION}" 2>/dev/null; then
+    log "Plan session '${PLAN_SESSION}' already running, waiting for completion..."
+  else
+    emit_event "plan:starting" "Creating implementation plan"
+
+    printf '%s' "${PROMPT}" > "${STATE_DIR}/prompt.txt"
+    create_done_script "${STATE_DIR}" "${STATE_DIR}/logs/plan.exit"
+
+    V0_SAFE_EXPORT=""
+    [[ "${SAFE}" = "true" ]] && V0_SAFE_EXPORT="export V0_SAFE=1"
+
+    cat > "${STATE_DIR}/run-plan.sh" <<EOF
+#!/bin/bash
+cd '${WORKTREE}'
+export V0_ROOT='${V0_ROOT}'
+${V0_SAFE_EXPORT}
+PROMPT="\$(cat '${STATE_DIR}/prompt.txt')"
+script -q '${STATE_DIR}/logs/plan.log' '${V0_DIR}/bin/v0-plan' '${NAME}' "\${PROMPT}" --direct
+EXIT_CODE=\$?
+[[ ! -f '${STATE_DIR}/logs/plan.exit' ]] && echo \${EXIT_CODE} > '${STATE_DIR}/logs/plan.exit'
+EOF
+    chmod +x "${STATE_DIR}/run-plan.sh"
+    tmux new-session -d -s "${PLAN_SESSION}" -c "${TREE_DIR}" "${STATE_DIR}/run-plan.sh"
+  fi
+
+  update_state "tmux_session" "\"${PLAN_SESSION}\""
+  # Write session marker and project root for nudge to find this session
+  echo "${V0_ROOT}" > "${TREE_DIR}/.worker-project-root"
+  write_session_marker "${TREE_DIR}" "${PLAN_SESSION}"
+
+  IDLE_COUNT=0
+  IDLE_THRESHOLD=6
+  LAST_MTIME=""
+  while tmux has-session -t "${PLAN_SESSION}" 2>/dev/null; do
+    if [[ -f "${STATE_DIR}/logs/plan.exit" ]]; then
+      tmux kill-session -t "${PLAN_SESSION}" 2>/dev/null || true
+      break
+    fi
+    sleep 2
+    # Find which plan file exists for mtime check
+    PLAN_FILE=""
+    if [[ -f "${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md" ]]; then
+      PLAN_FILE="${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md"
+    elif [[ -f "${WORKTREE}/${V0_PLANS_DIR}/${NAME}.md" ]]; then
+      PLAN_FILE="${WORKTREE}/${V0_PLANS_DIR}/${NAME}.md"
+    elif [[ -f "${PLANS_DIR}/${NAME}.md" ]]; then
+      PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+    fi
+    if [[ -n "${PLAN_FILE}" ]]; then
+      CURRENT_MTIME=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null || echo "0")
+      if [[ "${CURRENT_MTIME}" = "${LAST_MTIME}" ]]; then
+        IDLE_COUNT=$((IDLE_COUNT + 1))
+        if [[ ${IDLE_COUNT} -ge ${IDLE_THRESHOLD} ]]; then
+          emit_event "plan:idle_complete" "Plan file exists and agent idle, terminating session"
+          tmux kill-session -t "${PLAN_SESSION}" 2>/dev/null || true
+          echo "0" > "${STATE_DIR}/logs/plan.exit"
+          break
+        fi
+      else
+        IDLE_COUNT=0
+      fi
+      LAST_MTIME="${CURRENT_MTIME}"
+    fi
+  done
+
+  # Clean ANSI escape sequences from plan.log
+  v0_clean_log_file "${STATE_DIR}/logs/plan.log"
+
+  if [[ -f "${STATE_DIR}/logs/plan.exit" ]]; then
+    PLAN_EXIT=$(cat "${STATE_DIR}/logs/plan.exit")
+    rm -f "${STATE_DIR}/logs/plan.exit"
+  else
+    PLAN_EXIT=1
+  fi
+
+  mkdir -p "${PLANS_DIR}"
+  PLAN_FOUND=""
+  if [[ -f "${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md" ]]; then
+    PLAN_FOUND="${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md"
+  elif [[ -f "${WORKTREE}/${V0_PLANS_DIR}/${NAME}.md" ]]; then
+    PLAN_FOUND="${WORKTREE}/${V0_PLANS_DIR}/${NAME}.md"
+  elif [[ -f "${PLANS_DIR}/${NAME}.md" ]]; then
+    PLAN_FOUND="${PLANS_DIR}/${NAME}.md"
+  fi
+
+  if [[ ${PLAN_EXIT} -ne 0 ]]; then
+    if [[ -n "${PLAN_FOUND}" ]]; then
+      emit_event "plan:recovered" "Exit code ${PLAN_EXIT} but plan file exists at ${PLAN_FOUND}"
+      log "Note: Process exited with code ${PLAN_EXIT} but plan file was created successfully"
+    else
+      ERROR_MSG="Plan creation failed. Check ${STATE_DIR}/logs/plan.log for details."
+      return 1
+    fi
+  fi
+
+  if [[ -z "${PLAN_FOUND}" ]]; then
+    ERROR_MSG="Plan file was not created at ${V0_PLANS_DIR}/${NAME}.md"
+    return 1
+  fi
+
+  if [[ "${PLAN_FOUND}" != "${PLANS_DIR}/${NAME}.md" ]]; then
+    /bin/cp "${PLAN_FOUND}" "${PLANS_DIR}/${NAME}.md"
+    emit_event "plan:copied" "Copied from ${PLAN_FOUND} to main repo"
+  fi
+
+  # Auto-commit the plan file (unless already committed or worktree is dirty with other changes)
+  if git -C "${V0_ROOT}" diff --quiet -- "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null && \
+     git -C "${V0_ROOT}" ls-files --error-unmatch "${V0_PLANS_DIR}/${NAME}.md" &>/dev/null; then
+    emit_event "plan:commit" "Already committed"
+  elif git -C "${V0_ROOT}" check-ignore -q "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+    emit_event "plan:commit" "Skipped (gitignored)"
+  elif git -C "${V0_ROOT}" add "${V0_PLANS_DIR}/${NAME}.md" && \
+       git -C "${V0_ROOT}" commit -m "Add plan: ${NAME}" -m "Auto-committed by v0 feature"; then
+    emit_event "plan:commit" "Committed ${V0_PLANS_DIR}/${NAME}.md"
+  else
+    emit_event "plan:commit" "Failed to commit (worktree may have other changes)"
+  fi
+
+  rm -f "${STATE_DIR}/done"
+
+  # Use state machine transition to planned phase
+  sm_transition_to_planned "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
+  log "Plan phase complete"
+}
+
+run_decompose_phase() {
+  log "Starting decompose phase"
+  ensure_nudge_running
+
+  local SAFE
+  SAFE=$(get_state safe)
+
+  emit_event "decompose:starting" "Converting plan to issues"
+
+  FEATURE_BRANCH=$(v0_expand_branch "${V0_FEATURE_BRANCH}" "${NAME}")
+  TREE_DIR="${V0_STATE_DIR}/tree/${FEATURE_BRANCH}"
+  WORKTREE="${TREE_DIR}/${REPO_NAME}"
+  mkdir -p "${TREE_DIR}/.claude"
+  if [[ -f "${V0_ROOT}/.claude/settings.json" ]]; then
+    cp -f "${V0_ROOT}/.claude/settings.json" "${TREE_DIR}/.claude/settings.local.json"
+  fi
+
+  PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+  if [[ ! -f "${PLAN_FILE}" ]]; then
+    ERROR_MSG="Plan file not found: ${PLAN_FILE}"
+    return 1
+  fi
+
+  FEATURE_SESSION=$(v0_session_name "${NAME}" "decompose")
+
+  if tmux has-session -t "${FEATURE_SESSION}" 2>/dev/null; then
+    log "Feature session '${FEATURE_SESSION}' already running, waiting for completion..."
+  else
+    log "Starting decompose step"
+
+    [[ ! -f "${TREE_DIR}/done" ]] && create_done_script "${TREE_DIR}" "${STATE_DIR}/logs/feature.exit"
+
+    V0_SAFE_EXPORT=""
+    [[ "${SAFE}" = "true" ]] && V0_SAFE_EXPORT="export V0_SAFE=1"
+
+    cat > "${STATE_DIR}/run-feature.sh" <<EOF
+#!/bin/bash
+cd '${V0_ROOT}'
+export V0_ROOT='${V0_ROOT}'
+${V0_SAFE_EXPORT}
+script -q '${STATE_DIR}/logs/feature.log' '${V0_DIR}/bin/v0-decompose' '${PLAN_FILE}'
+EXIT_CODE=\$?
+[[ ! -f '${STATE_DIR}/logs/feature.exit' ]] && echo \${EXIT_CODE} > '${STATE_DIR}/logs/feature.exit'
+EOF
+    chmod +x "${STATE_DIR}/run-feature.sh"
+    tmux new-session -d -s "${FEATURE_SESSION}" -c "${TREE_DIR}" "${STATE_DIR}/run-feature.sh"
+  fi
+
+  update_state "tmux_session" "\"${FEATURE_SESSION}\""
+  # Write session marker and project root for nudge to find this session
+  echo "${V0_ROOT}" > "${TREE_DIR}/.worker-project-root"
+  write_session_marker "${TREE_DIR}" "${FEATURE_SESSION}"
+
+  PLAN_MTIME_BEFORE=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null)
+
+  IDLE_COUNT=0
+  IDLE_THRESHOLD=6
+  LAST_MTIME=""
+  ISSUE_PATTERN=$(v0_issue_pattern)
+  PLAN_HAS_FEATURE=""
+  grep -qE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" 2>/dev/null && PLAN_HAS_FEATURE=1
+  while tmux has-session -t "${FEATURE_SESSION}" 2>/dev/null; do
+    if [[ -f "${STATE_DIR}/logs/feature.exit" ]]; then
+      tmux kill-session -t "${FEATURE_SESSION}" 2>/dev/null || true
+      break
+    fi
+    sleep 2
+    PLAN_MTIME_NOW=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null)
+    if [[ "${PLAN_MTIME_NOW}" != "${PLAN_MTIME_BEFORE}" ]] || [[ -n "${PLAN_HAS_FEATURE}" ]]; then
+      if grep -qE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" 2>/dev/null; then
+        CURRENT_MTIME=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null || echo "0")
+        if [[ "${CURRENT_MTIME}" = "${LAST_MTIME}" ]]; then
+          IDLE_COUNT=$((IDLE_COUNT + 1))
+          if [[ ${IDLE_COUNT} -ge ${IDLE_THRESHOLD} ]]; then
+            emit_event "feature:idle_complete" "Plan has feature ID and agent idle, terminating session"
+            tmux kill-session -t "${FEATURE_SESSION}" 2>/dev/null || true
+            echo "0" > "${STATE_DIR}/logs/feature.exit"
+            break
+          fi
+        else
+          IDLE_COUNT=0
+        fi
+        LAST_MTIME="${CURRENT_MTIME}"
+      fi
+    fi
+  done
+
+  # Clean ANSI escape sequences from feature.log
+  v0_clean_log_file "${STATE_DIR}/logs/feature.log"
+
+  if [[ -f "${STATE_DIR}/logs/feature.exit" ]]; then
+    FEATURE_EXIT=$(cat "${STATE_DIR}/logs/feature.exit")
+    rm -f "${STATE_DIR}/logs/feature.exit"
+  else
+    FEATURE_EXIT=1
+  fi
+
+  ISSUE_PATTERN=$(v0_issue_pattern)
+  FEATURE_ID=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" | head -1 | tr -d '`' || true)
+  ISSUES_CREATED=$(wk list --label "plan:${NAME}" 2>/dev/null | wc -l | tr -d ' ')
+
+  if [[ ${FEATURE_EXIT} -ne 0 ]]; then
+    if [[ -n "${FEATURE_ID}" ]] || [[ "${ISSUES_CREATED}" -gt 0 ]]; then
+      emit_event "decompose:recovered" "Exit code ${FEATURE_EXIT} but work completed (feature: ${FEATURE_ID:-none}, issues: ${ISSUES_CREATED})"
+      log "Note: Process exited with code ${FEATURE_EXIT} but issue creation appears successful"
+    else
+      ERROR_MSG="Decomposition failed. Check ${STATE_DIR}/logs/feature.log for details."
+      return 1
+    fi
+  fi
+
+  if [[ -n "${FEATURE_ID}" ]]; then
+    update_state "epic_id" "\"${FEATURE_ID}\""
+  else
+    emit_event "decompose:warning" "No feature ID found in plan file"
+    log "Warning: Could not extract feature ID from plan file"
+  fi
+
+  LABELS=()
+  while IFS= read -r label; do
+    [[ -n "${label}" ]] && LABELS+=("${label}")
+  done < <(jq -r '.labels[]' "${STATE_FILE}" 2>/dev/null || true)
+
+  if [[ ${#LABELS[@]} -gt 0 ]]; then
+    for issue_id in $(wk list --label "plan:${NAME}" 2>/dev/null || true); do
+      for label in "${LABELS[@]}"; do
+        wk label "${issue_id}" "${label}" 2>/dev/null || true
+      done
+    done
+  fi
+
+  # Auto-commit plan file changes from decompose (unless gitignored)
+  # Log whether feature ID is present in plan file for debugging
+  if [[ -n "${FEATURE_ID}" ]]; then
+    if grep -qF "${FEATURE_ID}" "${V0_ROOT}/${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+      emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} found in plan file"
+    else
+      emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} NOT in plan file (may not have been written)"
+    fi
+  fi
+
+  if git -C "${V0_ROOT}" diff --quiet -- "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+    emit_event "decompose:commit" "No changes to commit (plan file unchanged)"
+  elif git -C "${V0_ROOT}" check-ignore -q "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
+    emit_event "decompose:commit" "Skipped (gitignored)"
+  elif git -C "${V0_ROOT}" add "${V0_PLANS_DIR}/${NAME}.md" && \
+       git -C "${V0_ROOT}" commit -m "Update plan: ${NAME}" -m "Auto-committed by v0 decompose"; then
+    emit_event "decompose:commit" "Committed ${V0_PLANS_DIR}/${NAME}.md"
+  else
+    # Capture more details about why commit failed
+    git_status=$(git -C "${V0_ROOT}" status --porcelain -- "${V0_PLANS_DIR}/${NAME}.md" 2>&1 || true)
+    emit_event "decompose:commit" "Failed to commit (status: ${git_status:-empty})"
+  fi
+
+  rm -f "${STATE_DIR}/done"
+
+  # Use state machine transition to queued phase
+  FEATURE_ID=$(sm_read_state "${NAME}" "epic_id")
+  sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
+  log "Decompose phase complete"
+}
+
+run_build_phase() {
+  log "Starting build phase"
+
+  local ENQUEUE_ONLY
+  ENQUEUE_ONLY=$(get_state enqueue_only)
+
+  if [[ "${ENQUEUE_ONLY}" = "true" ]]; then
+    log "Enqueue-only mode, skipping build phase"
+    return 0
+  fi
+
+  local AFTER
+  AFTER=$(get_state after)
+  local EAGER
+  EAGER=$(get_state eager)
+
+  if [[ "${EAGER}" = "true" ]] && [[ -n "${AFTER}" ]] && [[ "${AFTER}" != "null" ]]; then
+    if ! is_after_op_merged "${AFTER}"; then
+      # Use state machine transition to blocked phase
+      sm_transition_to_blocked "${NAME}" "${AFTER}" "queued"
+      log "Planning complete. Will execute after '${AFTER}' merges."
+      log "Current phase: $(get_blocker_phase "${AFTER}")"
+      return 0
+    fi
+  fi
+
+  emit_event "execute:starting" "Launching agent in tmux"
+
+  SESSION=$(v0_session_name "${NAME}" "feature")
+
+  if tmux has-session -t "${SESSION}" 2>/dev/null; then
+    log "Error: tmux session '${SESSION}' already exists"
+    return 0
+  fi
+
+  tree_output=""
+  FEATURE_BRANCH=$(v0_expand_branch "${V0_FEATURE_BRANCH}" "${NAME}")
+  if ! tree_output=$("${V0_DIR}/bin/v0-tree" "${FEATURE_BRANCH}"); then
+    ERROR_MSG="Failed to create worktree for ${FEATURE_BRANCH}"
+    return 1
+  fi
+  { read -r TREE_DIR; read -r _WORKTREE; } <<< "${tree_output}"
+
+  FEATURE_ID=$(get_state epic_id)
+
+  M4_ARGS="-D EPIC_ID=${FEATURE_ID} -D PLAN_LABEL=plan:${NAME} -D HAS_PLAN=1 -D V0_GIT_REMOTE=${V0_GIT_REMOTE}"
+  m4 ${M4_ARGS} "${V0_DIR}/lib/templates/claude.build.m4" > "${TREE_DIR}/CLAUDE.md"
+  emit_event "claude.md:created" "${TREE_DIR}/CLAUDE.md"
+
+  HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-build.sh"
+  cat > "${TREE_DIR}/.claude/settings.local.json" <<SETTINGS_EOF
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOOK_SCRIPT}"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "wk prime"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "wk prime"
+          }
+        ]
+      }
+    ]
+  }
+}
+SETTINGS_EOF
+
+  PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+  if [[ -f "${PLAN_FILE}" ]]; then
+    /bin/cp "${PLAN_FILE}" "${TREE_DIR}/PLAN.md"
+    emit_event "plan:copied" "PLAN.md"
+  fi
+
+  create_done_script "${TREE_DIR}"
+
+  local NO_MERGE
+  NO_MERGE=$(get_state merge_queued)
+  [[ "${NO_MERGE}" = "false" ]] && NO_MERGE=1 || NO_MERGE=""
+
+  local SAFE
+  SAFE=$(get_state safe)
+  CLAUDE_ARGS="--model opus --dangerously-skip-permissions --allow-dangerously-skip-permissions"
+  [[ "${SAFE}" = "true" ]] && CLAUDE_ARGS="--model opus --permission-mode acceptEdits"
+
+  cat > "${TREE_DIR}/.claude/on-complete.sh" <<WRAPPER
+#!/bin/bash
+STATE_FILE="${STATE_FILE}"
+BUILD_ROOT="${V0_ROOT}"
+OP_NAME="${NAME}"
+V0_DIR="${V0_DIR}"
+PROJECT="${PROJECT}"
+
+COMPLETED_JSON=\$(wk list --output json --label "plan:\${OP_NAME}" --status done 2>/dev/null | jq '[.issues[].id]' || echo '[]')
+if [[ "\${COMPLETED_JSON}" != "[]" ]]; then
+  tmp=\$(mktemp)
+  jq ".completed = \${COMPLETED_JSON}" "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
+fi
+
+tmp=\$(mktemp)
+jq '.phase = "completed" | .completed_at = "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"' "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
+
+if [[ "\$(jq -r '.merge_queued // false' "\${STATE_FILE}")" = "true" ]]; then
+  echo "=== Merge queued, preparing for merge ==="
+  tmp=\$(mktemp)
+  jq '.phase = "pending_merge"' "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
+
+  if V0_ROOT="\${BUILD_ROOT}" "\${V0_DIR}/bin/v0-mergeq" --enqueue "\${OP_NAME}"; then
+    echo "Operation '\${OP_NAME}' added to merge queue"
+  else
+    echo "Warning: Failed to enqueue for merge"
+    echo "Run manually: v0 startup mergeq"
+  fi
+fi
+WRAPPER
+  chmod +x "${TREE_DIR}/.claude/on-complete.sh"
+
+  # Ensure nudge worker is running and write session marker
+  ensure_nudge_running
+  write_session_marker "${TREE_DIR}" "${SESSION}"
+
+  tmux new-session -d -s "${SESSION}" -c "${TREE_DIR}" \
+    "V0_OP='${NAME}' V0_PLAN_LABEL='plan:${NAME}' V0_WORKTREE='${TREE_DIR}/${REPO_NAME}' V0_ROOT='${V0_ROOT}' claude ${CLAUDE_ARGS} 'Implement the plan. See CLAUDE.md and PLAN.md for details.'; \
+     '${TREE_DIR}/.claude/on-complete.sh'; \
+     echo ''; echo 'Session complete. Closing in 5 seconds...'; sleep 5"
+
+  # Store worktree first (needed by sm_is_merge_ready later)
+  sm_update_state "${NAME}" "worktree" "\"${TREE_DIR}/${REPO_NAME}\""
+  # Use state machine transition to executing phase
+  sm_transition_to_executing "${NAME}" "${SESSION}"
+
+  log "Build phase started: tmux session ${SESSION}"
+  log "Watch live: v0 attach feature ${NAME}"
+}
+
+main() {
+  log "Starting background worker for ${NAME}"
+
+  sm_update_state "${NAME}" "worker_started_at" "\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
+
+  PHASE=$(sm_get_phase "${NAME}")
+  log "Current phase: ${PHASE}"
+
+  case "${PHASE}" in
+    init)
+      check_hold_before_phase || exit 0
+      run_plan_phase || exit 1
+      check_hold_before_phase || exit 0
+      run_decompose_phase || exit 1
+      check_hold_before_phase || exit 0
+      run_build_phase || exit 1
+      ;;
+    planned)
+      check_hold_before_phase || exit 0
+      run_decompose_phase || exit 1
+      check_hold_before_phase || exit 0
+      run_build_phase || exit 1
+      ;;
+    queued)
+      check_hold_before_phase || exit 0
+      run_build_phase || exit 1
+      ;;
+    blocked)
+      log "Operation is blocked, waiting for dependency"
+      ;;
+    failed|interrupted|cancelled)
+      log "Recovering from ${PHASE} state"
+      # Use state machine to determine resume phase and clear error
+      RESUME_PHASE=$(sm_get_resume_phase "${NAME}")
+      sm_clear_error_state "${NAME}"
+      log "Resuming from ${RESUME_PHASE}"
+      sm_emit_event "${NAME}" "worker:recovered" "Resuming from ${PHASE} at ${RESUME_PHASE}"
+      case "${RESUME_PHASE}" in
+        queued)
+          run_build_phase || exit 1
+          ;;
+        planned)
+          run_decompose_phase || exit 1
+          run_build_phase || exit 1
+          ;;
+        init)
+          run_plan_phase || exit 1
+          run_decompose_phase || exit 1
+          run_build_phase || exit 1
+          ;;
+      esac
+      ;;
+    *)
+      log "Phase '${PHASE}' does not require worker processing"
+      ;;
+  esac
+
+  ERROR_MSG=""
+  log "Background worker completed successfully"
+}
+
+main

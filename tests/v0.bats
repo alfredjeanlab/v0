@@ -85,21 +85,21 @@ load '../packages/test-support/helpers/test_helper'
     assert_output --partial ".v0.rc"
 }
 
-@test "v0 resume shows feature usage when config exists" {
-    # With config, resume without args shows feature usage
+@test "v0 resume shows build usage when config exists" {
+    # With config, resume without args shows build usage
     create_v0rc "testproject" "test"
     run "${PROJECT_ROOT}/bin/v0" resume
     assert_failure  # usage exits with status 1
-    assert_output --partial "Usage: v0 feature"
+    assert_output --partial "Usage: v0 build"
     assert_output --partial "--resume"
 }
 
-@test "v0 resume --help shows feature help" {
+@test "v0 resume --help shows build help" {
     create_v0rc "testproject" "test"
     run "${PROJECT_ROOT}/bin/v0" resume --help
     # usage() exits with status 1, but it shows the help
     assert_failure
-    assert_output --partial "Usage: v0 feature"
+    assert_output --partial "Usage: v0 build"
     assert_output --partial "--resume"
 }
 
@@ -119,12 +119,12 @@ load '../packages/test-support/helpers/test_helper'
 # Alias tests
 # ============================================================================
 
-@test "v0 feat routes to feature" {
+@test "v0 feat routes to build" {
     create_v0rc "testproject" "test"
     run "${PROJECT_ROOT}/bin/v0" feat --help
     # usage() exits 1 but shows help
     assert_failure
-    assert_output --partial "Usage: v0 feature"
+    assert_output --partial "Usage: v0 build"
 }
 
 @test "v0 decomp routes to decompose" {
