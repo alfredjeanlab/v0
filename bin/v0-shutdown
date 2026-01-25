@@ -323,6 +323,15 @@ if coffee_is_running; then
   fi
 fi
 
+# Check if prune daemon is running
+if prune_daemon_running; then
+  found_anything=1
+  if [[ -n "${DRY_RUN}" ]]; then
+    echo ""
+    echo "Would stop prune daemon (pid: $(prune_daemon_pid))"
+  fi
+fi
+
 if [[ -z "${found_anything}" ]]; then
   echo "No v0 sessions running for project: ${PROJECT}"
   exit 0
