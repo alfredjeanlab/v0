@@ -13,20 +13,18 @@ create_feature_issue() {
   local name="$1"
   local title="Plan: ${name}"
 
-  # Create feature issue with placeholder description
-  local issue_id output wk_err
+  # Create feature issue with placeholder description, -o id returns just the issue ID
+  local issue_id wk_err
   wk_err=$(mktemp)
-  output=$(wk new feature "${title}" --description "Planning in progress..." 2>"${wk_err}") || {
+  issue_id=$(wk new feature "${title}" --description "Planning in progress..." -o id 2>"${wk_err}") || {
     echo "create_feature_issue: wk new failed: $(cat "${wk_err}")" >&2
     rm -f "${wk_err}"
     return 1
   }
   rm -f "${wk_err}"
 
-  issue_id=$(echo "${output}" | grep -oE '\) [a-zA-Z0-9-]+:' | sed 's/^) //; s/:$//')
-
   if [[ -z "${issue_id}" ]]; then
-    echo "create_feature_issue: failed to extract issue ID from: ${output}" >&2
+    echo "create_feature_issue: wk new returned empty ID" >&2
     return 1
   fi
 
@@ -60,21 +58,18 @@ file_plan_issue() {
     # Update existing issue
     issue_id="${existing_id}"
   else
-    # Create new issue (backwards compatibility)
-    # Output format: "Created [feature] (todo) v0-abc1: Title"
-    local output wk_err
+    # Create new issue (backwards compatibility), -o id returns just the issue ID
+    local wk_err
     wk_err=$(mktemp)
-    output=$(wk new feature "${title}" 2>"${wk_err}") || {
+    issue_id=$(wk new feature "${title}" -o id 2>"${wk_err}") || {
       echo "file_plan_issue: wk new failed: $(cat "${wk_err}")" >&2
       rm -f "${wk_err}"
       return 1
     }
     rm -f "${wk_err}"
 
-    issue_id=$(echo "${output}" | grep -oE '\) [a-zA-Z0-9-]+:' | sed 's/^) //; s/:$//')
-
     if [[ -z "${issue_id}" ]]; then
-      echo "file_plan_issue: failed to extract issue ID from: ${output}" >&2
+      echo "file_plan_issue: wk new returned empty ID" >&2
       return 1
     fi
   fi

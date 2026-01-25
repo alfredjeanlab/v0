@@ -511,9 +511,9 @@ report_bug() {
   # Create the bug (allow failure so we can show the error)
   local output id exit_code
   if [[ -n "${description}" ]]; then
-    output=$(wk new bug "${title}" --description "${description}" 2>&1) && exit_code=0 || exit_code=$?
+    output=$(wk new bug "${title}" --description "${description}" -o id 2>&1) && exit_code=0 || exit_code=$?
   else
-    output=$(wk new bug "${title}" 2>&1) && exit_code=0 || exit_code=$?
+    output=$(wk new bug "${title}" -o id 2>&1) && exit_code=0 || exit_code=$?
   fi
 
   if [[ "${exit_code}" -ne 0 ]]; then
@@ -522,14 +522,11 @@ report_bug() {
     exit 1
   fi
 
-  # Extract issue ID - match any prefix-hexid format (e.g., proj-abc1, v0-9e51)
-  # This is more robust than v0_issue_pattern which uses ISSUE_PREFIX from .v0.rc,
-  # while wk may use a different prefix from .wok/config.toml
-  id=$(echo "${output}" | v0_grep_extract '[a-zA-Z0-9]+-[a-f0-9]+' | head -1)
+  # -o id returns just the issue ID
+  id="${output}"
 
   if [[ -z "${id}" ]]; then
     echo "Error: Failed to create bug (no ID returned)"
-    echo "${output}"
     exit 1
   fi
 

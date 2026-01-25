@@ -24,7 +24,19 @@ case "$1" in
         type="$2"
         title="$3"
         issue_id="${MOCK_WK_NEW_ID:-mock-abc1}"
-        echo "Created [${type}] (todo) ${issue_id}: ${title}"
+        # Check for -o id flag
+        output_id_only=false
+        for arg in "$@"; do
+            if [[ "$arg" == "id" ]] && [[ "${prev_arg:-}" == "-o" ]]; then
+                output_id_only=true
+            fi
+            prev_arg="$arg"
+        done
+        if $output_id_only; then
+            echo "${issue_id}"
+        else
+            echo "Created [${type}] (todo) ${issue_id}: ${title}"
+        fi
         exit 0
         ;;
     "edit")
