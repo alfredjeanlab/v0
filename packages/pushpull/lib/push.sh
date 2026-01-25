@@ -35,6 +35,11 @@ pp_agent_has_diverged() {
     # Fetch latest state
     git fetch "${remote}" "${agent_branch}" 2>/dev/null || true
 
+    # If remote ref doesn't exist, we haven't diverged (nothing to diverge from)
+    if ! git rev-parse --verify "${remote_ref}" >/dev/null 2>&1; then
+        return 1  # Not diverged
+    fi
+
     # If agent is an ancestor of HEAD, we've already incorporated all agent commits
     # (either via pull, merge, or local commits that include the agent's work)
     if git merge-base --is-ancestor "${remote_ref}" HEAD 2>/dev/null; then

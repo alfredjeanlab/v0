@@ -56,6 +56,19 @@ teardown() {
     skip "Requires more complex git setup with remote"
 }
 
+@test "pp_agent_has_diverged returns 1 when remote ref does not exist" {
+    # Initialize a git repo without any remote refs
+    init_mock_git_repo
+
+    # Set remote and branch variables (no actual remote needed)
+    export V0_GIT_REMOTE="origin"
+    export V0_DEVELOP_BRANCH="agent"
+
+    # Run the function - should return 1 (not diverged) since origin/agent doesn't exist
+    run pp_agent_has_diverged
+    assert_failure  # exit code 1 means "not diverged"
+}
+
 @test "pp_show_divergence displays commits since last push" {
     # bats test_tags=todo:implement
     skip "Requires more complex git setup with remote"
