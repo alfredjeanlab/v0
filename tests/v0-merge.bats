@@ -509,6 +509,71 @@ EOF
     refute_output --partial "previously failed to merge"
 }
 
+@test "v0-merge: verification_failed extracts branch from worktree path when no branch field" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Create a bare "remote" repo
+    local remote_dir="${TEST_TEMP_DIR}/remote.git"
+    git init --bare --quiet "${remote_dir}"
+
+    # Initialize git repo
+    cd "${project_dir}"
+    git init --quiet
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    git remote add origin "${remote_dir}"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit --quiet -m "Initial commit"
+    git push --quiet -u origin HEAD
+
+    # Get the default branch name
+    local default_branch
+    default_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    # Update .v0.rc to use the correct develop branch
+    echo "V0_DEVELOP_BRANCH=\"${default_branch}\"" >> "${project_dir}/.v0.rc"
+
+    # Create feature branch and push to remote, but don't merge
+    git checkout -b feature/extract-test --quiet
+    echo "feature" > feature.txt
+    git add feature.txt
+    git commit --quiet -m "Feature commit"
+    git push --quiet -u origin feature/extract-test
+    git checkout "${default_branch}" --quiet
+
+    # Delete local feature branch (simulating worktree cleanup)
+    git branch -D feature/extract-test
+
+    # Delete local remote-tracking ref (simulating stale refs)
+    git update-ref -d refs/remotes/origin/feature/extract-test
+
+    # Create operation state with verification_failed but NO branch field
+    # The worktree path contains the branch info: .../tree/feature/extract-test/v0
+    mkdir -p "${project_dir}/.v0/build/operations/extract-test"
+    cat > "${project_dir}/.v0/build/operations/extract-test/state.json" <<EOF
+{
+    "name": "extract-test",
+    "phase": "completed",
+    "worktree": "${TEST_TEMP_DIR}/tree/feature/extract-test/v0",
+    "merge_status": "verification_failed",
+    "merge_commit": "0000000000000000000000000000000000000000"
+}
+EOF
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR -u MERGEQ_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_MERGE}"'" extract-test 2>&1
+    '
+    # Should extract branch from worktree path and find remote branch
+    assert_success
+    assert_output --partial "Found remote branch"
+    assert_output --partial "feature/extract-test"
+    assert_output --partial "attempting merge"
+    refute_output --partial "previously failed to merge"
+}
+
 # ============================================================================
 # Non-Fast-Forward Merge Tests
 # ============================================================================

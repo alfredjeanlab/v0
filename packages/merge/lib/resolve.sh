@@ -127,6 +127,24 @@ mg_resolve_operation_to_worktree() {
     local branch
     branch=$(sm_read_state "${op_name}" "branch")
 
+    # If branch not in state, try to extract from worktree path
+    # Worktree path pattern: .../tree/<branch-prefix>/<op-name>/<repo-name>
+    # e.g., .../tree/feature/wok-blocked-by/v0 -> feature/wok-blocked-by
+    if [[ -z "${branch}" ]] || [[ "${branch}" = "null" ]]; then
+        if [[ -n "${worktree}" ]] && [[ "${worktree}" != "null" ]]; then
+            local tree_dir op_dir_name branch_prefix
+            tree_dir="$(dirname "${worktree}")"
+            op_dir_name="$(basename "${tree_dir}")"
+            branch_prefix="$(basename "$(dirname "${tree_dir}")")"
+            # Only use if prefix looks like a branch type
+            if [[ "${branch_prefix}" == "feature" ]] || [[ "${branch_prefix}" == "fix" ]] || \
+               [[ "${branch_prefix}" == "chore" ]] || [[ "${branch_prefix}" == "bugfix" ]] || \
+               [[ "${branch_prefix}" == "hotfix" ]]; then
+                branch="${branch_prefix}/${op_dir_name}"
+            fi
+        fi
+    fi
+
     if [[ -z "${worktree}" ]] || [[ "${worktree}" = "null" ]] || [[ ! -d "${worktree}" ]]; then
         # Worktree missing - try branch-only merge if branch exists
         if [[ -n "${branch}" ]] && [[ "${branch}" != "null" ]]; then
