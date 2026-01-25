@@ -403,6 +403,7 @@ run_build_phase() {
   emit_event "claude.md:created" "${TREE_DIR}/CLAUDE.md"
 
   HOOK_SCRIPT="${V0_DIR}/packages/hooks/lib/stop-build.sh"
+  mkdir -p "${TREE_DIR}/.claude"
   cat > "${TREE_DIR}/.claude/settings.local.json" <<SETTINGS_EOF
 {
   "hooks": {
