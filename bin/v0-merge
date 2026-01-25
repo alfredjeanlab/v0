@@ -140,41 +140,20 @@ if mg_has_conflicts "${BRANCH}"; then
 
         # Check success by outcome
         if mg_worktree_has_conflicts "${WORKTREE}"; then
-            echo "Error: Conflicts still exist after resolution attempt"
-            if [[ -f "${MG_RESOLVE_LOG:-}" ]]; then
-                echo "Check log file: ${MG_RESOLVE_LOG}"
-            fi
-            if [[ "${USING_TEMP_WORKTREE}" = true ]]; then
-                mg_cleanup_temp_worktree
-            fi
-            exit 1
+            mg_fail_resolution "Conflicts still exist after resolution attempt"
         fi
 
         # Check if rebase is still in progress
         worktree_git_dir=$(mg_get_worktree_git_dir "${WORKTREE}")
         if [[ -d "${worktree_git_dir}/rebase-merge" ]] || [[ -d "${worktree_git_dir}/rebase-apply" ]]; then
-            echo "Error: Rebase not completed. Claude should have run 'git rebase --continue'"
-            if [[ -f "${MG_RESOLVE_LOG:-}" ]]; then
-                echo "Check log file: ${MG_RESOLVE_LOG}"
-            fi
-            if [[ "${USING_TEMP_WORKTREE}" = true ]]; then
-                mg_cleanup_temp_worktree
-            fi
-            exit 1
+            mg_fail_resolution "Rebase not completed. Claude should have run 'git rebase --continue'"
         fi
 
         # After successful resolution, merge using mg_do_merge
         if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
             rm -f "${MG_RESOLVE_LOG:-}"
-
-            if [[ "${USING_TEMP_WORKTREE}" = true ]]; then
-                mg_cleanup_temp_worktree
-                mg_cleanup_branch_only "${BRANCH}"
-            else
-                mg_cleanup_worktree "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
-            fi
-
+            mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" "${USING_TEMP_WORKTREE}"
             mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after resolution)"
         fi
     else
@@ -193,14 +172,14 @@ else
         # With worktree - use standard merge flow
         if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
-            mg_cleanup_worktree "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
+            mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
             mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"
         fi
     else
         # Without worktree - use fast-forward merge
         if mg_do_merge_without_worktree "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
-            mg_cleanup_branch_only "${BRANCH}"
+            mg_cleanup_merge "" "" "${BRANCH}"
             mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"
         else
             # Fast-forward failed - need worktree for rebase
@@ -213,8 +192,7 @@ else
                 # Do the merge with the temp worktree
                 if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
                     merge_commit=$(mg_get_merge_commit)
-                    mg_cleanup_temp_worktree
-                    mg_cleanup_branch_only "${BRANCH}"
+                    mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" true
                     mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after rebase)"
                 else
                     mg_cleanup_temp_worktree

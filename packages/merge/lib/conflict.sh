@@ -271,6 +271,7 @@ mg_create_temp_worktree_for_resolution() {
 
 # mg_cleanup_temp_worktree
 # Clean up temporary worktree after resolution
+# Safe to call even if no temp worktree exists
 mg_cleanup_temp_worktree() {
     if [[ -n "${MG_TEMP_WORKTREE:-}" ]] && [[ -d "${MG_TEMP_WORKTREE}" ]]; then
         git worktree remove "${MG_TEMP_WORKTREE}" --force 2>/dev/null || true
@@ -278,6 +279,19 @@ mg_cleanup_temp_worktree() {
         MG_TEMP_WORKTREE=""
         MG_TEMP_TREE_DIR=""
     fi
+}
+
+# mg_fail_resolution <message>
+# Print error message, show log file hint if available, cleanup temp worktree, and exit
+# This centralizes the error-exit pattern for resolution failures
+mg_fail_resolution() {
+    local message="$1"
+    echo "Error: ${message}"
+    if [[ -f "${MG_RESOLVE_LOG:-}" ]]; then
+        echo "Check log file: ${MG_RESOLVE_LOG}"
+    fi
+    mg_cleanup_temp_worktree
+    exit 1
 }
 
 # mg_resolve_uncommitted_changes <worktree> <tree_dir> <branch>
