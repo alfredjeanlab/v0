@@ -75,9 +75,17 @@ pp_do_push() {
     if git push "${remote}" "${source_branch}:${agent_branch}" --force; then
         pp_set_last_push_commit "${source_commit}"
 
-        # Also update local agent branch if it exists
+        # Also update local agent branch if it exists and isn't in use
         if git rev-parse --verify "${agent_branch}" >/dev/null 2>&1; then
-            git branch -f "${agent_branch}" "${source_commit}"
+            # Check if branch is checked out in a worktree
+            local worktree_path
+            worktree_path=$(git worktree list --porcelain | grep -A1 "^worktree " | grep -B1 "branch refs/heads/${agent_branch}$" | head -1 | sed 's/^worktree //')
+            if [[ -n "${worktree_path}" ]]; then
+                # Branch is in use by a worktree; skip local update (remote was already updated)
+                true
+            else
+                git branch -f "${agent_branch}" "${source_commit}"
+            fi
         fi
 
         echo "Agent branch ${agent_branch} reset to ${source_branch}"

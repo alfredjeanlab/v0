@@ -120,3 +120,52 @@ teardown() {
     agent_commit_after=$(git rev-parse "v0/develop")
     [[ "$agent_commit_after" == "$main_commit" ]]
 }
+
+@test "pp_do_push skips local update when branch is in worktree" {
+    # Set up git repo
+    init_mock_git_repo
+
+    # Create a bare remote to push to
+    git clone --bare "${TEST_TEMP_DIR}/project" "${TEST_TEMP_DIR}/remote.git" --quiet
+    cd "${TEST_TEMP_DIR}/project"
+    git remote set-url origin "${TEST_TEMP_DIR}/remote.git"
+
+    # Create agent branch at current commit
+    git branch "v0/develop"
+    local initial_commit
+    initial_commit=$(git rev-parse "v0/develop")
+
+    # Create a worktree using the agent branch
+    git worktree add "${TEST_TEMP_DIR}/agent-worktree" "v0/develop" --quiet
+
+    # Make a new commit on main
+    echo "new content" > newfile.txt
+    git add newfile.txt
+    git commit -m "New commit on main" --quiet
+
+    local main_commit
+    main_commit=$(git rev-parse main)
+
+    # Set up environment
+    export V0_GIT_REMOTE="origin"
+    export V0_DEVELOP_BRANCH="v0/develop"
+
+    # Run push - should succeed even though v0/develop is in a worktree
+    run pp_do_push "main"
+    assert_success
+
+    # Verify remote was updated (check the bare repo)
+    cd "${TEST_TEMP_DIR}/remote.git"
+    local remote_commit
+    remote_commit=$(git rev-parse "v0/develop")
+    [[ "$remote_commit" == "$main_commit" ]]
+
+    # Local branch should still be at old commit (can't update due to worktree)
+    cd "${TEST_TEMP_DIR}/project"
+    local local_agent_commit
+    local_agent_commit=$(git rev-parse "v0/develop")
+    [[ "$local_agent_commit" == "$initial_commit" ]]
+
+    # Clean up worktree
+    git worktree remove "${TEST_TEMP_DIR}/agent-worktree" --force
+}
