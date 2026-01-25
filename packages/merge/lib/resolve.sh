@@ -84,6 +84,29 @@ mg_resolve_operation_to_worktree() {
             fi
         fi
 
+        # Check operation status to give a more informative error
+        local phase merge_status
+        phase=$(sm_read_state "${op_name}" "phase")
+        merge_status=$(sm_read_state "${op_name}" "merge_status")
+
+        if [[ "${phase}" = "merged" ]] || [[ "${merge_status}" = "merged" ]]; then
+            echo "Error: Operation '${op_name}' has already been merged" >&2
+            return 1
+        fi
+
+        if [[ "${phase}" = "cancelled" ]]; then
+            echo "Error: Operation '${op_name}' has been cancelled" >&2
+            return 1
+        fi
+
+        if [[ "${merge_status}" = "conflict" ]] || [[ "${merge_status}" = "failed" ]] || [[ "${merge_status}" = "verification_failed" ]]; then
+            echo "Error: Operation '${op_name}' previously failed to merge (status: ${merge_status})" >&2
+            echo "" >&2
+            echo "The worktree and branch have been cleaned up." >&2
+            echo "To retry, recreate the operation or manually create a new branch." >&2
+            return 1
+        fi
+
         echo "Error: Worktree not found and branch doesn't exist for '${op_name}'" >&2
         return 1
     fi
