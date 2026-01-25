@@ -48,7 +48,16 @@ case "$1" in
         exit 0
         ;;
     "show")
-        # Return basic JSON for show command
+        # Support MOCK_DATA_DIR for per-issue mock data
+        issue_id="$2"
+        if [[ -n "${MOCK_DATA_DIR:-}" ]]; then
+            mock_file="${MOCK_DATA_DIR}/wk/${issue_id}.json"
+            if [[ -f "${mock_file}" ]]; then
+                cat "${mock_file}"
+                exit 0
+            fi
+        fi
+        # Default: return basic JSON
         echo '{"status": "open"}'
         exit 0
         ;;
