@@ -616,9 +616,9 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       # Show full sections for non-empty queues
       echo ""
 
-      # Bugfix section
+      # Bugs section
       fix_status=$(get_worker_status "fix" "${all_sessions}" "${all_polling}")
-      show_worker_header_compact "Bugfix" "${fix_status}" "${bugs_empty}"
+      show_worker_header_compact "Bugs" "${fix_status}" "${bugs_empty}"
       [[ "${bugs_empty}" != true ]] && show_worker_items_inline "${bugs_in_progress}" "${bugs_open}" 3
       [[ "${bugs_empty}" != true ]] && echo ""
 
