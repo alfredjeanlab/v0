@@ -29,8 +29,8 @@ done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
 # Load common libraries
-source "${V0_DIR}/lib/v0-common.sh"
-source "${V0_DIR}/lib/debug-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/debug-common.sh"
 
 # ============================================================================
 # Help

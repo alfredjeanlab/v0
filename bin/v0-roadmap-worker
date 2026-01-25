@@ -18,7 +18,7 @@
 set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
 usage() {
@@ -203,17 +203,17 @@ run_orchestration_phase() {
 
   # Create CLAUDE.md from roadmap template
   M4_ARGS="-D ROADMAP_NAME=${NAME} -D ROADMAP_DESCRIPTION=$(printf '%s' "${DESCRIPTION}" | sed 's/"/\\"/g') -D IDEA_ID=${IDEA_ID:-none} -D V0_GIT_REMOTE=${V0_GIT_REMOTE}"
-  m4 ${M4_ARGS} "${V0_DIR}/lib/templates/claude.roadmap.m4" > "${TREE_DIR}/CLAUDE.md"
+  m4 ${M4_ARGS} "${V0_DIR}/packages/cli/lib/templates/claude.roadmap.m4" > "${TREE_DIR}/CLAUDE.md"
   emit_event "claude.md:created" "${TREE_DIR}/CLAUDE.md"
 
   # Copy roadmap prompt as ROADMAP.md
-  if [[ -f "${V0_DIR}/lib/prompts/roadmap.md" ]]; then
-    /bin/cp "${V0_DIR}/lib/prompts/roadmap.md" "${TREE_DIR}/ROADMAP.md"
+  if [[ -f "${V0_DIR}/packages/cli/lib/prompts/roadmap.md" ]]; then
+    /bin/cp "${V0_DIR}/packages/cli/lib/prompts/roadmap.md" "${TREE_DIR}/ROADMAP.md"
     emit_event "roadmap.md:copied" "Copied roadmap orchestration instructions"
   fi
 
   # Configure hooks
-  HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-roadmap.sh"
+  HOOK_SCRIPT="${V0_DIR}/packages/hooks/lib/stop-roadmap.sh"
   mkdir -p "${TREE_DIR}/.claude"
   cat > "${TREE_DIR}/.claude/settings.local.json" <<SETTINGS_EOF
 {

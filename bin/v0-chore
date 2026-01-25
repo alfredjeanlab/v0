@@ -9,9 +9,9 @@ ROOT_DIR="$(pwd)"  # Current directory where command was invoked
 WORKER_BRANCH="v0/worker/chore"
 
 # Source shared utilities
-source "${V0_DIR}/lib/v0-common.sh"
-source "${V0_DIR}/lib/worker-common.sh"
-source "${V0_DIR}/lib/nudge-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/worker/lib/worker-common.sh"
+source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 # Determine if we're in standalone or project mode
 if v0_find_project_root >/dev/null 2>&1; then
@@ -125,11 +125,11 @@ start_worker() {
   echo "worker:chore" > "${tree_dir}/.wok/current/assignee"
 
   # Copy worker instructions template
-  cp "${V0_DIR}/lib/templates/claude.chore.md" "${tree_dir}/CLAUDE.md"
+  cp "${V0_DIR}/packages/cli/lib/templates/claude.chore.md" "${tree_dir}/CLAUDE.md"
 
   # Create settings.local.json with Stop hook AND progress notification hook
-  HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-chore.sh"
-  NOTIFY_HOOK="${V0_DIR}/lib/hooks/notify-progress.sh"
+  HOOK_SCRIPT="${V0_DIR}/packages/hooks/lib/stop-chore.sh"
+  NOTIFY_HOOK="${V0_DIR}/packages/hooks/lib/notify-progress.sh"
   mkdir -p "${tree_dir}/.claude"
   cat > "${tree_dir}/.claude/settings.local.json" <<SETTINGS_EOF
 {
@@ -368,17 +368,17 @@ start_worker_standalone() {
   echo "worker:chore" > "${tree_dir}/.wok/current/assignee"
 
   # Copy standalone worker instructions template
-  if [[ -f "${V0_DIR}/lib/templates/claude.chore.standalone.md" ]]; then
+  if [[ -f "${V0_DIR}/packages/cli/lib/templates/claude.chore.standalone.md" ]]; then
     # Use CWD variable in template
-    sed "s|{{CWD}}|${cwd}|g" "${V0_DIR}/lib/templates/claude.chore.standalone.md" > "${tree_dir}/CLAUDE.md"
+    sed "s|{{CWD}}|${cwd}|g" "${V0_DIR}/packages/cli/lib/templates/claude.chore.standalone.md" > "${tree_dir}/CLAUDE.md"
   else
     # Fallback to regular template
-    cp "${V0_DIR}/lib/templates/claude.chore.md" "${tree_dir}/CLAUDE.md"
+    cp "${V0_DIR}/packages/cli/lib/templates/claude.chore.md" "${tree_dir}/CLAUDE.md"
   fi
 
   # Create settings.local.json with Stop hook AND progress notification hook
-  HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-chore.sh"
-  NOTIFY_HOOK="${V0_DIR}/lib/hooks/notify-progress.sh"
+  HOOK_SCRIPT="${V0_DIR}/packages/hooks/lib/stop-chore.sh"
+  NOTIFY_HOOK="${V0_DIR}/packages/hooks/lib/notify-progress.sh"
   mkdir -p "${tree_dir}/.claude"
   cat > "${tree_dir}/.claude/settings.local.json" <<SETTINGS_EOF
 {

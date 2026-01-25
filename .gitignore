@@ -1,11 +1,4 @@
 .v0/
 .wok/
 .quench/
-
-# Github CI Logs
-logs_*/
-
-# Downloaded BATS testing libraries (run make test-init to install)
-tests/bats/bats-core/
-tests/bats/bats-support/
-tests/bats/bats-assert/
+vendor/

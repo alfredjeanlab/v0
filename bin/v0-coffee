@@ -9,12 +9,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Try to load project config if available (for V0_STATE_DIR)
 # but don't require it - coffee can work standalone
 if [[ -z "${V0_STATE_DIR:-}" ]]; then
-  source "${SCRIPT_DIR}/../lib/v0-common.sh"
+  source "${SCRIPT_DIR}/../packages/cli/lib/v0-common.sh"
   v0_load_config false 2>/dev/null || true
 fi
 
 # Source coffee functions
-source "${SCRIPT_DIR}/../lib/coffee-common.sh"
+source "${SCRIPT_DIR}/../packages/worker/lib/coffee-common.sh"
 
 usage() {
   cat <<'EOF'

@@ -20,7 +20,7 @@ V0_DEVELOP_BRANCH="agent"       # Target branch for merges (default: main)
 #   V0_CHECKOUT_DIR - Path to the main project checkout (V0_ROOT)
 #   V0_WORKTREE_DIR - Path to the new worktree directory
 # Example: Copy cached test framework to avoid reinstalling per-worktree
-# V0_WORKTREE_INIT='cp -r "${V0_CHECKOUT_DIR}/lib/bats" "${V0_WORKTREE_DIR}/lib/"'
+# V0_WORKTREE_INIT='cp -r "${V0_CHECKOUT_DIR}/vendor/bats" "${V0_WORKTREE_DIR}/vendor/"'
 
 # Initialize worktrees with cached dependencies (runs scripts/init-worktree)
 V0_WORKTREE_INIT='"${V0_CHECKOUT_DIR}/scripts/init-worktree"'

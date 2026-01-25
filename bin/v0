@@ -25,7 +25,7 @@ STANDALONE_COMMANDS="chore"
 NO_CONFIG_COMMANDS="init help version coffee talk prime"
 
 # Source common functions for standalone mode checking
-source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 
 # Check if running in standalone mode and handle appropriately
 # Returns 0 if standalone mode should be used, 1 if in a project
@@ -148,7 +148,7 @@ sanitize_for_display() {
 # Handle special commands first
 case "${1:-}" in
   init)
-    source "${V0_DIR}/lib/v0-common.sh"
+    source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 
     # Check dependencies first
     if ! v0_precheck; then

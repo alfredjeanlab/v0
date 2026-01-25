@@ -13,20 +13,12 @@ set -euo pipefail
 checkout="${V0_CHECKOUT_DIR:?V0_CHECKOUT_DIR not set}"
 worktree="${V0_WORKTREE_DIR:?V0_WORKTREE_DIR not set}"
 
-BATS_SRC="${checkout}/tests/bats"
-BATS_DST="${worktree}/tests/bats"
+# Copy test fixtures to worktree if present in main checkout
+FIXTURES_SRC="${checkout}/packages/test-support/fixtures"
+FIXTURES_DST="${worktree}/packages/test-support/fixtures"
 
-# Ensure bats is installed in the main checkout
-if [[ ! -d "${BATS_SRC}/bats-core" ]]; then
-    echo "Installing bats in main checkout..."
-    "${BATS_SRC}/install.sh"
-fi
-
-# Copy bats to worktree if not present
-if [[ ! -d "${BATS_DST}/bats-core" ]]; then
-    echo "Copying bats to worktree..."
-    mkdir -p "${BATS_DST}"
-    cp -r "${BATS_SRC}/bats-core" "${BATS_DST}/"
-    cp -r "${BATS_SRC}/bats-support" "${BATS_DST}/"
-    cp -r "${BATS_SRC}/bats-assert" "${BATS_DST}/"
+if [[ -f "${FIXTURES_SRC}/git-repo.tar" && ! -f "${FIXTURES_DST}/git-repo.tar" ]]; then
+    echo "Copying test fixtures to worktree..."
+    mkdir -p "${FIXTURES_DST}"
+    cp "${FIXTURES_SRC}/git-repo.tar" "${FIXTURES_DST}/"
 fi

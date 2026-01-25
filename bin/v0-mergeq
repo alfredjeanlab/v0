@@ -8,8 +8,8 @@
 set -eo pipefail
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-source "${V0_DIR}/lib/v0-common.sh"
-source "${V0_DIR}/lib/nudge-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 v0_load_config
 
 # Merge queue state must always be in the main repo's build directory, not
@@ -23,7 +23,7 @@ export DAEMON_PID_FILE="${MERGEQ_DIR}/.daemon.pid"
 export DAEMON_LOG_FILE="${MERGEQ_DIR}/logs/daemon.log"
 
 # Source the merge queue modules
-source "${V0_DIR}/lib/mergeq/queue.sh"
+source "${V0_DIR}/packages/mergeq/lib/queue.sh"
 
 usage() {
     cat <<EOF

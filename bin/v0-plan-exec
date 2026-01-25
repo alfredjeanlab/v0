@@ -6,7 +6,7 @@
 set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
 if [[ -z "$1" ]] || [[ -z "$2" ]]; then
@@ -26,7 +26,7 @@ INSTRUCTIONS="$2"
 mkdir -p "${PLANS_DIR}"
 
 # Build full prompt with context
-TEMPLATE="$(cat "${V0_DIR}/lib/prompts/plan.md")"
+TEMPLATE="$(cat "${V0_DIR}/packages/cli/lib/prompts/plan.md")"
 TEMPLATE="${TEMPLATE//\{name\}/${NAME}}"
 
 PROMPT="${TEMPLATE}

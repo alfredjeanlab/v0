@@ -1,0 +1,828 @@
+#!/usr/bin/env bash
+# v0 Incremental Test Runner
+# SPDX-License-Identifier: MIT
+#
+# Usage: scripts/test [--bust] [--verbose] [package...]
+#
+# Runs tests incrementally, caching successful results and only re-running
+# when source files or dependencies change.
+#
+# Compatible with bash 3.2+ (macOS default)
+
+set -euo pipefail
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PACKAGES_DIR="$PROJECT_ROOT/packages"
+V0_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/v0"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/v0/tests"
+
+# BATS configuration (global installation)
+BATS_DIR="$V0_DATA_DIR/bats"
+BATS="$BATS_DIR/bats-core/bin/bats"
+BATS_LIB_PATH="$BATS_DIR"
+INTEGRATION_TESTS_DIR="$PROJECT_ROOT/tests"
+
+# BATS versions
+BATS_CORE_VERSION="v1.13.0"
+BATS_SUPPORT_VERSION="v0.3.0"
+BATS_ASSERT_VERSION="v2.1.0"
+
+# Calculate parallel job count: max(1, min(4, cores-1))
+CORES=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 2)
+JOBS=$((CORES - 1))
+[[ $JOBS -lt 1 ]] && JOBS=1
+[[ $JOBS -gt 4 ]] && JOBS=4
+
+# Runtime state
+VERBOSE=false
+# Use temp directory for runtime hash cache (bash 3.2 compatible)
+HASH_CACHE_DIR=""
+
+#------------------------------------------------------------------------------
+# Logging
+#------------------------------------------------------------------------------
+
+log_verbose() {
+    if [[ "$VERBOSE" == true ]]; then
+        printf "  [debug] %s\n" "$*" >&2
+    fi
+}
+
+log_info() {
+    printf "  %s\n" "$*"
+}
+
+log_error() {
+    printf "  ✗ %s\n" "$*" >&2
+}
+
+#------------------------------------------------------------------------------
+# BATS Installation
+#------------------------------------------------------------------------------
+
+# Download and extract a BATS component
+download_bats_component() {
+    local repo="$1"
+    local version="$2"
+    local target="$3"
+    local url="https://github.com/bats-core/${repo}/archive/refs/tags/${version}.tar.gz"
+
+    if [[ -d "${BATS_DIR}/${target}" ]]; then
+        log_verbose "${target} already installed"
+        return 0
+    fi
+
+    log_info "Downloading ${repo} ${version}..."
+
+    local tmp_file
+    tmp_file="$(mktemp)"
+
+    if command -v curl &>/dev/null; then
+        curl -fsSL "$url" -o "$tmp_file"
+    elif command -v wget &>/dev/null; then
+        wget -q "$url" -O "$tmp_file"
+    else
+        log_error "Neither curl nor wget available"
+        return 1
+    fi
+
+    mkdir -p "${BATS_DIR}/${target}"
+    tar -xzf "$tmp_file" --strip-components=1 -C "${BATS_DIR}/${target}"
+    rm -f "$tmp_file"
+}
+
+# Ensure BATS and its libraries are installed
+ensure_bats_installed() {
+    # Check if fully installed
+    if [[ -d "$BATS_DIR/bats-support" && -x "$BATS" ]]; then
+        log_verbose "BATS already installed"
+        return 0
+    fi
+
+    log_info "Installing BATS testing libraries to ${BATS_DIR}..."
+    mkdir -p "$BATS_DIR"
+
+    download_bats_component "bats-core" "$BATS_CORE_VERSION" "bats-core" || return 1
+    download_bats_component "bats-support" "$BATS_SUPPORT_VERSION" "bats-support" || return 1
+    download_bats_component "bats-assert" "$BATS_ASSERT_VERSION" "bats-assert" || return 1
+
+    # Verify installation
+    if [[ ! -x "$BATS" ]]; then
+        log_error "BATS installation failed: $BATS not executable"
+        return 1
+    fi
+
+    log_info "BATS installation complete."
+}
+
+# Ensure test fixtures are generated
+ensure_fixtures() {
+    local fixture="$PROJECT_ROOT/packages/test-support/fixtures/git-repo.tar"
+    local create_script="$PROJECT_ROOT/packages/test-support/fixtures/create-git-fixture.sh"
+
+    if [[ -f "$fixture" ]]; then
+        log_verbose "Test fixtures already exist"
+        return 0
+    fi
+
+    if [[ ! -f "$create_script" ]]; then
+        log_verbose "No fixture creation script found, skipping"
+        return 0
+    fi
+
+    log_info "Generating test fixtures..."
+    if ! bash "$create_script"; then
+        log_error "Failed to generate test fixtures"
+        return 1
+    fi
+}
+
+#------------------------------------------------------------------------------
+# Package Manifest Reading
+#------------------------------------------------------------------------------
+
+# Read a package.sh manifest and extract variables
+# Usage: read_package_manifest <package_name>
+# Sets: PKG_NAME, PKG_DEPS, PKG_EXPORTS, PKG_TEST_ONLY
+read_package_manifest() {
+    local pkg="$1"
+    local manifest="$PACKAGES_DIR/$pkg/package.sh"
+
+    # Reset variables
+    PKG_NAME=""
+    PKG_DEPS=()
+    PKG_EXPORTS=()
+    PKG_TEST_ONLY=false
+    PKG_PER_FILE_CACHE=false
+
+    if [[ ! -f "$manifest" ]]; then
+        log_error "Package manifest not found: $manifest"
+        return 1
+    fi
+
+    # Source the manifest in a subshell to extract values safely
+    # shellcheck source=/dev/null
+    source "$manifest"
+}
+
+# Get list of all packages
+list_packages() {
+    local pkg_dir
+    for pkg_dir in "$PACKAGES_DIR"/*/; do
+        if [[ -f "${pkg_dir}package.sh" ]]; then
+            basename "$pkg_dir"
+        fi
+    done
+}
+
+#------------------------------------------------------------------------------
+# Hash Computation (bash 3.2 compatible)
+#------------------------------------------------------------------------------
+
+# Get cached hash for a package (runtime cache, not persistent)
+get_runtime_hash() {
+    local pkg="$1"
+    local cache_file="$HASH_CACHE_DIR/$pkg"
+    if [[ -f "$cache_file" ]]; then
+        cat "$cache_file"
+    fi
+}
+
+# Set cached hash for a package (runtime cache)
+set_runtime_hash() {
+    local pkg="$1"
+    local hash="$2"
+    echo "$hash" > "$HASH_CACHE_DIR/$pkg"
+}
+
+# Compute hash for a single file
+hash_file() {
+    if [[ -f "$1" ]]; then
+        shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1
+    fi
+}
+
+# Compute hash for a directory's contents
+hash_directory() {
+    local dir="$1"
+    if [[ -d "$dir" ]]; then
+        find "$dir" -type f \( -name "*.sh" -o -name "*.bash" -o -name "*.bats" \) 2>/dev/null | \
+            sort | \
+            xargs shasum -a 256 2>/dev/null | \
+            shasum -a 256 | \
+            cut -d' ' -f1
+    fi
+}
+
+# Compute base hash for a package (lib + deps + test-support, NOT individual test files)
+compute_package_base_hash() {
+    local pkg="$1"
+    local pkg_dir="$PACKAGES_DIR/$pkg"
+    local hash_input=""
+
+    # Hash package lib sources
+    if [[ -d "$pkg_dir/lib" ]]; then
+        hash_input+="lib:$(hash_directory "$pkg_dir/lib")"
+    fi
+
+    # Hash package manifest
+    if [[ -f "$pkg_dir/package.sh" ]]; then
+        hash_input+="manifest:$(hash_file "$pkg_dir/package.sh")"
+    fi
+
+    # Read package manifest for dependencies
+    read_package_manifest "$pkg" || return 1
+
+    # Include dependency hashes (recursive through cache)
+    local dep dep_hash
+    for dep in "${PKG_DEPS[@]+"${PKG_DEPS[@]}"}"; do
+        dep_hash=$(get_runtime_hash "$dep")
+        if [[ -z "$dep_hash" ]]; then
+            dep_hash=$(compute_package_base_hash "$dep")
+            set_runtime_hash "$dep" "$dep_hash"
+        fi
+        hash_input+="dep:$dep:$dep_hash"
+    done
+
+    # Include test-support hash for non-test-only packages
+    if [[ "$PKG_TEST_ONLY" != true && -d "$PACKAGES_DIR/test-support" ]]; then
+        local support_hash
+        support_hash=$(hash_directory "$PACKAGES_DIR/test-support")
+        hash_input+="test-support:$support_hash"
+    fi
+
+    # Compute final hash
+    echo "$hash_input" | shasum -a 256 | cut -d' ' -f1
+}
+
+# Compute hash for a single test file
+# Includes: base hash + test file + matching bin script(s)
+compute_test_hash() {
+    local test_file="$1"
+    local base_hash="$2"
+    local hash_input="base:$base_hash"
+
+    # Hash the test file itself
+    hash_input+=":test:$(hash_file "$test_file")"
+
+    # Find matching bin script(s) from test filename
+    # e.g., v0-cancel.bats -> bin/v0-cancel
+    # e.g., v0.bats -> bin/v0
+    local test_name bin_script
+    test_name=$(basename "$test_file" .bats)
+    bin_script="$PROJECT_ROOT/bin/$test_name"
+    if [[ -f "$bin_script" ]]; then
+        hash_input+=":bin:$(hash_file "$bin_script")"
+    fi
+
+    # Also check for worker variant (e.g., v0-feature.bats might test v0-feature-worker too)
+    if [[ -f "${bin_script}-worker" ]]; then
+        hash_input+=":bin-worker:$(hash_file "${bin_script}-worker")"
+    fi
+
+    echo "$hash_input" | shasum -a 256 | cut -d' ' -f1
+}
+
+#------------------------------------------------------------------------------
+# Topological Sort (bash 3.2 compatible using files)
+#------------------------------------------------------------------------------
+
+# Build dependency graph and perform topological sort
+# Returns packages in order they should be tested
+topological_sort() {
+    local requested="$*"
+    local topo_dir
+    topo_dir=$(mktemp -d)
+
+    # If no packages specified, use all
+    if [[ -z "$requested" ]] || [[ "$requested" == "all" ]]; then
+        requested=$(list_packages | tr '\n' ' ')
+    fi
+
+    # Initialize tracking files
+    mkdir -p "$topo_dir/in_degree" "$topo_dir/deps"
+
+    # Build the full dependency set (transitive closure)
+    local to_process="$requested"
+    local all_pkgs=""
+
+    while [[ -n "$to_process" ]]; do
+        local pkg
+        pkg=$(echo "$to_process" | awk '{print $1}')
+        to_process=$(echo "$to_process" | awk '{$1=""; print $0}' | xargs)
+
+        # Skip if already processed
+        if [[ -f "$topo_dir/in_degree/$pkg" ]]; then
+            continue
+        fi
+
+        all_pkgs="$all_pkgs $pkg"
+        read_package_manifest "$pkg" 2>/dev/null || continue
+
+        # Store deps and in_degree (handle empty arrays)
+        if [[ ${#PKG_DEPS[@]} -gt 0 ]]; then
+            echo "${PKG_DEPS[*]}" > "$topo_dir/deps/$pkg"
+            echo "${#PKG_DEPS[@]}" > "$topo_dir/in_degree/$pkg"
+        else
+            echo "" > "$topo_dir/deps/$pkg"
+            echo "0" > "$topo_dir/in_degree/$pkg"
+        fi
+
+        # Add unprocessed deps to queue
+        local dep
+        for dep in "${PKG_DEPS[@]+"${PKG_DEPS[@]}"}"; do
+            if [[ ! -f "$topo_dir/in_degree/$dep" ]]; then
+                to_process="$to_process $dep"
+            fi
+        done
+    done
+
+    # Kahn's algorithm for topological sort
+    local queue=""
+    local sorted=""
+
+    # Find all nodes with in_degree 0
+    for pkg in $all_pkgs; do
+        local degree
+        degree=$(cat "$topo_dir/in_degree/$pkg")
+        if [[ "$degree" -eq 0 ]]; then
+            queue="$queue $pkg"
+        fi
+    done
+
+    while [[ -n "$queue" ]]; do
+        local pkg
+        pkg=$(echo "$queue" | awk '{print $1}')
+        queue=$(echo "$queue" | awk '{$1=""; print $0}' | xargs)
+        sorted="$sorted $pkg"
+
+        # Decrease in_degree of dependents
+        for other in $all_pkgs; do
+            local other_deps
+            other_deps=$(cat "$topo_dir/deps/$other" 2>/dev/null || echo "")
+            if [[ " $other_deps " == *" $pkg "* ]]; then
+                local degree
+                degree=$(cat "$topo_dir/in_degree/$other")
+                degree=$((degree - 1))
+                echo "$degree" > "$topo_dir/in_degree/$other"
+                if [[ "$degree" -eq 0 ]]; then
+                    queue="$queue $other"
+                fi
+            fi
+        done
+    done
+
+    # Cleanup
+    rm -rf "$topo_dir"
+
+    # Check for cycles
+    local sorted_count all_count
+    sorted_count=$(echo "$sorted" | wc -w | tr -d ' ')
+    all_count=$(echo "$all_pkgs" | wc -w | tr -d ' ')
+    if [[ "$sorted_count" -ne "$all_count" ]]; then
+        log_error "Dependency cycle detected!"
+        return 1
+    fi
+
+    echo "$sorted" | xargs -n1
+}
+
+#------------------------------------------------------------------------------
+# Test Execution
+#------------------------------------------------------------------------------
+
+# Check if a test file is cached and valid
+is_test_cached() {
+    local cache_key="$1"
+    local hash="$2"
+    local cache_file="$CACHE_DIR/${cache_key}.hash"
+
+    if [[ -f "$cache_file" ]]; then
+        local cached_hash
+        cached_hash=$(cat "$cache_file")
+        if [[ "$cached_hash" == "$hash" ]]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Save successful test hash to cache
+cache_test_result() {
+    local cache_key="$1"
+    local hash="$2"
+    local cache_file="$CACHE_DIR/${cache_key}.hash"
+
+    mkdir -p "$(dirname "$cache_file")"
+    echo "$hash" > "$cache_file"
+}
+
+# Compute full package hash (base + all test files) for per-package caching
+compute_package_hash() {
+    local pkg="$1"
+    local pkg_dir="$PACKAGES_DIR/$pkg"
+    local base_hash
+    base_hash=$(compute_package_base_hash "$pkg")
+
+    local hash_input="base:$base_hash"
+
+    # Add hash of all test files
+    if [[ -d "$pkg_dir/tests" ]]; then
+        hash_input+=":tests:$(hash_directory "$pkg_dir/tests")"
+    fi
+
+    echo "$hash_input" | shasum -a 256 | cut -d' ' -f1
+}
+
+# Run tests for a package with per-package caching
+run_package_simple() {
+    local pkg="$1"
+    local pkg_dir="$PACKAGES_DIR/$pkg"
+    local test_dir="$pkg_dir/tests"
+    local test_files
+    test_files=$(find "$test_dir" -name "*.bats" -type f 2>/dev/null | sort)
+
+    # Compute package hash
+    local pkg_hash
+    pkg_hash=$(compute_package_hash "$pkg")
+    set_runtime_hash "$pkg" "$pkg_hash"
+
+    # Check cache
+    if is_test_cached "$pkg" "$pkg_hash"; then
+        log_info "✓ $pkg (cached)"
+        return 0
+    fi
+
+    # Run all tests
+    log_info "▸ $pkg"
+    # shellcheck disable=SC2086
+    if BATS_LIB_PATH="$BATS_LIB_PATH" BATS_FAST_CLEANUP=1 "$BATS" -j "$JOBS" --timing --print-output-on-failure $test_files; then
+        cache_test_result "$pkg" "$pkg_hash"
+        log_info "✓ $pkg"
+        return 0
+    else
+        log_error "$pkg failed"
+        return 1
+    fi
+}
+
+# Run tests for a package with per-file caching
+run_package_per_file() {
+    local pkg="$1"
+    local pkg_dir="$PACKAGES_DIR/$pkg"
+    local test_dir="$pkg_dir/tests"
+    local all_test_files
+    all_test_files=$(find "$test_dir" -name "*.bats" -type f 2>/dev/null | sort)
+
+    # Compute base hash for package (lib + deps)
+    local base_hash
+    base_hash=$(compute_package_base_hash "$pkg")
+    set_runtime_hash "$pkg" "$base_hash"
+
+    # Filter to uncached test files
+    local uncached_files=""
+    local cached_count=0
+    local test_file test_name test_hash cache_key
+
+    for test_file in $all_test_files; do
+        test_name=$(basename "$test_file" .bats)
+        cache_key="${pkg}/${test_name}"
+        test_hash=$(compute_test_hash "$test_file" "$base_hash")
+
+        if is_test_cached "$cache_key" "$test_hash"; then
+            cached_count=$((cached_count + 1))
+            log_verbose "  ✓ $test_name (cached)"
+        else
+            uncached_files="$uncached_files $test_file"
+            echo "$test_hash" > "$HASH_CACHE_DIR/${pkg}_${test_name}_pending"
+        fi
+    done
+
+    # If all cached, report and return
+    local total_count
+    total_count=$(echo "$all_test_files" | wc -w | tr -d ' ')
+    if [[ -z "$uncached_files" ]]; then
+        log_info "✓ $pkg ($cached_count/$total_count cached)"
+        return 0
+    fi
+
+    # Run uncached tests
+    local uncached_count
+    uncached_count=$(echo "$uncached_files" | wc -w | tr -d ' ')
+    log_info "▸ $pkg ($uncached_count to run, $cached_count cached)"
+
+    # shellcheck disable=SC2086
+    if BATS_LIB_PATH="$BATS_LIB_PATH" BATS_FAST_CLEANUP=1 "$BATS" -j "$JOBS" --timing --print-output-on-failure $uncached_files; then
+        for test_file in $uncached_files; do
+            test_name=$(basename "$test_file" .bats)
+            cache_key="${pkg}/${test_name}"
+            if [[ -f "$HASH_CACHE_DIR/${pkg}_${test_name}_pending" ]]; then
+                test_hash=$(cat "$HASH_CACHE_DIR/${pkg}_${test_name}_pending")
+                cache_test_result "$cache_key" "$test_hash"
+            fi
+        done
+        log_info "✓ $pkg"
+        return 0
+    else
+        log_error "$pkg failed"
+        return 1
+    fi
+}
+
+# Run tests for a package (dispatcher)
+run_package() {
+    local pkg="$1"
+    local pkg_dir="$PACKAGES_DIR/$pkg"
+    local test_dir="$pkg_dir/tests"
+
+    # Check if package has tests
+    if [[ ! -d "$test_dir" ]]; then
+        log_verbose "Package $pkg has no tests directory"
+        return 0
+    fi
+
+    local test_files
+    test_files=$(find "$test_dir" -name "*.bats" -type f 2>/dev/null | sort)
+
+    if [[ -z "$test_files" ]]; then
+        log_verbose "Package $pkg has no .bats files"
+        return 0
+    fi
+
+    # Read manifest
+    read_package_manifest "$pkg" || return 1
+
+    # Skip test-only packages
+    if [[ "$PKG_TEST_ONLY" == true ]]; then
+        log_verbose "Skipping test-only package: $pkg"
+        return 0
+    fi
+
+    # Dispatch to appropriate caching strategy
+    if [[ "$PKG_PER_FILE_CACHE" == true ]]; then
+        run_package_per_file "$pkg"
+    else
+        run_package_simple "$pkg"
+    fi
+}
+
+#------------------------------------------------------------------------------
+# Integration Tests (tests/*.bats)
+#------------------------------------------------------------------------------
+
+# List all integration tests
+list_integration_tests() {
+    if [[ -d "$INTEGRATION_TESTS_DIR" ]]; then
+        find "$INTEGRATION_TESTS_DIR" -maxdepth 1 -name "*.bats" -type f 2>/dev/null | \
+            xargs -n1 basename 2>/dev/null | \
+            sed 's/\.bats$//' | \
+            sort
+    fi
+}
+
+# Compute hash for an integration test
+# Includes: test file + matching bin script + all packages (simplified)
+compute_integration_hash() {
+    local test_name="$1"
+    local test_file="$INTEGRATION_TESTS_DIR/${test_name}.bats"
+    local hash_input=""
+
+    # Hash the test file
+    hash_input+="test:$(hash_file "$test_file")"
+
+    # Hash matching bin script
+    local bin_script="$PROJECT_ROOT/bin/$test_name"
+    if [[ -f "$bin_script" ]]; then
+        hash_input+=":bin:$(hash_file "$bin_script")"
+    fi
+
+    # Hash all package libs (simplified - any package change invalidates)
+    local pkg_hash
+    pkg_hash=$(find "$PACKAGES_DIR" -name "*.sh" -type f 2>/dev/null | sort | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    hash_input+=":pkgs:$pkg_hash"
+
+    echo "$hash_input" | shasum -a 256 | cut -d' ' -f1
+}
+
+# Run a single integration test with caching
+run_integration_test() {
+    local test_name="$1"
+    local test_file="$INTEGRATION_TESTS_DIR/${test_name}.bats"
+
+    if [[ ! -f "$test_file" ]]; then
+        log_error "Integration test not found: $test_file"
+        return 1
+    fi
+
+    # Compute hash
+    local test_hash cache_file
+    test_hash=$(compute_integration_hash "$test_name")
+    cache_file="$CACHE_DIR/integration/${test_name}.hash"
+
+    # Check cache
+    if [[ -f "$cache_file" ]]; then
+        local cached_hash
+        cached_hash=$(cat "$cache_file")
+        if [[ "$cached_hash" == "$test_hash" ]]; then
+            log_info "✓ $test_name (cached)"
+            return 0
+        fi
+    fi
+
+    # Run test
+    log_info "▸ $test_name"
+    if BATS_LIB_PATH="$BATS_LIB_PATH" BATS_FAST_CLEANUP=1 "$BATS" -j "$JOBS" --timing --print-output-on-failure "$test_file"; then
+        mkdir -p "$(dirname "$cache_file")"
+        echo "$test_hash" > "$cache_file"
+        log_info "✓ $test_name"
+        return 0
+    else
+        log_error "$test_name failed"
+        return 1
+    fi
+}
+
+#------------------------------------------------------------------------------
+# Main
+#------------------------------------------------------------------------------
+
+usage() {
+    cat <<EOF
+Usage: scripts/test [OPTIONS] [TARGET...]
+
+Run tests incrementally with caching.
+
+Options:
+    --init         Install BATS and generate fixtures, then exit
+    --bust [NAME]  Clear cache (all, or specific target)
+    --verbose      Show detailed debug output
+    -j, --jobs N   Number of parallel jobs (default: auto)
+    -h, --help     Show this help message
+
+Arguments:
+    TARGET         Package name or integration test (v0-cancel, v0-merge, etc.)
+
+Examples:
+    scripts/test                    # Run all tests (incremental)
+    scripts/test --bust v0-merge    # Clear cache for v0-merge
+    scripts/test core state         # Test only core and state packages
+    scripts/test v0-cancel          # Run only v0-cancel integration test
+    scripts/test -j 1 cli           # Test cli with single job (no parallel)
+EOF
+}
+
+cleanup() {
+    if [[ -n "${HASH_CACHE_DIR:-}" && -d "$HASH_CACHE_DIR" ]]; then
+        rm -rf "$HASH_CACHE_DIR"
+    fi
+}
+
+main() {
+    local bust_target=""
+    local targets=""
+    local init_only=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --init)
+                init_only=true
+                shift
+                ;;
+            --bust)
+                if [[ -n "${2:-}" && ! "$2" =~ ^- ]]; then
+                    bust_target="$2"
+                    shift 2
+                else
+                    bust_target="all"
+                    shift
+                fi
+                ;;
+            --verbose|-v)
+                VERBOSE=true
+                shift
+                ;;
+            -j|--jobs)
+                if [[ -z "${2:-}" || "$2" =~ ^- ]]; then
+                    log_error "Option $1 requires a number"
+                    exit 1
+                fi
+                JOBS="$2"
+                shift 2
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                usage
+                exit 1
+                ;;
+            *)
+                targets="$targets $1"
+                shift
+                ;;
+        esac
+    done
+
+    # Set up cleanup trap
+    HASH_CACHE_DIR=$(mktemp -d)
+    trap cleanup EXIT
+
+    # Bust cache if requested
+    if [[ -n "$bust_target" ]]; then
+        if [[ "$bust_target" == "all" ]]; then
+            log_info "Clearing all test caches..."
+            rm -rf "$CACHE_DIR"
+        else
+            log_info "Clearing cache for: $bust_target"
+            rm -f "$CACHE_DIR/$bust_target.hash"
+            rm -f "$CACHE_DIR/integration/$bust_target.hash"
+        fi
+    fi
+
+    # Check packages directory exists
+    if [[ ! -d "$PACKAGES_DIR" ]]; then
+        log_error "Packages directory not found: $PACKAGES_DIR"
+        log_error "Run this script from the project root."
+        exit 1
+    fi
+
+    # Ensure BATS is installed and fixtures exist
+    ensure_bats_installed || exit 1
+    ensure_fixtures || exit 1
+
+    # Exit early if just initializing
+    if [[ "$init_only" == true ]]; then
+        log_info "Initialization complete."
+        exit 0
+    fi
+
+    # Separate packages from integration tests
+    local packages="" integration_tests=""
+    local target
+    for target in $targets; do
+        if [[ -d "$PACKAGES_DIR/$target" ]]; then
+            packages="$packages $target"
+        elif [[ -f "$INTEGRATION_TESTS_DIR/$target.bats" ]]; then
+            integration_tests="$integration_tests $target"
+        elif [[ -f "$INTEGRATION_TESTS_DIR/${target}.bats" ]]; then
+            integration_tests="$integration_tests $target"
+        else
+            log_error "Unknown target: $target (not a package or integration test)"
+            exit 1
+        fi
+    done
+
+    # If no targets specified, run all
+    local run_all=false
+    if [[ -z "$targets" ]]; then
+        run_all=true
+        packages=$(topological_sort)
+        integration_tests=$(list_integration_tests)
+    fi
+
+    local total_count=0
+    [[ -n "$packages" ]] && total_count=$((total_count + $(echo "$packages" | wc -w)))
+    [[ -n "$integration_tests" ]] && total_count=$((total_count + $(echo "$integration_tests" | wc -w)))
+
+    if [[ $total_count -eq 0 ]]; then
+        log_error "No tests found"
+        exit 1
+    fi
+
+    log_info "Testing $total_count target(s)..."
+
+    # Run package tests
+    local failed=false
+    local pkg
+    for pkg in $packages; do
+        if ! run_package "$pkg"; then
+            failed=true
+            break
+        fi
+    done
+
+    # Run integration tests (if packages passed)
+    if [[ "$failed" != true ]]; then
+        local test_name
+        for test_name in $integration_tests; do
+            if ! run_integration_test "$test_name"; then
+                failed=true
+                break
+            fi
+        done
+    fi
+
+    if [[ "$failed" == true ]]; then
+        log_error "Tests failed"
+        exit 1
+    fi
+
+    log_info "All tests passed!"
+}
+
+main "$@"

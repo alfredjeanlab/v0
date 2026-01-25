@@ -3,13 +3,12 @@
 # Get the directory where this Makefile is located (works even if make is run from elsewhere)
 MAKEFILE_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 
-# Always use local bats for consistent behavior across environments
-BATS := $(MAKEFILE_DIR)tests/bats/bats-core/bin/bats
-BATS_LIB_PATH := $(MAKEFILE_DIR)tests/bats
+# BATS installed globally by scripts/test
+V0_DATA_DIR := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/v0
+BATS := $(V0_DATA_DIR)/bats/bats-core/bin/bats
+BATS_LIB_PATH := $(V0_DATA_DIR)/bats
 
-TEST_FILES := $(wildcard tests/unit/*.bats)
-
-.PHONY: help check test test-file test-init test-fixtures lint lint-scripts lint-tests lint-quality license install
+.PHONY: help check test test-file test-package lint lint-scripts lint-tests lint-quality license install
 
 # Default target
 help:
@@ -17,12 +16,12 @@ help:
 	@echo "  make install         Symlink v0 to ~/.local/bin for development"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test            Run all unit tests"
-	@echo "  make test-file FILE=tests/unit/foo.bats"
-	@echo "  make test-fixtures   Generate test fixtures (cached git repo)"
+	@echo "  make test            Run all tests (incremental, cached)"
+	@echo "  make test-package PKG=state  Run tests for a specific package"
+	@echo "  make test-file FILE=packages/core/tests/foo.bats"
 	@echo ""
 	@echo "Linting:"
-	@echo "  make lint            Run ShellCheck on scripts"
+	@echo "  make lint            Run lint on all scripts"
 	@echo "  make check           Run lint and all tests"
 	@echo ""
 	@echo "Maintenance:"
@@ -32,7 +31,7 @@ help:
 check: lint test
 
 # Lint scripts with ShellCheck
-lint: lint-scripts lint-tests lint-quality
+lint: lint-quality lint-scripts lint-tests
 
 # Enforce LOC limits, suppress rules, etc
 lint-quality:
@@ -46,8 +45,8 @@ lint-scripts:
 	fi
 	@echo "Linting bin/ scripts..."
 	@shellcheck -x bin/v0-*
-	@echo "Linting lib/ files..."
-	@shellcheck -x lib/*.sh
+	@echo "Linting packages/*/lib/ files..."
+	@find packages/*/lib -maxdepth 1 -name "*.sh" -type f | xargs shellcheck -x
 	@echo "All scripts pass ShellCheck!"
 
 # Lint test files with ShellCheck
@@ -57,35 +56,30 @@ lint-tests:
 		exit 1; \
 	fi
 	@echo "Linting test files..."
-	@shellcheck -x -S warning -e SC1090,SC2155,SC2164,SC2178 tests/unit/*.bats tests/helpers/*.bash
+	@find packages/*/tests tests -name "*.bats" -type f | xargs shellcheck -x -S warning -e SC1090,SC2155,SC2164,SC2178
+	@shellcheck -x -S warning -e SC1090,SC2155,SC2164,SC2178 packages/test-support/helpers/*.bash
 	@echo "All test files pass ShellCheck!"
 
-# Check if local BATS/libraries need installation
-test-init:
-	@if [ ! -d "tests/bats/bats-support" ] && echo "$(BATS_LIB_PATH)" | grep -q "tests/bats"; then \
-		echo "Installing BATS testing libraries..."; \
-		./tests/bats/install.sh; \
-	elif [ ! -x "$(BATS)" ] && [ ! -x "$(LOCAL_BATS)" ]; then \
-		echo "Installing BATS testing libraries..."; \
-		./tests/bats/install.sh; \
-	fi
+# Run all tests (incremental with caching)
+test:
+	./scripts/test
 
-# Generate test fixtures (cached git repo, etc.)
-test-fixtures:
-	@if [ ! -f "tests/fixtures/git-repo.tar" ]; then \
-		echo "Generating test fixtures..."; \
-		bash tests/fixtures/create-git-fixture.sh; \
+# Run tests for a specific package
+test-package:
+	@if [ -z "$(PKG)" ]; then \
+		echo "Usage: make test-package PKG=state"; \
+		exit 1; \
 	fi
-
-# Run all tests
-test: test-init test-fixtures
-	BATS_LIB_PATH="$(BATS_LIB_PATH)" BATS_FAST_CLEANUP=1 $(BATS) --timing --print-output-on-failure tests/unit/
+	./scripts/test $(PKG)
 
 # Run a specific test file
-test-file: test-init
+test-file:
 	@if [ -z "$(FILE)" ]; then \
-		echo "Usage: make test-file FILE=tests/unit/foo.bats"; \
+		echo "Usage: make test-file FILE=packages/core/tests/foo.bats"; \
 		exit 1; \
+	fi
+	@if [ ! -x "$(BATS)" ]; then \
+		./scripts/test --init; \
 	fi
 	BATS_LIB_PATH="$(BATS_LIB_PATH)" $(BATS) --timing $(FILE)
 

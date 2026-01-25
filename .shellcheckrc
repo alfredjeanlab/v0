@@ -17,10 +17,36 @@ enable=all
 # SC2001: Use ${var//pattern/replace} instead of sed (not possible for multiline)
 # SC2086: Double quote to prevent word splitting (often intentional for passing args)
 # SC2249: Consider adding default *) case (style, not required)
-disable=SC2034,SC2154,SC2310,SC2311,SC2312,SC2129,SC2001,SC2086,SC2249
+# SC2034: Unused variables (often intentional in library exports)
+# SC2154: Variable referenced but not assigned (often sourced from other files)
+# SC2310,SC2311: set -e disabled (informational, by design)
+# SC2312: Masked return value ($(date), $(basename) are safe)
+# SC2129: Consider using { } >> file (style preference)
+# SC2001: Use ${var//pattern/replace} instead of sed (not possible for multiline)
+# SC2086: Double quote to prevent word splitting (often intentional for passing args)
+# SC2249: Consider adding default *) case (style, not required)
+# SC2250,SC2292: Variable brace style and [[ vs [ (style, existing codebase style)
+# SC1010: Shell keyword 'done' - false positive with `wk done` CLI command
+# SC2046: Word splitting - often intentional for passing multiple arguments
+# SC2126: grep -c vs grep|wc -l (style preference)
+# SC2164: cd without error check - handled by context or set -e
+# SC2248: Prefer double quoting (style preference)
+# SC2329: Function never invoked (indirect invocation via dynamic calls)
+# SC1091: Not following sourced file (dynamic paths, shims)
+disable=SC2034,SC2154,SC2310,SC2311,SC2312,SC2129,SC2001,SC2086,SC2249,SC2250,SC2292,SC1010,SC2046,SC2126,SC2164,SC2248,SC2329,SC1091
 
 # Source path for sourced files (relative to script location)
+# Include both old lib path (for shims) and new packages paths
 source-path=lib
+source-path=packages/core/lib
+source-path=packages/state/lib
+source-path=packages/mergeq/lib
+source-path=packages/merge/lib
+source-path=packages/worker/lib
+source-path=packages/feature/lib
+source-path=packages/hooks/lib
+source-path=packages/status/lib
+source-path=packages/cli/lib
 
 # External sources - files that are sourced but defined elsewhere
 # (prevents "file not found" errors for sourced files)

@@ -4,33 +4,53 @@ A tool to ease you in to multi-agent vibe coding.
 
 Orchestrates Claude workers in tmux sessions for planning, feature development, bug fixing, and chore processing. Uses git worktrees for isolated development and a merge queue for automatic integration.
 
-## Directory Structure
+## Project Structure
 
 ```
-bin/            # CLI commands (v0, v0-plan, v0-feature, v0-fix, v0-chore, etc.)
-lib/            # Shared shell functions and resources
-  *.sh          #   Shell functions (v0-common.sh, worker-common.sh)
-  hooks/        #   Claude Code hooks (notify-progress.sh, stop-*.sh)
-  templates/    #   Worker CLAUDE.md templates (claude.feature.m4, claude.fix.md)
-  prompts/      #   Prompt templates for planning and merging
-docs/debug/     # Troubleshooting guides (workflows, hooks, lost work recovery)
-tests/          # Bats unit tests
+bin/                    # CLI commands (v0, v0-plan, v0-feature, v0-fix, etc.)
+packages/               # Modular shell library packages
+  core/                 #   Foundation: config, logging, git-verify
+  state/                #   State machine for operation lifecycle
+  mergeq/               #   Merge queue management
+  merge/                #   Merge conflict resolution
+  worker/               #   Worker utilities: nudge, coffee, try-catch
+  feature/              #   Feature workflow orchestration
+  hooks/                #   Claude Code hooks (stop-*.sh, notify-progress.sh)
+  status/               #   Status display formatting
+  cli/                  #   Entry point, templates, prompts
+  test-support/         #   Test helpers, fixtures, mocks
+tests/                  # Integration tests (v0-cancel.bats, v0-merge.bats, etc.)
+vendor/                 # Third-party tools (bats)
+docs/debug/             # Troubleshooting guides
+```
+
+## Package Layers
+
+Packages follow a layered dependency model (see `packages/CLAUDE.md`):
+- **Layer 0**: core
+- **Layer 1**: state, mergeq
+- **Layer 2**: merge, worker
+- **Layer 3**: feature, hooks, status
+- **Layer 4**: cli
+
+## Running Tests
+
+```bash
+scripts/test                    # Run all tests (incremental caching)
+scripts/test core cli           # Run specific packages
+scripts/test v0-cancel          # Run specific integration test
+scripts/test --bust v0-merge    # Clear cache for one target
 ```
 
 ## Common Commands
 
-- `make check` - Run all lints and all tests
-- `make lint` - Run all lints
-- `make test` - Run all tests
-- `make test-file FILE=tests/unit/v0-common.bats` - Run a specific test file
+- `make check` - Run all lints and tests
+- `make lint` - ShellCheck on all scripts
+- `scripts/test` - Incremental test runner with caching
 
-## Landing the Plane
+## Before Committing
 
-Before committing changes:
-
-- [ ] Run `make check` which will
-  - `make lint` (ShellCheck on scripts and tests)
-  - `make test` (bats unit tests)
-  - `quench check` (shellcheck policy, cloc, etc.)
-- [ ] New features need corresponding tests in `tests/unit/`
-- [ ] If a test is not yet implemented, tag it: `# bats test_tags=todo:implement`
+- [ ] Run `make check` (lint + test + quench)
+- [ ] New lib code needs unit tests in `packages/<pkg>/tests/`
+- [ ] New bin commands need integration tests in `tests/`
+- [ ] Tag unimplemented tests: `# bats test_tags=todo:implement`

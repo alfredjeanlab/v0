@@ -4,26 +4,26 @@
 set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
 # Source coffee functions for status display
-source "${V0_DIR}/lib/coffee-common.sh"
+source "${V0_DIR}/packages/worker/lib/coffee-common.sh"
 
 # Source nudge functions for status display
-source "${V0_DIR}/lib/nudge-common.sh"
+source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 # Source timestamp utilities
-source "${V0_DIR}/lib/status/timestamps.sh"
+source "${V0_DIR}/packages/status/lib/timestamps.sh"
 
 # Source queue display utilities
-source "${V0_DIR}/lib/status/queue-display.sh"
+source "${V0_DIR}/packages/status/lib/queue-display.sh"
 
 # Source worker status utilities
-source "${V0_DIR}/lib/status/worker-status.sh"
+source "${V0_DIR}/packages/status/lib/worker-status.sh"
 
 # Source recently completed display utilities
-source "${V0_DIR}/lib/status/recent-display.sh"
+source "${V0_DIR}/packages/status/lib/recent-display.sh"
 
 usage() {
   cat <<EOF

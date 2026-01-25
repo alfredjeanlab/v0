@@ -9,9 +9,9 @@ ROOT_DIR="$(pwd)"  # Current directory where command was invoked
 WORKER_BRANCH="v0/worker/fix"
 
 # Source shared utilities
-source "${V0_DIR}/lib/v0-common.sh"
-source "${V0_DIR}/lib/worker-common.sh"
-source "${V0_DIR}/lib/nudge-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/worker/lib/worker-common.sh"
+source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 # Load project config (exits if not found)
 v0_load_config
@@ -109,11 +109,11 @@ start_worker() {
   echo "worker:fix" > "${tree_dir}/.wok/current/assignee"
 
   # Copy worker instructions template
-  cp "${V0_DIR}/lib/templates/claude.fix.md" "${tree_dir}/CLAUDE.md"
+  cp "${V0_DIR}/packages/cli/lib/templates/claude.fix.md" "${tree_dir}/CLAUDE.md"
 
   # Create settings.local.json with Stop hook AND progress notification hook
-  HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-fix.sh"
-  NOTIFY_HOOK="${V0_DIR}/lib/hooks/notify-progress.sh"
+  HOOK_SCRIPT="${V0_DIR}/packages/hooks/lib/stop-fix.sh"
+  NOTIFY_HOOK="${V0_DIR}/packages/hooks/lib/notify-progress.sh"
   mkdir -p "${tree_dir}/.claude"
   cat > "${tree_dir}/.claude/settings.local.json" <<SETTINGS_EOF
 {
