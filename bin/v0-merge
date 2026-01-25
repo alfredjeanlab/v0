@@ -112,6 +112,11 @@ fi
 # Acquire lock before any merge operations
 mg_acquire_lock "${BRANCH}"
 
+# Ensure we're on the develop branch before merging
+if ! mg_ensure_develop_branch; then
+    exit 1
+fi
+
 if mg_has_conflicts "${BRANCH}"; then
     if [[ "${RESOLVE}" = true ]]; then
         echo "Conflicts detected. Starting claude to resolve..."

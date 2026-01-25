@@ -40,6 +40,27 @@ mg_release_lock() {
     rm -f "${MG_LOCKFILE:-}"
 }
 
+# mg_ensure_develop_branch
+# Ensure we're on the develop branch and up to date before merging
+# Returns 0 on success, 1 on failure
+mg_ensure_develop_branch() {
+    local current_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    if [[ "${current_branch}" != "${V0_DEVELOP_BRANCH}" ]]; then
+        echo "Switching to ${V0_DEVELOP_BRANCH} (was on ${current_branch})"
+        if ! git checkout "${V0_DEVELOP_BRANCH}"; then
+            echo "Error: Failed to checkout ${V0_DEVELOP_BRANCH}" >&2
+            return 1
+        fi
+    fi
+
+    # Pull latest to stay current
+    git pull --ff-only "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
+
+    return 0
+}
+
 # mg_do_merge <worktree> <branch>
 # Execute the merge (fast-forward or regular)
 # Returns 0 on success, 1 on failure
