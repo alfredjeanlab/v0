@@ -16,7 +16,7 @@ done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
 # Commands that require a project (.v0.rc)
-PROJECT_COMMANDS="plan tree decompose merge mergeq status build feature resume fix attach cancel shutdown startup hold roadmap pull push"
+PROJECT_COMMANDS="plan tree decompose merge mergeq status build feature resume fix attach cancel shutdown startup hold roadmap pull push archive"
 
 # Commands that work in standalone mode (no .v0.rc needed)
 STANDALONE_COMMANDS="chore"
@@ -89,6 +89,7 @@ Commands:
   resume        Resume an existing feature (alias for 'feature --resume')
   hold          Put an operation on hold (pause phase transitions)
   prune         Remove completed/cancelled operation state
+  archive       Move stale archived plans to icebox worktree
 
   prime         Quick-start guide (run after context loss)
   talk          Open claude with haiku model for quick conversations
@@ -203,7 +204,7 @@ shift
 
 case "${CMD}" in
   # Project-required commands
-  plan|tree|decompose|merge|mergeq|status|watch|build|fix|attach|cancel|shutdown|startup|prune|monitor|hold|roadmap|pull|push)
+  plan|tree|decompose|merge|mergeq|status|watch|build|fix|attach|cancel|shutdown|startup|prune|monitor|hold|roadmap|pull|push|archive)
     # Check if we're in a project - if not, show error
     if ! v0_find_project_root >/dev/null 2>&1; then
         v0_check_standalone_mode "${CMD}"
