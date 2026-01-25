@@ -47,6 +47,7 @@ show_branch_status() {
 
     # Build display string from agent's perspective
     local display=""
+    local state_label=""
     local suggestion=""
 
     if [[ "${agent_ahead}" != "0" ]]; then
@@ -55,6 +56,7 @@ show_branch_status() {
         else
             display="⇡${agent_ahead}"
         fi
+        state_label="ahead"
     fi
 
     if [[ "${agent_behind}" != "0" ]]; then
@@ -65,20 +67,22 @@ show_branch_status() {
             [[ -n "${display}" ]] && display="${display} "
             display="${display}⇣${agent_behind}"
         fi
+        # If behind at all, label is "behind" (even if also ahead)
+        state_label="behind"
     fi
 
     # Determine suggestion based on agent's status
     if [[ "${agent_ahead}" != "0" ]]; then
         # Agent has commits to pull
         if [[ -n "${is_tty}" ]]; then
-            suggestion="(use ${C_CYAN}v0 pull${C_RESET} to merge them to ${C_GREEN}${current_branch}${C_RESET})"
+            suggestion="${C_DIM}(use${C_RESET} ${C_CYAN}v0 pull${C_RESET} ${C_DIM}to merge them to${C_RESET} ${C_GREEN}${current_branch}${C_RESET}${C_DIM})${C_RESET}"
         else
             suggestion="(use v0 pull to merge them to ${current_branch})"
         fi
     elif [[ "${agent_behind}" != "0" ]]; then
         # Agent is strictly behind, suggest push
         if [[ -n "${is_tty}" ]]; then
-            suggestion="(use ${C_CYAN}v0 push${C_RESET} to send them to ${C_GREEN}${develop_branch}${C_RESET})"
+            suggestion="${C_DIM}(use${C_RESET} ${C_CYAN}v0 push${C_RESET} ${C_DIM}to send them to${C_RESET} ${C_GREEN}${develop_branch}${C_RESET}${C_DIM})${C_RESET}"
         else
             suggestion="(use v0 push to send them to ${develop_branch})"
         fi
@@ -86,9 +90,9 @@ show_branch_status() {
 
     # Output from agent's perspective
     if [[ -n "${is_tty}" ]]; then
-        echo -e "Changes: ${C_GREEN}${develop_branch}${C_RESET} is ${display} ${suggestion}"
+        echo -e "Changes: ${C_GREEN}${develop_branch}${C_RESET} is ${display} ${state_label} ${suggestion}"
     else
-        echo -e "Changes: ${develop_branch} is ${display} ${suggestion}"
+        echo -e "Changes: ${develop_branch} is ${display} ${state_label} ${suggestion}"
     fi
     return 0
 }
