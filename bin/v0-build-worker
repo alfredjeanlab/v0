@@ -325,15 +325,24 @@ EOF
   # Use state machine transition to planned phase
   sm_transition_to_planned "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
 
-  # File single feature issue
+  # Update feature issue with plan content (issue already created at init)
   local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
   local FEATURE_ID
-  FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-  if [[ -n "${FEATURE_ID}" ]]; then
-    update_state "epic_id" "\"${FEATURE_ID}\""
-    emit_event "issue:created" "Created feature ${FEATURE_ID}"
+  FEATURE_ID=$(get_state epic_id)
+
+  if [[ -n "${FEATURE_ID}" ]] && [[ "${FEATURE_ID}" != "null" ]]; then
+    # Update existing issue with plan content
+    file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}"
+    emit_event "issue:updated" "Updated feature ${FEATURE_ID} with plan"
   else
-    emit_event "issue:warning" "Failed to create feature issue"
+    # Fallback: create new issue (shouldn't happen normally)
+    FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+    if [[ -n "${FEATURE_ID}" ]]; then
+      update_state "epic_id" "\"${FEATURE_ID}\""
+      emit_event "issue:created" "Created feature ${FEATURE_ID}"
+    else
+      emit_event "issue:warning" "Failed to create feature issue"
+    fi
   fi
 
   # Add labels to the issue
@@ -526,16 +535,25 @@ main() {
       run_build_phase || exit 1
       ;;
     planned)
-      # Plan exists but issue not filed yet - file it now
-      log "Filing issue for existing plan"
+      # Plan exists - update or create issue
+      log "Updating/filing issue for existing plan"
       local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
       local FEATURE_ID
-      FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-      if [[ -n "${FEATURE_ID}" ]]; then
-        update_state "epic_id" "\"${FEATURE_ID}\""
-        emit_event "issue:created" "Created feature ${FEATURE_ID}"
+      FEATURE_ID=$(get_state epic_id)
+
+      if [[ -n "${FEATURE_ID}" ]] && [[ "${FEATURE_ID}" != "null" ]]; then
+        # Update existing issue with plan content
+        file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}"
+        emit_event "issue:updated" "Updated feature ${FEATURE_ID} with plan"
       else
-        emit_event "issue:warning" "Failed to create feature issue"
+        # Fallback: create new issue
+        FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+        if [[ -n "${FEATURE_ID}" ]]; then
+          update_state "epic_id" "\"${FEATURE_ID}\""
+          emit_event "issue:created" "Created feature ${FEATURE_ID}"
+        else
+          emit_event "issue:warning" "Failed to create feature issue"
+        fi
       fi
       sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
       check_hold_before_phase || exit 0
@@ -560,13 +578,22 @@ main() {
           run_build_phase || exit 1
           ;;
         planned)
-          # File issue then build
+          # Update/file issue then build
           local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
           local FEATURE_ID
-          FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-          if [[ -n "${FEATURE_ID}" ]]; then
-            update_state "epic_id" "\"${FEATURE_ID}\""
-            emit_event "issue:created" "Created feature ${FEATURE_ID}"
+          FEATURE_ID=$(get_state epic_id)
+
+          if [[ -n "${FEATURE_ID}" ]] && [[ "${FEATURE_ID}" != "null" ]]; then
+            # Update existing issue with plan content
+            file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}"
+            emit_event "issue:updated" "Updated feature ${FEATURE_ID} with plan"
+          else
+            # Fallback: create new issue
+            FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+            if [[ -n "${FEATURE_ID}" ]]; then
+              update_state "epic_id" "\"${FEATURE_ID}\""
+              emit_event "issue:created" "Created feature ${FEATURE_ID}"
+            fi
           fi
           sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
           run_build_phase || exit 1

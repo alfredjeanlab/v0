@@ -16,6 +16,9 @@ source "${V0_DIR}/packages/worker/lib/worker-common.sh"
 # Source build utilities (init, session monitoring, on-complete)
 source "${V0_DIR}/packages/cli/lib/build/build.sh"
 
+# Source issue filing functions
+source "${V0_DIR}/packages/cli/lib/build/issue.sh"
+
 usage() {
   v0_help <<'EOF'
 Usage: v0 build <name> <prompt> [options]
@@ -576,6 +579,19 @@ else
     fi
   fi
 
+  # Create feature issue immediately (before planning)
+  # This allows showing the issue ID to the user right away
+  FEATURE_ID=$(get_state epic_id)
+  if [[ -z "${FEATURE_ID}" ]] || [[ "${FEATURE_ID}" = "null" ]]; then
+    FEATURE_ID=$(create_feature_issue "${NAME}")
+    if [[ -n "${FEATURE_ID}" ]]; then
+      update_state "epic_id" "\"${FEATURE_ID}\""
+      emit_event "issue:created" "Created feature ${FEATURE_ID}"
+    else
+      emit_event "issue:warning" "Failed to create feature issue"
+    fi
+  fi
+
   # Background execution (default for new operations)
   # The worker (v0-build-worker) runs plan -> build in background.
   # This allows the user to queue features and continue with other work.
@@ -591,6 +607,10 @@ else
     update_state "worker_log" "\"${WORKER_LOG}\""
 
     echo ""
+    if [[ -n "${FEATURE_ID}" ]]; then
+      echo -e "${C_GREEN}Created feature:${C_RESET} ${C_CYAN}${FEATURE_ID}${C_RESET}"
+      echo ""
+    fi
     echo -e "${C_BOLD}${C_CYAN}=== Feature '${NAME}' queued for planning ===${C_RESET}"
     echo -e "Worker PID: ${C_DIM}${WORKER_PID}${C_RESET}"
     echo ""
@@ -629,6 +649,18 @@ if [[ "${PHASE}" = "init" ]]; then
   if [[ -n "${DRY_RUN}" ]]; then
     echo "[DRY-RUN] Would run: v0 plan ${NAME} \"${PROMPT}\" in tmux session ${PLAN_SESSION}"
   else
+    # Create feature issue immediately (before planning) for foreground mode
+    FEATURE_ID=$(get_state epic_id)
+    if [[ -z "${FEATURE_ID}" ]] || [[ "${FEATURE_ID}" = "null" ]]; then
+      FEATURE_ID=$(create_feature_issue "${NAME}")
+      if [[ -n "${FEATURE_ID}" ]]; then
+        update_state "epic_id" "\"${FEATURE_ID}\""
+        emit_event "issue:created" "Created feature ${FEATURE_ID}"
+        echo -e "${C_GREEN}Created feature:${C_RESET} ${C_CYAN}${FEATURE_ID}${C_RESET}"
+        echo ""
+      fi
+    fi
+
     if tmux has-session -t "${PLAN_SESSION}" 2>/dev/null; then
       echo "Plan session '${PLAN_SESSION}' already running, waiting for completion..."
       echo "Attach with: v0 attach feature ${NAME}"
@@ -731,14 +763,23 @@ EOF
   # Use state machine transition to planned phase
   sm_transition_to_planned "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
 
-  # File single feature issue
+  # Update feature issue with plan content (issue already created at init)
   PLAN_FILE="${PLANS_DIR}/${NAME}.md"
-  FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-  if [[ -n "${FEATURE_ID}" ]]; then
-    update_state "epic_id" "\"${FEATURE_ID}\""
-    emit_event "issue:created" "Created feature ${FEATURE_ID}"
+  FEATURE_ID=$(get_state epic_id)
+
+  if [[ -n "${FEATURE_ID}" ]] && [[ "${FEATURE_ID}" != "null" ]]; then
+    # Update existing issue with plan content
+    file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}"
+    emit_event "issue:updated" "Updated feature ${FEATURE_ID} with plan"
   else
-    emit_event "issue:warning" "Failed to create feature issue"
+    # Fallback: create new issue (shouldn't happen normally)
+    FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+    if [[ -n "${FEATURE_ID}" ]]; then
+      update_state "epic_id" "\"${FEATURE_ID}\""
+      emit_event "issue:created" "Created feature ${FEATURE_ID}"
+    else
+      emit_event "issue:warning" "Failed to create feature issue"
+    fi
   fi
 
   # Add labels to the issue
