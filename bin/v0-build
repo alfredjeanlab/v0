@@ -272,6 +272,15 @@ get_blocker_phase() {
   echo "${phase:-unknown}"
 }
 
+# Get blocker operation's issue ID for wk dep
+get_blocker_issue_id() {
+  local op="$1"
+  local blocker_state="${BUILD_DIR}/operations/${op}/state.json"
+  if [[ -f "${blocker_state}" ]]; then
+    jq -r '.epic_id // empty' "${blocker_state}"
+  fi
+}
+
 # Resume logic
 if [[ -n "${RESUME}" ]]; then
   if [[ ! -f "${STATE_FILE}" ]]; then
@@ -566,6 +575,17 @@ else
         update_state "phase" '"queued"'
         emit_event "plan:provided" "Using existing feature ${EXISTING_FEATURE} from ${PLAN_FILE_ARG}"
         PHASE="queued"
+        # Add blocked-by dependency in wk if --after was specified
+        if [[ -n "${AFTER}" ]] && [[ "${AFTER}" != "null" ]]; then
+          BLOCKER_ISSUE_ID=$(get_blocker_issue_id "${AFTER}")
+          if [[ -n "${BLOCKER_ISSUE_ID}" ]] && [[ "${BLOCKER_ISSUE_ID}" != "null" ]]; then
+            if wk dep "${EXISTING_FEATURE}" blocked-by "${BLOCKER_ISSUE_ID}" 2>/dev/null; then
+              emit_event "dep:added" "Added blocked-by: ${BLOCKER_ISSUE_ID}"
+            else
+              emit_event "dep:failed" "Failed to add blocked-by: ${BLOCKER_ISSUE_ID}"
+            fi
+          fi
+        fi
       else
         echo "Warning: Feature ${EXISTING_FEATURE} is ${FEATURE_STATUS}, will file new issue"
         update_state "phase" '"planned"'
@@ -777,6 +797,17 @@ EOF
     if [[ -n "${FEATURE_ID}" ]]; then
       update_state "epic_id" "\"${FEATURE_ID}\""
       emit_event "issue:created" "Created feature ${FEATURE_ID}"
+      # Add blocked-by dependency in wk if --after was specified
+      if [[ -n "${AFTER}" ]] && [[ "${AFTER}" != "null" ]]; then
+        BLOCKER_ISSUE_ID=$(get_blocker_issue_id "${AFTER}")
+        if [[ -n "${BLOCKER_ISSUE_ID}" ]] && [[ "${BLOCKER_ISSUE_ID}" != "null" ]]; then
+          if wk dep "${FEATURE_ID}" blocked-by "${BLOCKER_ISSUE_ID}" 2>/dev/null; then
+            emit_event "dep:added" "Added blocked-by: ${BLOCKER_ISSUE_ID}"
+          else
+            emit_event "dep:failed" "Failed to add blocked-by: ${BLOCKER_ISSUE_ID}"
+          fi
+        fi
+      fi
     else
       emit_event "issue:warning" "Failed to create feature issue"
     fi

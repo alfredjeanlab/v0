@@ -91,6 +91,15 @@ get_blocker_phase() {
   echo "${phase:-unknown}"
 }
 
+# Get blocker operation's issue ID for wk dep
+get_blocker_issue_id() {
+  local op="$1"
+  local blocker_state="${BUILD_DIR}/operations/${op}/state.json"
+  if [[ -f "${blocker_state}" ]]; then
+    jq -r '.epic_id // empty' "${blocker_state}"
+  fi
+}
+
 create_done_script() {
   local target_dir="$1"
   local exit_file="${2:-}"
@@ -342,6 +351,19 @@ EOF
       emit_event "issue:created" "Created feature ${FEATURE_ID}"
     else
       emit_event "issue:warning" "Failed to create feature issue"
+    fi
+  fi
+
+  # Add blocked-by dependency in wk if --after was specified
+  AFTER_OP=$(get_state after)
+  if [[ -n "${FEATURE_ID}" ]] && [[ -n "${AFTER_OP}" ]] && [[ "${AFTER_OP}" != "null" ]]; then
+    BLOCKER_ISSUE_ID=$(get_blocker_issue_id "${AFTER_OP}")
+    if [[ -n "${BLOCKER_ISSUE_ID}" ]] && [[ "${BLOCKER_ISSUE_ID}" != "null" ]]; then
+      if wk dep "${FEATURE_ID}" blocked-by "${BLOCKER_ISSUE_ID}" 2>/dev/null; then
+        emit_event "dep:added" "Added blocked-by: ${BLOCKER_ISSUE_ID}"
+      else
+        emit_event "dep:failed" "Failed to add blocked-by: ${BLOCKER_ISSUE_ID}"
+      fi
     fi
   fi
 
