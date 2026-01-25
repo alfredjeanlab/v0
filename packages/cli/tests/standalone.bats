@@ -198,11 +198,11 @@ load '../../test-support/helpers/test_helper'
 # bin/v0 standalone dispatch tests
 # ============================================================================
 
-@test "v0 feature shows error outside project" {
+@test "v0 build shows error outside project" {
     cd "${TEST_TEMP_DIR}"
     rm -f "${TEST_TEMP_DIR}/project/.v0.rc"  # Ensure no .v0.rc
 
-    run "$PROJECT_ROOT/bin/v0" feature test-feature
+    run "$PROJECT_ROOT/bin/v0" build test-feature
     assert_failure
     assert_output --partial "Error: Not in a v0 project directory"
 }
@@ -220,7 +220,7 @@ load '../../test-support/helpers/test_helper'
     cd "${TEST_TEMP_DIR}"
     rm -f "${TEST_TEMP_DIR}/project/.v0.rc"
 
-    run "$PROJECT_ROOT/bin/v0" feature test-feature
+    run "$PROJECT_ROOT/bin/v0" build test-feature
     assert_failure
     assert_output --partial "v0 chore"
 }
@@ -229,7 +229,7 @@ load '../../test-support/helpers/test_helper'
     cd "${TEST_TEMP_DIR}"
     rm -f "${TEST_TEMP_DIR}/project/.v0.rc"
 
-    run "$PROJECT_ROOT/bin/v0" feature test-feature
+    run "$PROJECT_ROOT/bin/v0" build test-feature
     assert_failure
     assert_output --partial "v0 help"
 }

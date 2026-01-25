@@ -69,7 +69,7 @@ v0 init --develop staging --remote upstream
 The main workflow is fire-and-forget. Start work and let it run:
 
 ```bash
-v0 feature auth "Add JWT authentication"   # Plans, decomposes, implements, merges
+v0 build auth "Add JWT authentication"      # Plans, decomposes, implements, merges
 v0 chore "Update dependencies"              # Files issue, starts worker immediately
 v0 fix "Login button broken on mobile"      # Files bug, starts worker immediately
 ```
@@ -77,7 +77,7 @@ v0 fix "Login button broken on mobile"      # Files bug, starts worker immediate
 A typical session looks like launching parallel work:
 
 ```bash
-v0 feature api "REST API for users"
+v0 build api "REST API for users"
 v0 chore "Refactor auth module"
 v0 chore "Add missing tests"
 v0 fix "500 error on empty request"
@@ -96,9 +96,9 @@ As work completes, it's automatically committed, pushed, and merged into main vi
 You'll get macOS notifications as tasks complete and branches merge.
 
 
-### Features and Plans
+### Builds and Plans
 
-Features go through a planning lifecycle:
+Builds go through a planning lifecycle:
 
 1. **Plan** - Creates `plans/<name>.md` with implementation steps
 2. **Decompose** - Converts the plan into trackable issues
@@ -110,13 +110,13 @@ You can create plans separately for review:
 ```bash
 v0 plan api "Build REST API"           # Creates plans/api.md
 # ... review and edit the plan ...
-v0 feature plans/api.md                # Execute the plan
+v0 build plans/api.md                  # Execute the plan
 ```
 
-Or let `v0 feature` handle everything:
+Or let `v0 build` handle everything:
 
 ```bash
-v0 feature api "Build REST API"        # Plans, decomposes, executes, merges
+v0 build api "Build REST API"          # Plans, decomposes, executes, merges
 ```
 
 Completed plans are archived to `plans/archive/`.

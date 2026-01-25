@@ -16,7 +16,7 @@ done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
 # Commands that require a project (.v0.rc)
-PROJECT_COMMANDS="plan tree decompose merge mergeq status feature resume fix attach cancel shutdown startup hold roadmap pull push"
+PROJECT_COMMANDS="plan tree decompose merge mergeq status build feature resume fix attach cancel shutdown startup hold roadmap pull push"
 
 # Commands that work in standalone mode (no .v0.rc needed)
 STANDALONE_COMMANDS="chore"
@@ -75,7 +75,7 @@ Commands:
 
   fix           Sequential bug fixing worker
   chore         Sequential chore processing worker
-  feat[ure]     Full pipeline: plan -> decompose -> execute -> merge
+  build         Full pipeline: plan -> decompose -> execute -> merge
   roadmap       Orchestrate autonomous work using a roadmap
   plan          Create implementation plan from prompt
   decomp[ose]   Convert plan to issues
@@ -105,7 +105,7 @@ Examples:
   v0 init                              # Initialize with auto-detected branch
   v0 init --develop agent              # Use 'agent' as the development branch
   v0 init ./myproject --remote upstream  # Init in myproject, use 'upstream' remote
-  v0 feature auth "Add JWT auth"       # Full autonomous pipeline
+  v0 build auth "Add JWT auth"         # Full autonomous pipeline
   v0 fix "Button not working"          # Report a bug to the fix worker
   v0 status                            # List all operations
   v0 plan api "Build REST API"         # Just create a plan
@@ -208,7 +208,7 @@ shift
 
 case "${CMD}" in
   # Project-required commands
-  plan|tree|decompose|merge|mergeq|status|watch|feature|fix|attach|cancel|shutdown|startup|prune|monitor|hold|roadmap|pull|push)
+  plan|tree|decompose|merge|mergeq|status|watch|build|fix|attach|cancel|shutdown|startup|prune|monitor|hold|roadmap|pull|push)
     # Check if we're in a project - if not, show error
     if ! v0_find_project_root >/dev/null 2>&1; then
         v0_check_standalone_mode "${CMD}"
@@ -234,11 +234,11 @@ case "${CMD}" in
     exec "${V0_DIR}/bin/v0-self" "$@"
     ;;
   # Aliases
-  feat)
-    exec "${V0_DIR}/bin/v0-feature" "$@"
+  feat|feature)
+    exec "${V0_DIR}/bin/v0-build" "$@"
     ;;
   resume)
-    exec "${V0_DIR}/bin/v0-feature" --resume "$@"
+    exec "${V0_DIR}/bin/v0-build" --resume "$@"
     ;;
   decomp)
     exec "${V0_DIR}/bin/v0-decompose" "$@"
