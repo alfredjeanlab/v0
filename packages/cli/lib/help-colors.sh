@@ -7,6 +7,7 @@
 # Reads from stdin, writes to stdout
 # Colorizes:
 #   - Section headers (lines ending with : at column 0)
+#   - Usage line prefix (just the "Usage:" part)
 #   - Commands and flags (first word after leading spaces)
 #   - Defaults (text in parentheses containing "default")
 v0_colorize_help() {
@@ -15,6 +16,9 @@ v0_colorize_help() {
         # Section headers: lines that end with ":" and start at column 0
         if [[ "$line" =~ ^[A-Z][a-zA-Z\ ]*:$ ]]; then
             printf '%b%s%b\n' "${C_HELP_SECTION}" "$line" "${C_RESET}"
+        # Usage line: colorize just the "Usage:" prefix
+        elif [[ "$line" =~ ^(Usage:)(.*)$ ]]; then
+            printf '%b%s%b%s\n' "${C_HELP_SECTION}" "${BASH_REMATCH[1]}" "${C_RESET}" "${BASH_REMATCH[2]}"
         # Lines with commands/flags (indented lines)
         elif [[ "$line" =~ ^[\ ]{2,} ]]; then
             # Colorize defaults in parentheses containing "default"

@@ -49,6 +49,24 @@ setup() {
     [[ "$result" != *$'\033[38;5;74m'"some text:"* ]]
 }
 
+@test "v0_colorize_help colorizes Usage: prefix" {
+    C_HELP_SECTION=$'\033[38;5;74m'
+    C_RESET=$'\033[0m'
+
+    result=$(echo "Usage: v0 <command> [args]" | v0_colorize_help)
+    [[ "$result" == *$'\033[38;5;74m'"Usage:"* ]]  # Usage: is colored
+    [[ "$result" == *"v0 <command> [args]"* ]]     # Rest is preserved
+}
+
+@test "v0_colorize_help leaves content after Usage: uncolored" {
+    C_HELP_SECTION=$'\033[38;5;74m'
+    C_RESET=$'\033[0m'
+
+    result=$(echo "Usage: mycommand --flag" | v0_colorize_help)
+    # The reset should come right after "Usage:"
+    [[ "$result" == $'\033[38;5;74m'"Usage:"$'\033[0m'" mycommand --flag" ]]
+}
+
 # ============================================================================
 # v0_colorize_help() tests - Command colorization
 # ============================================================================
