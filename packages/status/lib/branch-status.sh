@@ -3,11 +3,13 @@
 # Copyright (c) 2026 Alfred Jean LLC
 #
 # Branch status display functions
-# Shows ahead/behind status for V0_DEVELOP_BRANCH vs current branch
+# Shows ahead/behind status for V0_DEVELOP_BRANCH from agent's perspective
 
 # Show ahead/behind status line for develop branch
-# Displays ⇡N (green) for ahead, ⇣N (red) for behind
-# Suggests v0 push (if strictly ahead) or v0 pull (if any behind)
+# Displays status from agent branch perspective:
+#   ⇡N (green) = agent is N commits ahead of current branch
+#   ⇣N (red) = agent is N commits behind current branch
+# Suggests v0 pull (if agent ahead) or v0 push (if agent strictly behind)
 #
 # Returns: 0 if status line was displayed, 1 if nothing to display
 show_branch_status() {
@@ -25,60 +27,68 @@ show_branch_status() {
     git fetch "${remote}" "${develop_branch}" --quiet 2>/dev/null || true
 
     # Get ahead/behind counts between current branch and remote develop branch
-    # Format: ahead<tab>behind
+    # Format: left<tab>right (left = commits in remote, right = commits in HEAD)
     local counts
     counts=$(git rev-list --left-right --count "${remote}/${develop_branch}...HEAD" 2>/dev/null) || return 1
 
-    local behind ahead
-    behind=$(echo "${counts}" | cut -f1)
-    ahead=$(echo "${counts}" | cut -f2)
+    # From agent's perspective:
+    # - agent_ahead = commits agent has that current doesn't (left side)
+    # - agent_behind = commits current has that agent doesn't (right side)
+    local agent_ahead agent_behind
+    agent_ahead=$(echo "${counts}" | cut -f1)
+    agent_behind=$(echo "${counts}" | cut -f2)
 
     # Nothing to display if in sync
-    [[ "${behind}" = "0" ]] && [[ "${ahead}" = "0" ]] && return 1
+    [[ "${agent_ahead}" = "0" ]] && [[ "${agent_behind}" = "0" ]] && return 1
 
     # Check if TTY for colors
     local is_tty=""
     [[ -t 1 ]] && is_tty=1
 
-    # Build display string
+    # Build display string from agent's perspective
     local display=""
     local suggestion=""
 
-    if [[ "${ahead}" != "0" ]]; then
+    if [[ "${agent_ahead}" != "0" ]]; then
         if [[ -n "${is_tty}" ]]; then
-            display="${C_GREEN}⇡${ahead}${C_RESET}"
+            display="${C_GREEN}⇡${agent_ahead}${C_RESET}"
         else
-            display="⇡${ahead}"
+            display="⇡${agent_ahead}"
         fi
     fi
 
-    if [[ "${behind}" != "0" ]]; then
+    if [[ "${agent_behind}" != "0" ]]; then
         if [[ -n "${is_tty}" ]]; then
             [[ -n "${display}" ]] && display="${display} "
-            display="${display}${C_RED}⇣${behind}${C_RESET}"
+            display="${display}${C_RED}⇣${agent_behind}${C_RESET}"
         else
             [[ -n "${display}" ]] && display="${display} "
-            display="${display}⇣${behind}"
+            display="${display}⇣${agent_behind}"
         fi
     fi
 
-    # Determine suggestion
-    if [[ "${behind}" != "0" ]]; then
-        # Any behind means we should pull first
+    # Determine suggestion based on agent's status
+    if [[ "${agent_ahead}" != "0" ]]; then
+        # Agent has commits to pull
         if [[ -n "${is_tty}" ]]; then
-            suggestion="${C_DIM}(v0 pull)${C_RESET}"
+            suggestion="(use ${C_CYAN}v0 pull${C_RESET} to merge them to ${C_YELLOW}${current_branch}${C_RESET})"
         else
-            suggestion="(v0 pull)"
+            suggestion="(use v0 pull to merge them to ${current_branch})"
         fi
-    elif [[ "${ahead}" != "0" ]]; then
-        # Strictly ahead, suggest push
+    elif [[ "${agent_behind}" != "0" ]]; then
+        # Agent is strictly behind, suggest push
         if [[ -n "${is_tty}" ]]; then
-            suggestion="${C_DIM}(v0 push)${C_RESET}"
+            suggestion="(use ${C_CYAN}v0 push${C_RESET} to send them to ${C_YELLOW}${develop_branch}${C_RESET})"
         else
-            suggestion="(v0 push)"
+            suggestion="(use v0 push to send them to ${develop_branch})"
         fi
     fi
 
-    echo -e "${current_branch} ${display} ${suggestion}"
+    # Output from agent's perspective
+    if [[ -n "${is_tty}" ]]; then
+        echo -e "Changes: ${C_YELLOW}${develop_branch}${C_RESET} is ${display} ${suggestion}"
+    else
+        echo -e "Changes: ${develop_branch} is ${display} ${suggestion}"
+    fi
     return 0
 }
