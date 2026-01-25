@@ -30,9 +30,9 @@ v0_colorize_help() {
                 local spaces="${BASH_REMATCH[1]}"
                 local cmd="${BASH_REMATCH[2]}"
                 local rest="${BASH_REMATCH[3]}"
-                printf '%s%b%s%b%s\n' "$spaces" "${C_HELP_COMMAND}" "$cmd" "${C_RESET}" "$rest"
+                printf '%s%b%s%b%b\n' "$spaces" "${C_HELP_COMMAND}" "$cmd" "${C_RESET}" "$rest"
             else
-                printf '%s\n' "$line"
+                printf '%b\n' "$line"
             fi
         else
             printf '%s\n' "$line"
