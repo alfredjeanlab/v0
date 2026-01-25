@@ -142,19 +142,18 @@ teardown() {
 @test "v0-roadmap: rejects invalid name with spaces" {
     run "${V0_ROADMAP}" "invalid name" "Description" 2>&1
     assert_failure
-    assert_output --partial "must start with a letter"
+    assert_output --partial "must start with an alphanumeric"
 }
 
-@test "v0-roadmap: rejects name starting with number" {
-    run "${V0_ROADMAP}" "123roadmap" "Description" 2>&1
-    assert_failure
-    assert_output --partial "must start with a letter"
+@test "v0-roadmap: accepts name starting with number" {
+    run "${V0_ROADMAP}" "123roadmap" "Test description" --dry-run
+    assert_success
 }
 
 @test "v0-roadmap: rejects name starting with underscore" {
     run "${V0_ROADMAP}" "_roadmap" "Description" 2>&1
     assert_failure
-    assert_output --partial "must start with a letter"
+    assert_output --partial "must start with an alphanumeric"
 }
 
 @test "v0-roadmap: accepts valid name with letters and hyphens" {
