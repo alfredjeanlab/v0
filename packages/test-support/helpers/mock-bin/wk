@@ -2,6 +2,8 @@
 # Mock wk command for testing
 # Behavior controlled by environment variables:
 #   MOCK_WK_LIST_OUTPUT - output for wk list
+#   MOCK_WK_NEW_ID - issue ID to return for wk new (default: mock-abc1)
+#   MOCK_WK_NEW_FAIL - set to 1 to make wk new fail
 
 case "$1" in
     "list")
@@ -11,6 +13,31 @@ case "$1" in
         exit 0
         ;;
     "init")
+        exit 0
+        ;;
+    "new")
+        if [ -n "$MOCK_WK_NEW_FAIL" ]; then
+            echo "Error: mock wk new failure" >&2
+            exit 1
+        fi
+        # Extract title from args ($2 is type, $3 is title)
+        type="$2"
+        title="$3"
+        issue_id="${MOCK_WK_NEW_ID:-mock-abc1}"
+        echo "Created [${type}] (todo) ${issue_id}: ${title}"
+        exit 0
+        ;;
+    "edit")
+        # Silent success for edit commands
+        exit 0
+        ;;
+    "label")
+        # Silent success for label commands
+        exit 0
+        ;;
+    "show")
+        # Return basic JSON for show command
+        echo '{"status": "open"}'
         exit 0
         ;;
     *)

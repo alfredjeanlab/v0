@@ -4,16 +4,47 @@
 # Issue filing utilities for v0-build
 # Source this file to get issue filing functions
 
-# file_plan_issue <name> <plan_file>
-# Creates a single feature issue for the plan
+# create_feature_issue <name>
+# Creates a feature issue with a placeholder description
+# Arguments:
+#   $1 = operation name
+# Returns: issue ID on stdout, or empty string on failure
+create_feature_issue() {
+  local name="$1"
+  local title="Plan: ${name}"
+
+  # Create feature issue with placeholder description
+  local issue_id output wk_err
+  wk_err=$(mktemp)
+  output=$(wk new feature "${title}" --description "Planning in progress..." 2>"${wk_err}") || {
+    echo "create_feature_issue: wk new failed: $(cat "${wk_err}")" >&2
+    rm -f "${wk_err}"
+    return 1
+  }
+  rm -f "${wk_err}"
+
+  issue_id=$(echo "${output}" | grep -oE '\) [a-zA-Z0-9-]+:' | sed 's/^) //; s/:$//')
+
+  if [[ -z "${issue_id}" ]]; then
+    echo "create_feature_issue: failed to extract issue ID from: ${output}" >&2
+    return 1
+  fi
+
+  echo "${issue_id}"
+}
+
+# file_plan_issue <name> <plan_file> [existing_id]
+# Creates or updates a feature issue with plan content
 # Arguments:
 #   $1 = operation name (basename of plan)
 #   $2 = path to plan file
+#   $3 = (optional) existing issue ID to update instead of creating new
 # Returns: issue ID on stdout, or empty string on failure
 # Logs progress to stderr for debugging
 file_plan_issue() {
   local name="$1"
   local plan_file="$2"
+  local existing_id="${3:-}"
   local title="Plan: ${name}"
   local description
 
@@ -24,22 +55,28 @@ file_plan_issue() {
   fi
   description=$(cat "${plan_file}")
 
-  # Create feature issue and extract ID from output
-  # Output format: "Created [feature] (todo) v0-abc1: Title"
-  local issue_id output wk_err
-  wk_err=$(mktemp)
-  output=$(wk new feature "${title}" 2>"${wk_err}") || {
-    echo "file_plan_issue: wk new failed: $(cat "${wk_err}")" >&2
+  local issue_id
+  if [[ -n "${existing_id}" ]]; then
+    # Update existing issue
+    issue_id="${existing_id}"
+  else
+    # Create new issue (backwards compatibility)
+    # Output format: "Created [feature] (todo) v0-abc1: Title"
+    local output wk_err
+    wk_err=$(mktemp)
+    output=$(wk new feature "${title}" 2>"${wk_err}") || {
+      echo "file_plan_issue: wk new failed: $(cat "${wk_err}")" >&2
+      rm -f "${wk_err}"
+      return 1
+    }
     rm -f "${wk_err}"
-    return 1
-  }
-  rm -f "${wk_err}"
 
-  issue_id=$(echo "${output}" | grep -oE '\) [a-zA-Z0-9-]+:' | sed 's/^) //; s/:$//')
+    issue_id=$(echo "${output}" | grep -oE '\) [a-zA-Z0-9-]+:' | sed 's/^) //; s/:$//')
 
-  if [[ -z "${issue_id}" ]]; then
-    echo "file_plan_issue: failed to extract issue ID from: ${output}" >&2
-    return 1
+    if [[ -z "${issue_id}" ]]; then
+      echo "file_plan_issue: failed to extract issue ID from: ${output}" >&2
+      return 1
+    fi
   fi
 
   # Set the description (plan content)
