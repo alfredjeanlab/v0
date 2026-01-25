@@ -33,20 +33,22 @@ Options:
   --dry-run      Show what would happen without executing
   --after <op>       Wait for operation to merge before executing
   --eager            With --after: run planning before waiting (default: wait first)
-  --plan <file>      Use existing plan file
+  --plan <file>      Use existing plan (skips planning if feature ID present)
   --foreground       Run plan/build in foreground (blocking)
   --attach           Follow worker logs after queuing
 
 Modes:
   Default: Queue build and run in background (exits immediately)
   --foreground: Plan -> Launch worker -> Auto-merge (blocking)
-  --enqueue: Plan -> Stop (work available for wk ready)
+  --enqueue: Plan only, don't execute (work available via resume)
   --resume: Check state and continue from last phase
   --no-merge: Skip automatic merge after completion
   --after: Wait for another operation to merge before executing
     Default: Block immediately, don't start any work until unblocked
     --eager: Run planning first, then block before execution
   --plan: Use existing plan file
+    If plan has feature ID (\$ISSUE_PREFIX-xxx): Skip planning, go to execute
+    If no feature ID: Skip planning, file issue, then execute
 
 Examples:
   v0 build auth "Add JWT authentication"          # Queue and run in background
@@ -562,8 +564,9 @@ else
         emit_event "plan:provided" "Using existing feature ${EXISTING_FEATURE} from ${PLAN_FILE_ARG}"
         PHASE="queued"
       else
+        echo "Warning: Feature ${EXISTING_FEATURE} is ${FEATURE_STATUS}, will file new issue"
         update_state "phase" '"planned"'
-        emit_event "plan:provided" "Feature ${EXISTING_FEATURE} is ${FEATURE_STATUS}, will file new issue"
+        emit_event "plan:provided" "Feature ${EXISTING_FEATURE} is ${FEATURE_STATUS}, needs new issue"
         PHASE="planned"
       fi
     else

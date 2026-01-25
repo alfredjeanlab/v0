@@ -102,7 +102,7 @@ You'll get macOS notifications as tasks complete and branches merge.
 Builds go through a planning lifecycle:
 
 1. **Plan** - Creates `plans/<name>.md` with implementation steps
-2. **Execute** - Works through the plan in an isolated worktree
+2. **Execute** - Implements the plan in an isolated worktree
 3. **Merge** - Completed work merges to main
 
 You can create plans separately for review:

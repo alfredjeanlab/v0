@@ -52,8 +52,8 @@ flowchart TD
 | State | Description |
 |-------|-------------|
 | `init` | Initial state. Planning has not started yet. |
-| `planned` | Plan file created at `plans/<name>.md`. Ready for execution. |
-| `queued` | Issue filed from plan. Ready for execution (or stopped if `--enqueue`). |
+| `planned` | Plan file created at `plans/<name>.md`. Ready for issue filing. |
+| `queued` | Feature issue filed from plan. Ready for execution (or stopped if `--enqueue`). |
 | `blocked` | Waiting for another operation to complete (`--after` flag). |
 | `executing` | Claude agent is running in a tmux session. |
 | `completed` | Agent finished work. May be pending merge. |
@@ -79,8 +79,9 @@ flowchart TD
 
 ### Issue Filing Phase (`planned` → `queued`)
 
-- Single feature issue created with plan contents as description
+- Single feature issue created using `wk new feature`
 - Issue labeled with `plan:<name>`
+- Issue description contains the full plan contents
 
 ### Execution Phase (`queued` → `executing` → `completed`)
 

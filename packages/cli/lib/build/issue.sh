@@ -6,6 +6,9 @@
 
 # file_plan_issue <name> <plan_file>
 # Creates a single feature issue for the plan
+# Arguments:
+#   $1 = operation name (basename of plan)
+#   $2 = path to plan file
 # Returns: issue ID on stdout, or empty string on failure
 # Logs progress to stderr for debugging
 file_plan_issue() {

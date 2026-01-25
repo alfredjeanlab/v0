@@ -326,7 +326,7 @@ EOF
   sm_transition_to_planned "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
 
   # File single feature issue
-  PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+  local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
   local FEATURE_ID
   FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
   if [[ -n "${FEATURE_ID}" ]]; then
@@ -402,7 +402,7 @@ run_build_phase() {
   m4 ${M4_ARGS} "${V0_DIR}/packages/cli/lib/templates/claude.build.m4" > "${TREE_DIR}/CLAUDE.md"
   emit_event "claude.md:created" "${TREE_DIR}/CLAUDE.md"
 
-  HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-build.sh"
+  HOOK_SCRIPT="${V0_DIR}/packages/hooks/lib/stop-build.sh"
   cat > "${TREE_DIR}/.claude/settings.local.json" <<SETTINGS_EOF
 {
   "hooks": {
@@ -525,16 +525,18 @@ main() {
       run_build_phase || exit 1
       ;;
     planned)
-      # Plan exists but issue may not be filed yet - file it now
-      PLAN_FILE="${PLANS_DIR}/${NAME}.md"
-      if [[ -f "${PLAN_FILE}" ]]; then
-        FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-        if [[ -n "${FEATURE_ID}" ]]; then
-          update_state "epic_id" "\"${FEATURE_ID}\""
-          emit_event "issue:created" "Created feature ${FEATURE_ID}"
-        fi
-        sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
+      # Plan exists but issue not filed yet - file it now
+      log "Filing issue for existing plan"
+      local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+      local FEATURE_ID
+      FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+      if [[ -n "${FEATURE_ID}" ]]; then
+        update_state "epic_id" "\"${FEATURE_ID}\""
+        emit_event "issue:created" "Created feature ${FEATURE_ID}"
+      else
+        emit_event "issue:warning" "Failed to create feature issue"
       fi
+      sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
       check_hold_before_phase || exit 0
       run_build_phase || exit 1
       ;;
@@ -557,16 +559,15 @@ main() {
           run_build_phase || exit 1
           ;;
         planned)
-          # File issue if not already done
-          PLAN_FILE="${PLANS_DIR}/${NAME}.md"
-          if [[ -f "${PLAN_FILE}" ]]; then
-            FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-            if [[ -n "${FEATURE_ID}" ]]; then
-              update_state "epic_id" "\"${FEATURE_ID}\""
-              emit_event "issue:created" "Created feature ${FEATURE_ID}"
-            fi
-            sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
+          # File issue then build
+          local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+          local FEATURE_ID
+          FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+          if [[ -n "${FEATURE_ID}" ]]; then
+            update_state "epic_id" "\"${FEATURE_ID}\""
+            emit_event "issue:created" "Created feature ${FEATURE_ID}"
           fi
+          sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
           run_build_phase || exit 1
           ;;
         init)
