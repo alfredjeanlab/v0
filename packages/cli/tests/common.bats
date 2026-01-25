@@ -253,14 +253,14 @@ EOF
     refute_output --partial "Error"
 }
 
-@test "v0_load_config sets V0_DEVELOP_BRANCH default to agent" {
+@test "v0_load_config sets V0_DEVELOP_BRANCH default to v0/develop" {
     create_v0rc
     cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
 
     v0_load_config
 
-    assert_equal "${V0_DEVELOP_BRANCH}" "agent"
+    assert_equal "${V0_DEVELOP_BRANCH}" "v0/develop"
 }
 
 @test "v0_load_config allows V0_DEVELOP_BRANCH override" {
@@ -283,7 +283,7 @@ EOF
 
     # Verify it's exported by checking in subshell
     run bash -c 'echo "${V0_DEVELOP_BRANCH}"'
-    assert_output "agent"
+    assert_output "v0/develop"
 }
 
 # ============================================================================
@@ -634,7 +634,7 @@ EOF
     assert_output "develop"
 }
 
-@test "v0_detect_develop_branch returns agent when develop does not exist" {
+@test "v0_detect_develop_branch returns v0/develop when develop does not exist" {
     init_mock_git_repo "${TEST_TEMP_DIR}/project"
     cd "${TEST_TEMP_DIR}/project" || return 1
 
@@ -642,7 +642,7 @@ EOF
 
     run v0_detect_develop_branch
     assert_success
-    assert_output "agent"
+    assert_output "v0/develop"
 }
 
 @test "v0_detect_develop_branch checks remote when local branch not found" {
@@ -737,7 +737,7 @@ EOF
     assert_success
 }
 
-@test "v0_init_config creates agent branch if missing" {
+@test "v0_init_config creates v0/develop branch if missing" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
@@ -748,19 +748,19 @@ EOF
 
     source_lib "v0-common.sh"
 
-    # Verify agent branch does not exist initially
-    run git branch --list agent
-    refute_output --partial "agent"
+    # Verify v0/develop branch does not exist initially
+    run git branch --list "v0/develop"
+    refute_output --partial "v0/develop"
 
-    # Run init (should auto-detect agent and create branch)
+    # Run init (should auto-detect v0/develop and create branch)
     v0_init_config "${test_dir}"
 
-    # Verify agent branch was created
-    run git branch --list agent
-    assert_output --partial "agent"
+    # Verify v0/develop branch was created
+    run git branch --list "v0/develop"
+    assert_output --partial "v0/develop"
 }
 
-@test "v0_init_config writes explicit agent branch to .v0.rc" {
+@test "v0_init_config writes explicit v0/develop branch to .v0.rc" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
@@ -773,26 +773,26 @@ EOF
 
     v0_init_config "${test_dir}"
 
-    # Should contain explicit V0_DEVELOP_BRANCH="agent"
-    run grep 'V0_DEVELOP_BRANCH="agent"' "${test_dir}/.v0.rc"
+    # Should contain explicit V0_DEVELOP_BRANCH="v0/develop"
+    run grep 'V0_DEVELOP_BRANCH="v0/develop"' "${test_dir}/.v0.rc"
     assert_success
     # Should NOT be commented
     run grep -E '^# V0_DEVELOP_BRANCH=' "${test_dir}/.v0.rc"
     assert_failure
 }
 
-@test "v0_init_config preserves existing agent branch" {
+@test "v0_init_config preserves existing v0/develop branch" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
 
-    # Create agent branch with a different commit
-    git checkout -b agent
-    echo "agent content" > agent.txt
-    git add agent.txt
-    git commit -m "Agent commit"
-    local agent_commit
-    agent_commit=$(git rev-parse HEAD)
+    # Create v0/develop branch with a different commit
+    git checkout -b "v0/develop"
+    echo "develop content" > develop.txt
+    git add develop.txt
+    git commit -m "Develop commit"
+    local develop_commit
+    develop_commit=$(git rev-parse HEAD)
     git checkout main
 
     # Mock wk to avoid actual wk initialization
@@ -804,9 +804,9 @@ EOF
     # Run init
     v0_init_config "${test_dir}"
 
-    # Verify agent branch still points to same commit (was preserved)
-    run git rev-parse agent
-    assert_output "${agent_commit}"
+    # Verify v0/develop branch still points to same commit (was preserved)
+    run git rev-parse "v0/develop"
+    assert_output "${develop_commit}"
 }
 
 # ============================================================================

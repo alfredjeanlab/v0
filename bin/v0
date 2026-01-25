@@ -80,8 +80,8 @@ Commands:
   plan          Create implementation plan from prompt
   merge         Merge worktree branch to main
   mergeq        Merge queue daemon
-  pull          Pull agent branch changes into current branch
-  push          Reset agent branch to match current branch
+  pull          Pull develop branch changes into current branch
+  push          Reset develop branch to match current branch
 
   attach        Attach to a running tmux session (fix, chore, mergeq, feature)
   cancel        Cancel a running operation
@@ -103,7 +103,7 @@ Options:
 
 Examples:
   v0 init                              # Initialize with auto-detected branch
-  v0 init --develop agent              # Use 'agent' as the development branch
+  v0 init --develop main               # Use 'main' as the development branch
   v0 init ./myproject --remote upstream  # Init in myproject, use 'upstream' remote
   v0 build auth "Add JWT auth"         # Full autonomous pipeline
   v0 fix "Button not working"          # Report a bug to the fix worker

@@ -96,7 +96,7 @@ v0_load_config() {
   # Defaults (can be overridden in .v0.rc)
   V0_BUILD_DIR=".v0/build"
   V0_PLANS_DIR="plans"
-  V0_DEVELOP_BRANCH="agent"
+  V0_DEVELOP_BRANCH="v0/develop"
   V0_FEATURE_BRANCH="feature/{name}"
   V0_BUGFIX_BRANCH="fix/{id}"
   V0_CHORE_BRANCH="chore/{id}"
@@ -177,12 +177,12 @@ v0_detect_develop_branch() {
     return 0
   fi
 
-  # Fallback to agent
-  echo "agent"
+  # Fallback to v0/develop
+  echo "v0/develop"
 }
 
-# Ensure agent branch exists, creating from current HEAD if needed
-v0_ensure_agent_branch() {
+# Ensure v0/develop branch exists, creating from current HEAD if needed
+v0_ensure_develop_branch() {
   local remote="${1:-origin}"
 
   # Skip if not in a git repository
@@ -190,29 +190,29 @@ v0_ensure_agent_branch() {
     return 0
   fi
 
-  # Check if agent branch exists locally
-  if git branch --list agent 2>/dev/null | v0_grep_quiet agent; then
+  # Check if v0/develop branch exists locally
+  if git branch --list "v0/develop" 2>/dev/null | v0_grep_quiet "v0/develop"; then
     return 0
   fi
 
-  # Check if agent branch exists on remote
-  if git ls-remote --heads "${remote}" agent 2>/dev/null | v0_grep_quiet agent; then
+  # Check if v0/develop branch exists on remote
+  if git ls-remote --heads "${remote}" "v0/develop" 2>/dev/null | v0_grep_quiet "v0/develop"; then
     # Fetch and create local tracking branch
-    git fetch "${remote}" agent 2>/dev/null || true
-    git branch --track agent "${remote}/agent" 2>/dev/null || true
+    git fetch "${remote}" "v0/develop" 2>/dev/null || true
+    git branch --track "v0/develop" "${remote}/v0/develop" 2>/dev/null || true
     return 0
   fi
 
-  # Create new agent branch from current HEAD (typically main)
+  # Create new v0/develop branch from current HEAD (typically main)
   local base_branch
   base_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
-  git branch agent "${base_branch}" 2>/dev/null || {
-    echo "Warning: Could not create agent branch" >&2
+  git branch "v0/develop" "${base_branch}" 2>/dev/null || {
+    echo "Warning: Could not create v0/develop branch" >&2
     return 1
   }
 
-  echo -e "Created branch ${C_CYAN}agent${C_RESET}"
+  echo -e "Created branch ${C_CYAN}v0/develop${C_RESET}"
 }
 
 # Create .v0.rc template in specified directory
@@ -278,9 +278,9 @@ v0_init_config() {
     develop_branch="$(v0_detect_develop_branch "${git_remote}")"
   fi
 
-  # Create agent branch if it doesn't exist (only for 'agent' branch)
-  if [[ "${develop_branch}" == "agent" ]]; then
-    v0_ensure_agent_branch "${git_remote}"
+  # Create v0/develop branch if it doesn't exist (only for 'v0/develop' branch)
+  if [[ "${develop_branch}" == "v0/develop" ]]; then
+    v0_ensure_develop_branch "${git_remote}"
   fi
 
   # Always show where agents will merge
