@@ -151,3 +151,123 @@ EOF
     # Note: Will fail on push since there's no remote, but should show the no-worktree message
     assert_output --partial "No worktree found. Attempting direct branch merge"
 }
+
+# ============================================================================
+# Queue-based Branch Merge Tests
+# ============================================================================
+
+@test "v0-merge: queue entry with no state file resolves local branch" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Initialize git repo
+    cd "${project_dir}"
+    git init --quiet
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit --quiet -m "Initial commit"
+
+    # Create feature branch
+    git checkout -b feature/queue-test --quiet
+    echo "feature" > feature.txt
+    git add feature.txt
+    git commit --quiet -m "Feature commit"
+    git checkout main --quiet 2>/dev/null || git checkout master --quiet
+
+    # Create queue entry without operation state (simulate external queue addition)
+    mkdir -p "${project_dir}/.v0/build/mergeq"
+    cat > "${project_dir}/.v0/build/mergeq/queue.json" <<EOF
+{
+    "version": 1,
+    "entries": [
+        {
+            "operation": "feature/queue-test",
+            "worktree": "",
+            "priority": 0,
+            "enqueued_at": "2026-01-01T00:00:00Z",
+            "status": "pending",
+            "merge_type": "branch"
+        }
+    ]
+}
+EOF
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_MERGE}"'" feature/queue-test 2>&1
+    '
+    # Should show the no-worktree message since it resolved from queue
+    assert_output --partial "No worktree found. Attempting direct branch merge"
+}
+
+@test "v0-merge: error shows hint when queue entry exists but branch missing" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Initialize git repo (need a git repo for branch resolution to work)
+    cd "${project_dir}"
+    git init --quiet
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit --quiet -m "Initial commit"
+
+    # Create queue entry for a branch that doesn't exist
+    mkdir -p "${project_dir}/.v0/build/mergeq"
+    cat > "${project_dir}/.v0/build/mergeq/queue.json" <<EOF
+{
+    "version": 1,
+    "entries": [
+        {
+            "operation": "feature/phantom",
+            "worktree": "",
+            "priority": 0,
+            "enqueued_at": "2026-01-01T00:00:00Z",
+            "status": "pending",
+            "merge_type": "branch"
+        }
+    ]
+}
+EOF
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_MERGE}"'" feature/phantom 2>&1
+    '
+    assert_failure
+    assert_output --partial "No operation found"
+    assert_output --partial "in the merge queue"
+    assert_output --partial "git fetch"
+}
+
+@test "v0-merge: direct branch resolution works without queue entry" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Initialize git repo
+    cd "${project_dir}"
+    git init --quiet
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit --quiet -m "Initial commit"
+
+    # Create feature branch
+    git checkout -b feature/direct-branch --quiet
+    echo "feature" > feature.txt
+    git add feature.txt
+    git commit --quiet -m "Feature commit"
+    git checkout main --quiet 2>/dev/null || git checkout master --quiet
+
+    # No queue entry, no state file - just a branch
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_MERGE}"'" feature/direct-branch 2>&1
+    '
+    # Should show the no-worktree message since it resolved directly from branch
+    assert_output --partial "No worktree found. Attempting direct branch merge"
+}

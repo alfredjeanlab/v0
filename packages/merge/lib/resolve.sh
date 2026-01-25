@@ -3,12 +3,13 @@
 # Copyright (c) 2026 Alfred Jean LLC
 # merge/resolve.sh - Path resolution for merge operations
 #
-# Depends on: v0-common.sh (for sm_* functions)
+# Depends on: v0-common.sh (for sm_* functions), mergeq (for mq_* functions)
 # IMPURE: Uses git, jq, file system operations
 
 # Expected environment variables:
 # BUILD_DIR - Path to build directory
 # REPO_NAME - Name of the repository
+# V0_GIT_REMOTE - Git remote name
 
 # mg_resolve_branch_to_ref <branch-name>
 # Resolve branch name to git ref, verify it exists
@@ -33,7 +34,51 @@ mg_resolve_branch_to_ref() {
         return 0
     fi
 
-    echo "Error: Branch '${branch}' not found locally or on remote" >&2
+    return 1
+}
+
+# mg_resolve_queue_entry_to_branch <name>
+# Resolve an operation/branch name via the merge queue
+# Sets: MG_BRANCH, MG_HAS_WORKTREE=false, MG_OP_NAME
+# Returns 0 if found in queue and branch exists, 1 if not
+mg_resolve_queue_entry_to_branch() {
+    local name="$1"
+
+    # Skip if queue file doesn't exist
+    if [[ ! -f "${QUEUE_FILE:-}" ]]; then
+        return 1
+    fi
+
+    # Check if entry exists in merge queue
+    if ! mq_entry_exists "${name}"; then
+        return 1
+    fi
+
+    # Queue entries use operation name which is typically the branch name
+    local branch="${name}"
+
+    # Check if branch exists locally
+    if git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
+        MG_BRANCH="${branch}"
+        MG_HAS_WORKTREE=false
+        MG_OP_NAME="${name}"
+        MG_WORKTREE=""
+        MG_TREE_DIR=""
+        return 0
+    fi
+
+    # Check remote
+    if git show-ref --verify --quiet "refs/remotes/${V0_GIT_REMOTE}/${branch}" 2>/dev/null; then
+        # Create local tracking branch
+        git branch "${branch}" "${V0_GIT_REMOTE}/${branch}" 2>/dev/null || true
+        MG_BRANCH="${branch}"
+        MG_HAS_WORKTREE=false
+        MG_OP_NAME="${name}"
+        MG_WORKTREE=""
+        MG_TREE_DIR=""
+        return 0
+    fi
+
     return 1
 }
 
@@ -46,9 +91,31 @@ mg_resolve_operation_to_worktree() {
     local state_file="${BUILD_DIR}/operations/${op_name}/state.json"
 
     if [[ ! -f "${state_file}" ]]; then
+        # Fallback 1: Check merge queue for this entry
+        if mg_resolve_queue_entry_to_branch "${op_name}"; then
+            return 0
+        fi
+
+        # Fallback 2: Try direct branch resolution (local or remote)
+        if mg_resolve_branch_to_ref "${op_name}"; then
+            MG_OP_NAME=""  # No operation, just a branch
+            MG_WORKTREE=""
+            MG_TREE_DIR=""
+            return 0
+        fi
+
+        # All fallbacks failed
         echo "Error: No operation found for '${op_name}'" >&2
         echo "" >&2
         echo "List operations with: v0 status" >&2
+
+        # Check if it's a pending merge and provide helpful hint
+        if [[ -f "${QUEUE_FILE:-}" ]] && mq_entry_exists "${op_name}"; then
+            echo "" >&2
+            echo "Note: '${op_name}' is in the merge queue but the branch doesn't exist." >&2
+            echo "The branch may need to be fetched: git fetch ${V0_GIT_REMOTE}" >&2
+        fi
+
         return 1
     fi
 
