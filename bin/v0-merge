@@ -38,9 +38,18 @@ EOF
 
 [[ -z "$1" ]] && usage
 
-INPUT="$1"
+# Parse arguments - allow --resolve before or after operation name
 RESOLVE=false
-[[ "$2" = "--resolve" ]] && RESOLVE=true
+INPUT=""
+for arg in "$@"; do
+    if [[ "$arg" = "--resolve" ]]; then
+        RESOLVE=true
+    else
+        INPUT="$arg"
+    fi
+done
+
+[[ -z "$INPUT" ]] && usage
 
 # Resolve input to worktree and tree_dir
 if mg_is_input_path "${INPUT}"; then
