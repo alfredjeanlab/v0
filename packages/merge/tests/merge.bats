@@ -390,3 +390,86 @@ resolve_operation_name() {
     run jq -r '.worktree' "${BUILD_DIR}/operations/${op_name}/state.json"
     assert_output "/some/path"
 }
+
+# ============================================================================
+# mg_ensure_develop_branch() tests
+# ============================================================================
+
+@test "mg_ensure_develop_branch does nothing when already on develop branch" {
+    # Setup a real git repo for this test
+    local test_repo="${TEST_TEMP_DIR}/test-repo"
+    git init "${test_repo}" --quiet
+    cd "${test_repo}"
+    git config user.email "test@example.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit -m "initial" --quiet
+
+    # Ensure we have a 'main' branch
+    git branch -M main
+
+    export V0_DEVELOP_BRANCH="main"
+    export V0_GIT_REMOTE="origin"
+
+    # Source the actual function
+    source_lib "execution.sh"
+
+    run mg_ensure_develop_branch
+    assert_success
+    refute_output --partial "Switching to"
+}
+
+@test "mg_ensure_develop_branch switches to develop branch when on different branch" {
+    # Setup a real git repo for this test
+    local test_repo="${TEST_TEMP_DIR}/test-repo"
+    git init "${test_repo}" --quiet
+    cd "${test_repo}"
+    git config user.email "test@example.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit -m "initial" --quiet
+
+    # Ensure we have a 'main' branch (rename if needed)
+    git branch -M main
+
+    # Create and switch to a different branch
+    git checkout -b other-branch --quiet
+
+    export V0_DEVELOP_BRANCH="main"
+    export V0_GIT_REMOTE="origin"
+
+    # Source the actual function
+    source_lib "execution.sh"
+
+    run mg_ensure_develop_branch
+    assert_success
+    assert_output --partial "Switching to main"
+
+    # Verify we're now on main
+    run git rev-parse --abbrev-ref HEAD
+    assert_output "main"
+}
+
+@test "mg_ensure_develop_branch fails when develop branch doesn't exist" {
+    # Setup a real git repo for this test
+    local test_repo="${TEST_TEMP_DIR}/test-repo"
+    git init "${test_repo}" --quiet
+    cd "${test_repo}"
+    git config user.email "test@example.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit -m "initial" --quiet
+
+    export V0_DEVELOP_BRANCH="nonexistent-branch"
+    export V0_GIT_REMOTE="origin"
+
+    # Source the actual function
+    source_lib "execution.sh"
+
+    run mg_ensure_develop_branch
+    assert_failure
+    assert_output --partial "Failed to checkout"
+}
