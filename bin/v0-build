@@ -4,17 +4,17 @@
 set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-source "${V0_DIR}/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
 # Source nudge functions for idle session monitoring
-source "${V0_DIR}/lib/nudge-common.sh"
+source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 # Source worker utilities for done/incomplete scripts
-source "${V0_DIR}/lib/worker-common.sh"
+source "${V0_DIR}/packages/worker/lib/worker-common.sh"
 
 # Source build utilities (init, session monitoring, on-complete)
-source "${V0_DIR}/lib/build/build.sh"
+source "${V0_DIR}/packages/cli/lib/build/build.sh"
 
 usage() {
   cat <<EOF
@@ -911,7 +911,7 @@ if [[ "${PHASE}" = "queued" ]] && [[ -z "${ENQUEUE_ONLY}" ]]; then
     FEATURE_ID=$(get_state epic_id)
 
     M4_ARGS="-D EPIC_ID=${FEATURE_ID} -D PLAN_LABEL=plan:${NAME} -D HAS_PLAN=1 -D V0_GIT_REMOTE=${V0_GIT_REMOTE}"
-    m4 ${M4_ARGS} "${V0_DIR}/lib/templates/claude.build.m4" > "${TREE_DIR}/CLAUDE.md"
+    m4 ${M4_ARGS} "${V0_DIR}/packages/cli/lib/templates/claude.build.m4" > "${TREE_DIR}/CLAUDE.md"
     emit_event "claude.md:created" "${TREE_DIR}/CLAUDE.md"
 
     feature_create_settings "${TREE_DIR}" "${V0_DIR}"

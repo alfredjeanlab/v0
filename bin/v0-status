@@ -25,6 +25,9 @@ source "${V0_DIR}/packages/status/lib/worker-status.sh"
 # Source recently completed display utilities
 source "${V0_DIR}/packages/status/lib/recent-display.sh"
 
+# Source branch status utilities
+source "${V0_DIR}/packages/status/lib/branch-status.sh"
+
 usage() {
   cat <<EOF
 Usage: v0 status [name] [options]
@@ -221,6 +224,10 @@ fi
 
 # List all operations (default behavior)
 if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
+  # Show branch ahead/behind status at the top
+  show_branch_status || true
+  echo ""
+
   # Batch tmux session check - single call to list all sessions (used by operations loop and workers)
   all_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null || true)
 
