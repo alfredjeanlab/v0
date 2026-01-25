@@ -24,8 +24,6 @@ POLLING_LOG="/tmp/v0-${PROJECT}-fix-polling.log"
 usage() {
   v0_help <<'EOF'
 Usage: v0 fix [options] <bug description>
-       v0 fix --start
-       v0 fix --stop
        v0 fix --status
        v0 fix --history
 
@@ -33,8 +31,6 @@ Simple sequential bug fixing.
 
 Commands:
   <description>   Report a bug and ensure worker is running
-  --start         Start worker to process existing bugs
-  --stop          Stop the worker
   --status        Show worker state and pending bugs
   --logs          Show worker stdout/stderr logs
   --err           Show worker error logs
@@ -52,7 +48,6 @@ Examples:
   v0 fix "Login button doesn't work on mobile"
   v0 fix --after v0-123 "Bug that depends on v0-123"
   v0 fix --after v0-1,v0-2 "Bug blocked by multiple issues"
-  v0 fix --start
   v0 fix --status
   v0 fix --logs
   v0 fix --err

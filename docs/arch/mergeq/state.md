@@ -73,13 +73,13 @@ The daemon polls every 30 seconds and picks the highest-priority ready entry:
 
 ### Processing → Completed
 
-On successful merge:
-1. Merge or rebase onto main branch
-2. Push to remote
-3. Delete feature branch
-4. Update operation state: `phase=merged`, `merged_at=<timestamp>`
-5. Archive plan file
-6. Trigger dependent operations
+On successful merge (see [v0-merge](../commands/v0-merge.md) for detailed flow):
+1. Merge via fast-forward, rebase+FF, or merge commit
+2. Push to remote and verify
+3. Update operation state: `phase=merged`, `merged_at=<timestamp>`
+4. Mark queue entry `completed`
+5. Trigger dependent operations
+6. Delete remote and local branches
 
 ### Processing → Failed
 
@@ -92,10 +92,11 @@ Failed entries require manual investigation.
 
 ### Processing → Conflict
 
-Merge has conflicts:
-1. Daemon launches Claude in tmux to attempt resolution
-2. If resolution succeeds → `completed`
-3. If resolution fails or times out → `conflict`
+Merge has conflicts (see [v0-merge conflict resolution](../commands/v0-merge.md#conflict-resolution-flow)):
+1. Daemon calls `v0 merge --resolve`
+2. Claude launched in tmux to resolve conflicts via rebase
+3. If resolution succeeds → `completed`
+4. If resolution fails or times out → `conflict`
 
 ### Conflict → Pending (Auto-Retry)
 

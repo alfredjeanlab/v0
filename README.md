@@ -130,7 +130,7 @@ v0 watch         # Continuously refresh status
 v0 attach fix    # Attach to a worker (fix, chore, mergeq)
 v0 coffee        # Keep computer awake
 v0 prune         # Clean up completed state
-v0 shutdown      # Stop all workers and daemons
+v0 stop          # Stop all workers and daemons
 ```
 
 While attached to tmux: scroll with `Ctrl-b [`, exit scroll with `q`, detach with `Ctrl-b d`.

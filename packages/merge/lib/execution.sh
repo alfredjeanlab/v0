@@ -163,6 +163,25 @@ mg_cleanup_branch_only() {
     echo "Removed branch: ${branch}"
 }
 
+# mg_cleanup_merge <worktree> <tree_dir> <branch> [is_temp]
+# Unified cleanup after successful merge
+# Handles all three cleanup patterns: temp worktree, regular worktree, branch-only
+mg_cleanup_merge() {
+    local worktree="$1"
+    local tree_dir="$2"
+    local branch="$3"
+    local is_temp="${4:-false}"
+
+    if [[ "${is_temp}" = true ]]; then
+        mg_cleanup_temp_worktree
+        mg_cleanup_branch_only "${branch}"
+    elif [[ -n "${worktree}" ]] && [[ -d "${worktree}" ]]; then
+        mg_cleanup_worktree "${worktree}" "${tree_dir}" "${branch}"
+    else
+        mg_cleanup_branch_only "${branch}"
+    fi
+}
+
 # mg_get_merge_commit
 # Get the current HEAD commit hash (after merge)
 mg_get_merge_commit() {

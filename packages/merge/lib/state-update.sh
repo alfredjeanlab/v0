@@ -89,3 +89,38 @@ mg_resolve_op_name() {
         echo "${op_name}"
     fi
 }
+
+# mg_finalize_merge <merge_commit> <op_name> <branch> <project> [suffix]
+# Execute all post-merge steps: push, record, update state, notify, cleanup
+# Returns 0 on success, 1 if push/verify fails
+mg_finalize_merge() {
+    local merge_commit="$1"
+    local op_name="$2"
+    local branch="$3"
+    local project="$4"
+    local suffix="${5:-}"
+
+    if ! mg_push_and_verify "${merge_commit}"; then
+        return 1
+    fi
+
+    # Record merge commit in operation state
+    local op_to_update
+    op_to_update=$(mg_resolve_op_name "${op_name}" "${branch}")
+    if [[ -n "${op_to_update}" ]]; then
+        mg_record_merge_commit "${op_to_update}" "${merge_commit}"
+    fi
+
+    # Update operation and queue state
+    mg_update_operation_state "${branch}"
+    if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
+        mg_update_queue_entry "${op_name}" "${branch}"
+    fi
+
+    # Notify and cleanup
+    mg_trigger_dependents "${branch}"
+    mg_notify_merge "${project}" "${branch}" "${suffix}"
+    mg_delete_remote_branch "${branch}"
+
+    return 0
+}

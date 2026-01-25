@@ -45,7 +45,7 @@ v0 attach chore                     # Watch progress
 ## Getting Started
 ```bash
 v0 init                             # Initialize project (creates .v0.rc)
-v0 startup                          # Start background workers
+v0 start                            # Start background workers
 ```
 
 ## More Info

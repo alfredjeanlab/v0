@@ -32,8 +32,6 @@ Usage: v0 mergeq [options]
 Merge queue daemon for build operations.
 
 Options:
-  --start          Start daemon in background (if not running)
-  --stop           Stop the daemon if running
   --status         Show queue status
   --list           List queued operations
   --add <op>       Manually add operation to queue

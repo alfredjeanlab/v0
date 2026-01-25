@@ -34,8 +34,6 @@ fi
 usage() {
   v0_help <<'EOF'
 Usage: v0 chore [options] <chore description>
-       v0 chore --start
-       v0 chore --stop
        v0 chore --status
        v0 chore --history
 
@@ -43,8 +41,6 @@ Simple sequential chore processing.
 
 Commands:
   <description>   Report a chore and ensure worker is running
-  --start         Start worker to process existing chores
-  --stop          Stop the worker
   --status        Show worker state and pending chores
   --logs          Show worker stdout/stderr logs
   --err           Show worker error logs
@@ -62,7 +58,6 @@ Examples:
   v0 chore "Update dependencies"
   v0 chore --after v0-123 "Chore that depends on v0-123"
   v0 chore --after v0-1,v0-2 "Chore blocked by multiple issues"
-  v0 chore --start
   v0 chore --status
   v0 chore --logs
   v0 chore --err
