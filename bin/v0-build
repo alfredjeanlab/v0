@@ -380,7 +380,7 @@ if [[ -n "${RESUME}" ]]; then
       echo ""
       echo -e "Check status: ${C_BOLD}v0 status ${NAME}${C_RESET}"
       echo -e "View logs:    ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
-      echo -e "Attach:       ${C_BOLD}v0 feature ${NAME} --resume --attach${C_RESET}"
+      echo -e "Attach:       ${C_BOLD}v0 attach ${NAME}${C_RESET}"
       echo ""
 
       if [[ -n "${ATTACH}" ]]; then
@@ -593,7 +593,7 @@ else
     echo ""
     echo -e "Check status: ${C_BOLD}v0 status ${NAME}${C_RESET}"
     echo -e "View logs:    ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
-    echo -e "Attach:       ${C_BOLD}v0 feature ${NAME} --resume --attach${C_RESET}"
+    echo -e "Attach:       ${C_BOLD}v0 attach ${NAME}${C_RESET}"
     echo ""
 
     if [[ -n "${ATTACH}" ]]; then
