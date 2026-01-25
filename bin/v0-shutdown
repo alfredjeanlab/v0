@@ -78,7 +78,7 @@ done
 SESSION_PREFIX="v0-${PROJECT}-"
 
 # Get all matching sessions
-all_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${SESSION_PREFIX}" || true)
+all_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | v0_grep "^${SESSION_PREFIX}" || true)
 
 # Track if we found anything to clean up
 found_anything=""

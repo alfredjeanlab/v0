@@ -577,7 +577,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     if [[ -f "${mergeq_queue_file}" ]]; then
       mergeq_entries=$(jq -r '.entries[] | select(.status == "pending" or .status == "processing") | "\(.status)\t\(.operation)"' "${mergeq_queue_file}" 2>/dev/null || true)
       # Derive operation list for backwards compatibility with merges_empty check
-      merges_pending=$(echo "${mergeq_entries}" | cut -f2 | grep -v '^$' || true)
+      merges_pending=$(echo "${mergeq_entries}" | cut -f2 | v0_grep_invert '^$' || true)
     fi
 
     bugs_empty=false
@@ -613,13 +613,13 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       mergeq_pid_file="${BUILD_DIR}/mergeq/.daemon.pid"
       # Check if a merge-resolve session is running (manual conflict resolution)
       merge_resolve_running=false
-      if [[ -n "${all_sessions}" ]] && echo "${all_sessions}" | grep -q "merge-resolve"; then
+      if [[ -n "${all_sessions}" ]] && echo "${all_sessions}" | v0_grep_quiet "merge-resolve"; then
         merge_resolve_running=true
       fi
       if [[ -f "${mergeq_pid_file}" ]] && kill -0 "$(cat "${mergeq_pid_file}" 2>/dev/null)" 2>/dev/null; then
         # Derive counts from pre-fetched mergeq_entries (Phase 2 optimization)
-        processing=$(echo "${mergeq_entries}" | grep -c "^processing" 2>/dev/null || true)
-        pending=$(echo "${mergeq_entries}" | grep -c "^pending" 2>/dev/null || true)
+        processing=$(echo "${mergeq_entries}" | v0_grep_count "^processing" 2>/dev/null)
+        pending=$(echo "${mergeq_entries}" | v0_grep_count "^pending" 2>/dev/null)
         if [[ "${processing}" -gt 0 ]]; then
           echo -e "Merges: ${C_CYAN}Active${C_RESET}"
         elif [[ "${pending}" -gt 0 ]]; then
@@ -636,7 +636,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
       fi
       if [[ "${merges_empty}" != true ]]; then
         # Use pre-fetched mergeq_entries (Phase 2 optimization)
-        total=$(echo "${mergeq_entries}" | grep -c '' 2>/dev/null || true)
+        total=$(echo "${mergeq_entries}" | v0_grep_count '.' 2>/dev/null)
         if [[ "${total}" -le 3 ]]; then
           echo "${mergeq_entries}" | while IFS=$'\t' read -r status op; do
             [[ -z "${status}" ]] && continue

@@ -3,12 +3,12 @@
 # Copyright (c) 2026 Alfred Jean LLC
 # v0-build-worker - Background worker for v0 build pipeline
 #
-# This script runs the plan -> decompose -> build pipeline in the background.
+# This script runs the plan -> build pipeline in the background.
 # It is launched by v0-build and handles all phase transitions autonomously.
 #
 # Key responsibilities:
 # - Execute plan phase (launch v0-plan in tmux, wait for completion)
-# - Execute decompose phase (launch v0-decompose in tmux, wait for completion)
+# - File a single feature issue after planning
 # - Execute build phase (launch Claude worker in tmux)
 # - Update state after each phase transition
 # - Handle errors gracefully (update state to 'failed' with error message)
@@ -23,6 +23,9 @@ v0_load_config
 
 # Source nudge functions for idle session monitoring
 source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
+
+# Source issue filing functions
+source "${V0_DIR}/packages/cli/lib/build/issue.sh"
 
 usage() {
   cat <<EOF
@@ -321,169 +324,33 @@ EOF
 
   # Use state machine transition to planned phase
   sm_transition_to_planned "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
-  log "Plan phase complete"
-}
 
-run_decompose_phase() {
-  log "Starting decompose phase"
-  ensure_nudge_running
-
-  local SAFE
-  SAFE=$(get_state safe)
-
-  emit_event "decompose:starting" "Converting plan to issues"
-
-  FEATURE_BRANCH=$(v0_expand_branch "${V0_FEATURE_BRANCH}" "${NAME}")
-  TREE_DIR="${V0_STATE_DIR}/tree/${FEATURE_BRANCH}"
-  WORKTREE="${TREE_DIR}/${REPO_NAME}"
-  mkdir -p "${TREE_DIR}/.claude"
-  if [[ -f "${V0_ROOT}/.claude/settings.json" ]]; then
-    cp -f "${V0_ROOT}/.claude/settings.json" "${TREE_DIR}/.claude/settings.local.json"
-  fi
-
+  # File single feature issue
   PLAN_FILE="${PLANS_DIR}/${NAME}.md"
-  if [[ ! -f "${PLAN_FILE}" ]]; then
-    ERROR_MSG="Plan file not found: ${PLAN_FILE}"
-    return 1
-  fi
-
-  FEATURE_SESSION=$(v0_session_name "${NAME}" "decompose")
-
-  if tmux has-session -t "${FEATURE_SESSION}" 2>/dev/null; then
-    log "Feature session '${FEATURE_SESSION}' already running, waiting for completion..."
-  else
-    log "Starting decompose step"
-
-    [[ ! -f "${TREE_DIR}/done" ]] && create_done_script "${TREE_DIR}" "${STATE_DIR}/logs/feature.exit"
-
-    V0_SAFE_EXPORT=""
-    [[ "${SAFE}" = "true" ]] && V0_SAFE_EXPORT="export V0_SAFE=1"
-
-    cat > "${STATE_DIR}/run-feature.sh" <<EOF
-#!/bin/bash
-cd '${V0_ROOT}'
-export V0_ROOT='${V0_ROOT}'
-${V0_SAFE_EXPORT}
-script -q '${STATE_DIR}/logs/feature.log' '${V0_DIR}/bin/v0-decompose' '${PLAN_FILE}'
-EXIT_CODE=\$?
-[[ ! -f '${STATE_DIR}/logs/feature.exit' ]] && echo \${EXIT_CODE} > '${STATE_DIR}/logs/feature.exit'
-EOF
-    chmod +x "${STATE_DIR}/run-feature.sh"
-    tmux new-session -d -s "${FEATURE_SESSION}" -c "${TREE_DIR}" "${STATE_DIR}/run-feature.sh"
-  fi
-
-  update_state "tmux_session" "\"${FEATURE_SESSION}\""
-  # Write session marker and project root for nudge to find this session
-  echo "${V0_ROOT}" > "${TREE_DIR}/.worker-project-root"
-  write_session_marker "${TREE_DIR}" "${FEATURE_SESSION}"
-
-  PLAN_MTIME_BEFORE=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null)
-
-  IDLE_COUNT=0
-  IDLE_THRESHOLD=6
-  LAST_MTIME=""
-  ISSUE_PATTERN=$(v0_issue_pattern)
-  PLAN_HAS_FEATURE=""
-  grep -qE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" 2>/dev/null && PLAN_HAS_FEATURE=1
-  while tmux has-session -t "${FEATURE_SESSION}" 2>/dev/null; do
-    if [[ -f "${STATE_DIR}/logs/feature.exit" ]]; then
-      tmux kill-session -t "${FEATURE_SESSION}" 2>/dev/null || true
-      break
-    fi
-    sleep 2
-    PLAN_MTIME_NOW=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null)
-    if [[ "${PLAN_MTIME_NOW}" != "${PLAN_MTIME_BEFORE}" ]] || [[ -n "${PLAN_HAS_FEATURE}" ]]; then
-      if grep -qE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" 2>/dev/null; then
-        CURRENT_MTIME=$(stat -f %m "${PLAN_FILE}" 2>/dev/null || stat -c %Y "${PLAN_FILE}" 2>/dev/null || echo "0")
-        if [[ "${CURRENT_MTIME}" = "${LAST_MTIME}" ]]; then
-          IDLE_COUNT=$((IDLE_COUNT + 1))
-          if [[ ${IDLE_COUNT} -ge ${IDLE_THRESHOLD} ]]; then
-            emit_event "feature:idle_complete" "Plan has feature ID and agent idle, terminating session"
-            tmux kill-session -t "${FEATURE_SESSION}" 2>/dev/null || true
-            echo "0" > "${STATE_DIR}/logs/feature.exit"
-            break
-          fi
-        else
-          IDLE_COUNT=0
-        fi
-        LAST_MTIME="${CURRENT_MTIME}"
-      fi
-    fi
-  done
-
-  # Clean ANSI escape sequences from feature.log
-  v0_clean_log_file "${STATE_DIR}/logs/feature.log"
-
-  if [[ -f "${STATE_DIR}/logs/feature.exit" ]]; then
-    FEATURE_EXIT=$(cat "${STATE_DIR}/logs/feature.exit")
-    rm -f "${STATE_DIR}/logs/feature.exit"
-  else
-    FEATURE_EXIT=1
-  fi
-
-  ISSUE_PATTERN=$(v0_issue_pattern)
-  FEATURE_ID=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" | head -1 | tr -d '`' || true)
-  ISSUES_CREATED=$(wk list --label "plan:${NAME}" 2>/dev/null | wc -l | tr -d ' ')
-
-  if [[ ${FEATURE_EXIT} -ne 0 ]]; then
-    if [[ -n "${FEATURE_ID}" ]] || [[ "${ISSUES_CREATED}" -gt 0 ]]; then
-      emit_event "decompose:recovered" "Exit code ${FEATURE_EXIT} but work completed (feature: ${FEATURE_ID:-none}, issues: ${ISSUES_CREATED})"
-      log "Note: Process exited with code ${FEATURE_EXIT} but issue creation appears successful"
-    else
-      ERROR_MSG="Decomposition failed. Check ${STATE_DIR}/logs/feature.log for details."
-      return 1
-    fi
-  fi
-
+  local FEATURE_ID
+  FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
   if [[ -n "${FEATURE_ID}" ]]; then
     update_state "epic_id" "\"${FEATURE_ID}\""
+    emit_event "issue:created" "Created feature ${FEATURE_ID}"
   else
-    emit_event "decompose:warning" "No feature ID found in plan file"
-    log "Warning: Could not extract feature ID from plan file"
+    emit_event "issue:warning" "Failed to create feature issue"
   fi
 
+  # Add labels to the issue
   LABELS=()
   while IFS= read -r label; do
     [[ -n "${label}" ]] && LABELS+=("${label}")
   done < <(jq -r '.labels[]' "${STATE_FILE}" 2>/dev/null || true)
 
-  if [[ ${#LABELS[@]} -gt 0 ]]; then
-    for issue_id in $(wk list --label "plan:${NAME}" 2>/dev/null || true); do
-      for label in "${LABELS[@]}"; do
-        wk label "${issue_id}" "${label}" 2>/dev/null || true
-      done
+  if [[ -n "${FEATURE_ID}" ]] && [[ ${#LABELS[@]} -gt 0 ]]; then
+    for label in "${LABELS[@]}"; do
+      wk label "${FEATURE_ID}" "${label}" 2>/dev/null || true
     done
   fi
 
-  # Auto-commit plan file changes from decompose (unless gitignored)
-  # Log whether feature ID is present in plan file for debugging
-  if [[ -n "${FEATURE_ID}" ]]; then
-    if grep -qF "${FEATURE_ID}" "${V0_ROOT}/${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
-      emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} found in plan file"
-    else
-      emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} NOT in plan file (may not have been written)"
-    fi
-  fi
-
-  if git -C "${V0_ROOT}" diff --quiet -- "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
-    emit_event "decompose:commit" "No changes to commit (plan file unchanged)"
-  elif git -C "${V0_ROOT}" check-ignore -q "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
-    emit_event "decompose:commit" "Skipped (gitignored)"
-  elif git -C "${V0_ROOT}" add "${V0_PLANS_DIR}/${NAME}.md" && \
-       git -C "${V0_ROOT}" commit -m "Update plan: ${NAME}" -m "Auto-committed by v0 decompose"; then
-    emit_event "decompose:commit" "Committed ${V0_PLANS_DIR}/${NAME}.md"
-  else
-    # Capture more details about why commit failed
-    git_status=$(git -C "${V0_ROOT}" status --porcelain -- "${V0_PLANS_DIR}/${NAME}.md" 2>&1 || true)
-    emit_event "decompose:commit" "Failed to commit (status: ${git_status:-empty})"
-  fi
-
-  rm -f "${STATE_DIR}/done"
-
-  # Use state machine transition to queued phase
-  FEATURE_ID=$(sm_read_state "${NAME}" "epic_id")
+  # Transition to queued
   sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
-  log "Decompose phase complete"
+  log "Plan phase complete, issue filed"
 }
 
 run_build_phase() {
@@ -655,13 +522,19 @@ main() {
       check_hold_before_phase || exit 0
       run_plan_phase || exit 1
       check_hold_before_phase || exit 0
-      run_decompose_phase || exit 1
-      check_hold_before_phase || exit 0
       run_build_phase || exit 1
       ;;
     planned)
-      check_hold_before_phase || exit 0
-      run_decompose_phase || exit 1
+      # Plan exists but issue may not be filed yet - file it now
+      PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+      if [[ -f "${PLAN_FILE}" ]]; then
+        FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+        if [[ -n "${FEATURE_ID}" ]]; then
+          update_state "epic_id" "\"${FEATURE_ID}\""
+          emit_event "issue:created" "Created feature ${FEATURE_ID}"
+        fi
+        sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
+      fi
       check_hold_before_phase || exit 0
       run_build_phase || exit 1
       ;;
@@ -684,12 +557,20 @@ main() {
           run_build_phase || exit 1
           ;;
         planned)
-          run_decompose_phase || exit 1
+          # File issue if not already done
+          PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+          if [[ -f "${PLAN_FILE}" ]]; then
+            FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+            if [[ -n "${FEATURE_ID}" ]]; then
+              update_state "epic_id" "\"${FEATURE_ID}\""
+              emit_event "issue:created" "Created feature ${FEATURE_ID}"
+            fi
+            sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
+          fi
           run_build_phase || exit 1
           ;;
         init)
           run_plan_phase || exit 1
-          run_decompose_phase || exit 1
           run_build_phase || exit 1
           ;;
       esac

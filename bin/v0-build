@@ -750,135 +750,7 @@ EOF
   PHASE="queued"
 fi
 
-# Phase 2: Execute (was Phase 3)
-if [[ "${PHASE}" = "planned" ]]; then
-  mkdir -p "${STATE_DIR}/logs"
-
-  emit_event "decompose:starting" "Converting plan to issues"
-
-  FEATURE_BRANCH=$(v0_expand_branch "${V0_FEATURE_BRANCH}" "${NAME}")
-  TREE_DIR="${V0_STATE_DIR}/tree/${FEATURE_BRANCH}"
-  mkdir -p "${TREE_DIR}/.claude"
-  if [[ -f "${V0_ROOT}/.claude/settings.json" ]]; then
-    cp -f "${V0_ROOT}/.claude/settings.json" "${TREE_DIR}/.claude/settings.local.json"
-  fi
-
-  PLAN_FILE="${PLANS_DIR}/${NAME}.md"
-  if [[ ! -f "${PLAN_FILE}" ]]; then
-    echo "Error: Plan file not found: ${PLAN_FILE}"
-    exit 1
-  fi
-
-  FEATURE_SESSION=$(v0_session_name "${NAME}" "decompose")
-
-  if [[ -n "${DRY_RUN}" ]]; then
-    echo "[DRY-RUN] Would run: v0 decompose ${PLAN_FILE} in tmux session ${FEATURE_SESSION}"
-  else
-    if tmux has-session -t "${FEATURE_SESSION}" 2>/dev/null; then
-      echo "Feature session '${FEATURE_SESSION}' already running, waiting for completion..."
-      echo "Attach with: v0 attach feature ${NAME}"
-    else
-      echo ""
-      echo -e "${C_BOLD}${C_CYAN}=== Starting decompose step ===${C_RESET}"
-      echo -e "Session: ${C_DIM}${FEATURE_SESSION}${C_RESET}"
-      echo ""
-      echo "Attach to watch decompose:"
-      echo -e "  ${C_BOLD}v0 attach feature ${NAME}${C_RESET}"
-      echo -e "  ${C_DIM}(Ctrl-B D to detach)${C_RESET}"
-      echo ""
-
-      [[ ! -f "${TREE_DIR}/done" ]] && create_feature_done_script "${TREE_DIR}" "${STATE_DIR}/logs/feature.exit"
-      [[ ! -f "${TREE_DIR}/incomplete" ]] && create_incomplete_script "${TREE_DIR}" "${NAME}" "${V0_DIR}"
-
-      V0_SAFE_EXPORT=""
-      [[ -n "${SAFE}" ]] && V0_SAFE_EXPORT="export V0_SAFE=1"
-
-      cat > "${STATE_DIR}/run-feature.sh" <<EOF
-#!/bin/bash
-cd '${V0_ROOT}'
-${V0_SAFE_EXPORT}
-script -q '${STATE_DIR}/logs/feature.log' '${V0_DIR}/bin/v0-decompose' '${PLAN_FILE}'
-EXIT_CODE=\$?
-[[ ! -f '${STATE_DIR}/logs/feature.exit' ]] && echo \${EXIT_CODE} > '${STATE_DIR}/logs/feature.exit'
-EOF
-      chmod +x "${STATE_DIR}/run-feature.sh"
-      tmux new-session -d -s "${FEATURE_SESSION}" -c "${TREE_DIR}" "${STATE_DIR}/run-feature.sh"
-    fi
-
-    update_state "tmux_session" "\"${FEATURE_SESSION}\""
-    update_state "working_dir" "\"${V0_ROOT}\""
-
-    # Monitor session until feature ID appears in plan and agent idle
-    ISSUE_PATTERN=$(v0_issue_pattern)
-    monitor_decompose_session "${FEATURE_SESSION}" "${STATE_DIR}/logs/feature.exit" "${PLAN_FILE}" "${ISSUE_PATTERN}" "feature:idle_complete"
-
-    # Clean ANSI escape sequences from feature.log
-    v0_clean_log_file "${STATE_DIR}/logs/feature.log"
-
-    FEATURE_EXIT=$(get_session_exit_code "${STATE_DIR}/logs/feature.exit")
-    FEATURE_ID=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE}" | head -1 | tr -d '`' || true)
-    ISSUES_CREATED=$(wk list --label "plan:${NAME}" 2>/dev/null | wc -l | tr -d ' ')
-
-    if [[ ${FEATURE_EXIT} -ne 0 ]]; then
-      if [[ -n "${FEATURE_ID}" ]] || [[ "${ISSUES_CREATED}" -gt 0 ]]; then
-        emit_event "decompose:recovered" "Exit code ${FEATURE_EXIT} but work completed (feature: ${FEATURE_ID:-none}, issues: ${ISSUES_CREATED})"
-        echo "Note: Process exited with code ${FEATURE_EXIT} but issue creation appears successful"
-      else
-        emit_event "decompose:failed" "Exit code ${FEATURE_EXIT}"
-        echo "Error: Decomposition failed. Check ${STATE_DIR}/logs/feature.log for details."
-        rm -f "${STATE_DIR}/done"
-        exit 1
-      fi
-    fi
-
-    if [[ -n "${FEATURE_ID}" ]]; then
-      update_state "epic_id" "\"${FEATURE_ID}\""
-    else
-      emit_event "decompose:warning" "No feature ID found in plan file"
-      echo "Warning: Could not extract feature ID from plan file"
-    fi
-
-    if [[ ${#LABELS[@]} -gt 0 ]]; then
-      for issue_id in $(wk list --label "plan:${NAME}" 2>/dev/null || true); do
-        for label in "${LABELS[@]}"; do
-          wk label "${issue_id}" "${label}" 2>/dev/null || true
-        done
-      done
-    fi
-
-    # Auto-commit plan file changes from decompose (unless gitignored)
-    # Log whether feature ID is present in plan file for debugging
-    if [[ -n "${FEATURE_ID}" ]]; then
-      if grep -qF "${FEATURE_ID}" "${V0_ROOT}/${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
-        emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} found in plan file"
-      else
-        emit_event "decompose:plan_check" "Feature ID ${FEATURE_ID} NOT in plan file (may not have been written)"
-      fi
-    fi
-
-    if git -C "${V0_ROOT}" diff --quiet -- "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
-      emit_event "decompose:commit" "No changes to commit (plan file unchanged)"
-    elif git -C "${V0_ROOT}" check-ignore -q "${V0_PLANS_DIR}/${NAME}.md" 2>/dev/null; then
-      emit_event "decompose:commit" "Skipped (gitignored)"
-    elif git -C "${V0_ROOT}" add "${V0_PLANS_DIR}/${NAME}.md" && \
-         git -C "${V0_ROOT}" commit -m "Update plan: ${NAME}" -m "Auto-committed by v0 decompose"; then
-      emit_event "decompose:commit" "Committed ${V0_PLANS_DIR}/${NAME}.md"
-    else
-      # Capture more details about why commit failed
-      git_status=$(git -C "${V0_ROOT}" status --porcelain -- "${V0_PLANS_DIR}/${NAME}.md" 2>&1 || true)
-      emit_event "decompose:commit" "Failed to commit (status: ${git_status:-empty})"
-    fi
-
-    rm -f "${STATE_DIR}/done"
-  fi
-
-  # Use state machine transition to queued phase
-  FEATURE_ID=$(get_state epic_id)
-  sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
-  PHASE="queued"
-fi
-
-# Phase 3: Execute (unless --enqueue)
+# Phase 2: Execute (unless --enqueue)
 if [[ "${PHASE}" = "queued" ]] && [[ -z "${ENQUEUE_ONLY}" ]]; then
   mkdir -p "${STATE_DIR}/logs"
 
@@ -891,8 +763,6 @@ if [[ "${PHASE}" = "queued" ]] && [[ -z "${ENQUEUE_ONLY}" ]]; then
       echo "Planning complete. Will execute after '${AFTER}' merges."
       echo -e "Current phase: ${C_DIM}$(get_blocker_phase "${AFTER}")${C_RESET}"
       echo -e "Feature: ${C_DIM}$(get_state epic_id)${C_RESET}"
-      echo ""
-      echo -e "Issues created with label ${C_DIM}plan:${NAME}${C_RESET}"
       echo ""
       echo "Resume manually with:"
       echo -e "  ${C_BOLD}v0 feature ${NAME} --resume${C_RESET}"
