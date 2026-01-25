@@ -15,7 +15,7 @@ source "${V0_DIR}/packages/worker/lib/coffee-common.sh"
 source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 usage() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 Usage: v0 startup [workers...]
 
 Start v0 workers for the current project.

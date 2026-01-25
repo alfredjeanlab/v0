@@ -23,20 +23,30 @@ if [[ -t 1 ]]; then
   YELLOW='\033[0;33m'
   CYAN='\033[0;36m'
   NC='\033[0m'
+  # Help output colors
+  C_RESET='\033[0m'
+  C_HELP_SECTION='\033[38;5;74m'
+  C_HELP_COMMAND='\033[38;5;250m'
+  C_HELP_DEFAULT='\033[38;5;243m'
 else
   RED=''
   GREEN=''
   YELLOW=''
   CYAN=''
   NC=''
+  C_RESET=''
+  C_HELP_SECTION=''
+  C_HELP_COMMAND=''
+  C_HELP_DEFAULT=''
 fi
+source "${V0_DIR}/packages/cli/lib/help-colors.sh"
 
 info() { echo -e "${GREEN}==>${NC} $1"; }
 warn() { echo -e "${YELLOW}Warning:${NC} $1"; }
 error() { echo -e "${RED}Error:${NC} $1" >&2; exit 1; }
 
 show_help() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 v0 self update - Update v0 installation
 
 Usage:

@@ -26,7 +26,7 @@ export DAEMON_LOG_FILE="${MERGEQ_DIR}/logs/daemon.log"
 source "${V0_DIR}/packages/mergeq/lib/queue.sh"
 
 usage() {
-    cat <<EOF
+    v0_help <<'EOF'
 Usage: v0 mergeq [options]
 
 Merge queue daemon for build operations.

@@ -17,7 +17,7 @@ source "${V0_DIR}/packages/worker/lib/worker-common.sh"
 source "${V0_DIR}/packages/cli/lib/build/build.sh"
 
 usage() {
-  cat <<EOF
+  v0_help <<'EOF'
 Usage: v0 build <name> <prompt> [options]
        v0 build <name> --resume [phase] [options]
 

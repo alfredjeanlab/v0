@@ -22,7 +22,7 @@ POLLING_SESSION=$(v0_session_name "polling" "fix")
 POLLING_LOG="/tmp/v0-${PROJECT}-fix-polling.log"
 
 usage() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 Usage: v0 fix [options] <bug description>
        v0 fix --start
        v0 fix --stop

@@ -15,7 +15,7 @@ v0_load_config
 source "${V0_DIR}/packages/pushpull/lib/pushpull.sh"
 
 show_help() {
-    cat <<EOF
+    v0_help <<EOF
 Usage: v0 pull [branch] [--resolve]
 
 Pull changes from the agent branch (${V0_DEVELOP_BRANCH}) into the current

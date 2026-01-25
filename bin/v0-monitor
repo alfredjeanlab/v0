@@ -12,7 +12,7 @@ v0_load_config
 source "${V0_DIR}/packages/worker/lib/coffee-common.sh"
 
 usage() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 Usage: v0 monitor [options]
 
 Monitor worker queues and auto-shutdown when all queues are empty.

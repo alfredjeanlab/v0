@@ -36,7 +36,7 @@ source "${V0_DIR}/packages/cli/lib/debug-common.sh"
 # ============================================================================
 
 show_help() {
-    cat <<'EOF'
+    v0_help <<'EOF'
 v0 self debug - Generate comprehensive debug reports for v0 operations
 
 Usage:

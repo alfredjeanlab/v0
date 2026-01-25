@@ -14,7 +14,7 @@ OPERATION_NAME=""
 MAX_ITERATIONS=""  # For testing: limit number of watch iterations
 
 usage() {
-  cat <<EOF
+  v0_help <<'EOF'
 Usage: v0 watch [OPTIONS] [OPERATION]
 
 Continuously watch v0 status output.

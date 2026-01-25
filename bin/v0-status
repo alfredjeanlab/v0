@@ -29,7 +29,7 @@ source "${V0_DIR}/packages/status/lib/recent-display.sh"
 source "${V0_DIR}/packages/status/lib/branch-status.sh"
 
 usage() {
-  cat <<EOF
+  v0_help <<'EOF'
 Usage: v0 status [name] [options]
 
 Check status of build operations.

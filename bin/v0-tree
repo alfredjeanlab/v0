@@ -19,7 +19,7 @@ if [[ "${GIT_ROOT}" != /* ]]; then
 fi
 
 usage() {
-  cat <<EOF
+  v0_help <<'EOF'
 Usage: v0 tree <name> [--branch <branch-name>]
 
 Create a worktree and sync settings. Skips creation if worktree already exists.

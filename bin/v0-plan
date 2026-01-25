@@ -11,7 +11,7 @@ v0_load_config
 source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 usage() {
-  cat <<EOF
+  v0_help <<EOF
 Usage: v0 plan <name> <instructions> [options]
 
 Create an implementation plan using Claude.

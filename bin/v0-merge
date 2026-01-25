@@ -18,7 +18,7 @@ MAIN_REPO=$(v0_find_main_repo "${V0_ROOT}")
 source "${V0_DIR}/packages/merge/lib/merge.sh"
 
 usage() {
-    cat <<EOF
+    v0_help <<'EOF'
 Usage: v0 merge <operation> [--resolve]
        v0 merge <tree-dir> [--resolve]
 

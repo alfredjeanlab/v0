@@ -8,7 +8,7 @@ source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
 usage() {
-  cat <<EOF
+  v0_help <<'EOF'
 Usage: v0 roadmap <name> "<roadmap description>" [options]
        v0 roadmap <name> --resume [options]
        v0 roadmap --status

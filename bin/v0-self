@@ -13,8 +13,22 @@ while [[ -L "${SOURCE}" ]]; do
 done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
+# Help color support (only when stdout is a TTY)
+if [[ -t 1 ]]; then
+    C_RESET='\033[0m'
+    C_HELP_SECTION='\033[38;5;74m'
+    C_HELP_COMMAND='\033[38;5;250m'
+    C_HELP_DEFAULT='\033[38;5;243m'
+else
+    C_RESET=''
+    C_HELP_SECTION=''
+    C_HELP_COMMAND=''
+    C_HELP_DEFAULT=''
+fi
+source "${V0_DIR}/packages/cli/lib/help-colors.sh"
+
 show_help() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 v0 self - Self-management commands
 
 Usage: v0 self <command> [args]

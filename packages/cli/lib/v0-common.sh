@@ -22,6 +22,10 @@ if [[ -t 1 ]]; then
     C_CYAN='\033[36m'
     C_RED='\033[31m'
     C_LAVENDER='\033[38;5;183m'
+    # Help output colors (muted/pastel palette)
+    C_HELP_SECTION='\033[38;5;74m'   # Pastel cyan/steel blue
+    C_HELP_COMMAND='\033[38;5;250m'  # Light grey
+    C_HELP_DEFAULT='\033[38;5;243m'  # Muted/darker grey
 else
     C_RESET=''
     C_BOLD=''
@@ -32,7 +36,14 @@ else
     C_CYAN=''
     C_RED=''
     C_LAVENDER=''
+    C_HELP_SECTION=''
+    C_HELP_COMMAND=''
+    C_HELP_DEFAULT=''
 fi
+
+# Source help colorization functions
+# shellcheck source=packages/cli/lib/help-colors.sh
+source "${V0_INSTALL_DIR}/packages/cli/lib/help-colors.sh"
 
 # Source modular components
 # shellcheck source=packages/core/lib/grep.sh

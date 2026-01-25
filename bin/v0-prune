@@ -7,7 +7,7 @@ V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 
 usage() {
-  cat <<EOF
+  v0_help <<'EOF'
 v0 prune - Remove operation state
 
 Usage: v0 prune [options] [name...]

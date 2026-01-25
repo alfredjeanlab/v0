@@ -9,7 +9,7 @@ source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
 usage() {
-  cat <<EOF
+  v0_help <<'EOF'
 Usage: v0 attach <type> [name]
        v0 attach <feature_name>
        v0 attach --list

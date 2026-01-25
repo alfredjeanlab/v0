@@ -58,7 +58,7 @@ v0_check_standalone_mode() {
 }
 
 show_help() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 v0 - A tool to ease you in to multi-agent vibe coding.
 
 Usage: v0 <command> [args]

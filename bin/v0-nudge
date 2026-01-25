@@ -24,7 +24,7 @@ V0_STATE_DIR="${V0_STATE_DIR:-${HOME}/.local/state/v0}"
 NUDGE_LOG_FILE="${V0_STATE_DIR}/.nudge.log"
 
 usage() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 Usage: v0-nudge <command>
 
 Commands:

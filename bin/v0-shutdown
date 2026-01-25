@@ -18,7 +18,7 @@ source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 source "${V0_DIR}/packages/worker/lib/worker-common.sh"
 
 usage() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 Usage: v0 shutdown [options]
 
 Stop all v0 workers, daemons, and sessions for the current project.

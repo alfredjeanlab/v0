@@ -32,7 +32,7 @@ else
 fi
 
 usage() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 Usage: v0 chore [options] <chore description>
        v0 chore --start
        v0 chore --stop
