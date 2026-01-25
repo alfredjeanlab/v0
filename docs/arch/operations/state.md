@@ -21,9 +21,9 @@ flowchart TD
     planned["planned<br/>(plan created)"]
 
     blocked -->|"after op merged"| queued
-    planned -->|decompose| queued
+    planned -->|"issue filed"| queued
 
-    queued["queued<br/>(issues created)"]
+    queued["queued<br/>(issue filed)"]
     queued -->|"--enqueue"| stop1(("(stops)"))
     queued -->|error| failed1[failed]
     queued --> executing
@@ -52,8 +52,8 @@ flowchart TD
 | State | Description |
 |-------|-------------|
 | `init` | Initial state. Planning has not started yet. |
-| `planned` | Plan file created at `plans/<name>.md`. Ready for decomposition. |
-| `queued` | Issues created from plan. Ready for execution (or stopped if `--enqueue`). |
+| `planned` | Plan file created at `plans/<name>.md`. Ready for execution. |
+| `queued` | Issue filed from plan. Ready for execution (or stopped if `--enqueue`). |
 | `blocked` | Waiting for another operation to complete (`--after` flag). |
 | `executing` | Claude agent is running in a tmux session. |
 | `completed` | Agent finished work. May be pending merge. |
