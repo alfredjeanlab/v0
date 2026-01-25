@@ -35,7 +35,7 @@ mg_has_conflicts() {
 # Returns 0 if has conflicts, 1 if no conflicts
 mg_worktree_has_conflicts() {
     local worktree="$1"
-    git -C "${worktree}" status --porcelain | v0_grep_quiet '^UU\|^AA\|^DD'
+    git -C "${worktree}" status --porcelain | v0_grep_quiet '^UU|^AA|^DD'
 }
 
 # mg_worktree_has_uncommitted <worktree>

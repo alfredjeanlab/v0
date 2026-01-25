@@ -87,7 +87,7 @@ case "${1:-}" in
   merge|mergeq)
     # Look for active merge-resolve sessions (created by v0 merge --resolve)
     RESOLVE_PREFIX="v0-${PROJECT}"
-    RESOLVE_SESSIONS=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | v0_grep "^${RESOLVE_PREFIX}.*-merge-resolve\|^${RESOLVE_PREFIX}.*-mergeq-resolve" || true)
+    RESOLVE_SESSIONS=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | v0_grep "^${RESOLVE_PREFIX}.*-merge-resolve|^${RESOLVE_PREFIX}.*-mergeq-resolve" || true)
 
     if [[ -z "${RESOLVE_SESSIONS}" ]]; then
       echo "Error: No active merge resolution session found"

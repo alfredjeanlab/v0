@@ -33,7 +33,7 @@ if [ -z "$WORKTREE" ] || [ ! -d "$WORKTREE" ]; then
 fi
 
 # Check for unresolved conflicts
-if git -C "$WORKTREE" status --porcelain 2>/dev/null | v0_grep_quiet '^UU\|^AA\|^DD'; then
+if git -C "$WORKTREE" status --porcelain 2>/dev/null | v0_grep_quiet '^UU|^AA|^DD'; then
   echo '{"decision": "block", "reason": "Merge conflicts still exist. Resolve conflicts then run: git add <files> && git rebase --continue"}'
   exit 0
 fi
