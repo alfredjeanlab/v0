@@ -210,7 +210,7 @@ source_lib() {
         prune-daemon.sh)    lib_path="$PROJECT_ROOT/packages/core/lib/prune-daemon.sh" ;;
         *)
             # Try to find in packages subdirectories
-            for pkg in cli core state worker mergeq merge feature hooks status; do
+            for pkg in cli core state worker mergeq merge feature hooks status workspace; do
                 if [[ -f "$PROJECT_ROOT/packages/$pkg/lib/$lib" ]]; then
                     lib_path="$PROJECT_ROOT/packages/$pkg/lib/$lib"
                     break

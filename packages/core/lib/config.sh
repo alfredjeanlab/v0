@@ -7,6 +7,16 @@
 # Global standalone state directory (no project required)
 V0_STANDALONE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/v0/standalone"
 
+# Infer workspace mode based on develop branch
+# Returns: "worktree" or "clone"
+v0_infer_workspace_mode() {
+  local develop_branch="${1:-${V0_DEVELOP_BRANCH:-main}}"
+  case "${develop_branch}" in
+    main|develop|master) echo "clone" ;;
+    *) echo "worktree" ;;
+  esac
+}
+
 # Maximum operations to show in v0 status list (default: 15)
 # Set to 0 or very high number to disable limit
 V0_STATUS_LIMIT="${V0_STATUS_LIMIT:-15}"
@@ -102,6 +112,7 @@ v0_load_config() {
   V0_CHORE_BRANCH="chore/{id}"
   V0_WORKTREE_INIT="${V0_WORKTREE_INIT:-}"  # Optional worktree init hook
   V0_GIT_REMOTE="origin"                     # Git remote for push/fetch operations
+  V0_WORKSPACE_MODE=""                       # 'worktree' or 'clone' (inferred if empty)
 
   # Load project config (overrides defaults)
   source "${V0_ROOT}/.v0.rc"
@@ -120,6 +131,14 @@ v0_load_config() {
   REPO_NAME=$(basename "${V0_ROOT}")
   V0_STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/v0/${PROJECT}"
 
+  # Infer workspace mode if not set
+  if [[ -z "${V0_WORKSPACE_MODE}" ]]; then
+    V0_WORKSPACE_MODE=$(v0_infer_workspace_mode "${V0_DEVELOP_BRANCH}")
+  fi
+
+  # Workspace directory for merge operations (keeps V0_ROOT clean)
+  V0_WORKSPACE_DIR="${V0_STATE_DIR}/workspace/${REPO_NAME}"
+
   # Full paths
   BUILD_DIR="${V0_ROOT}/${V0_BUILD_DIR}"
   PLANS_DIR="${V0_ROOT}/${V0_PLANS_DIR}"
@@ -136,6 +155,7 @@ v0_load_config() {
   # shellcheck disable=SC2090  # V0_WORKTREE_INIT is a shell command used with eval
   export V0_WORKTREE_INIT
   export V0_GIT_REMOTE
+  export V0_WORKSPACE_MODE V0_WORKSPACE_DIR
 }
 
 # Load standalone configuration (no .v0.rc required)
@@ -286,12 +306,16 @@ v0_init_config() {
   # Always show where agents will merge
   echo -e "Agents will merge into \`${C_CYAN}${develop_branch}${C_RESET}\`"
 
+  # Infer workspace mode based on develop branch
+  local workspace_mode
+  workspace_mode=$(v0_infer_workspace_mode "${develop_branch}")
+
   # Only create or update .v0.rc if it doesn't exist
   if [[ -f "${config_file}" ]]; then
     echo ".v0.rc already exists in ${target_dir}"
   else
     # Generate config with conditional commenting based on defaults
-    local branch_line remote_line
+    local branch_line remote_line workspace_line
     # Always write branch explicitly (self-documenting config)
     branch_line="V0_DEVELOP_BRANCH=\"${develop_branch}\"     # Target branch for merges"
 
@@ -300,6 +324,9 @@ v0_init_config() {
     else
       remote_line="# V0_GIT_REMOTE=\"origin\"        # Git remote for push/fetch"
     fi
+
+    # Add workspace mode comment explaining the setting
+    workspace_line="# V0_WORKSPACE_MODE=\"${workspace_mode}\"  # 'worktree' or 'clone' (auto-detected)"
 
     cat > "${config_file}" <<EOF
 # v0 project configuration
@@ -317,6 +344,7 @@ ${branch_line}
 # V0_BUGFIX_BRANCH="fix/{id}"
 # V0_CHORE_BRANCH="chore/{id}"
 ${remote_line}
+${workspace_line}
 # DISABLE_NOTIFICATIONS=1       # Disable macOS notifications
 EOF
 
@@ -329,6 +357,27 @@ EOF
     echo ""
     echo "  # Or start individual workers: v0 fix --start, v0 chore --start"
     echo "  # Focused commands (v0 feature, v0 plan) manage their own sessions"
+  fi
+
+  # Load config to set up derived values needed for workspace creation
+  V0_ROOT="${target_dir}"
+  PROJECT="${project_name}"
+  REPO_NAME=$(basename "${target_dir}")
+  V0_STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/v0/${PROJECT}"
+  V0_DEVELOP_BRANCH="${develop_branch}"
+  V0_GIT_REMOTE="${git_remote}"
+  V0_WORKSPACE_MODE="${workspace_mode}"
+  V0_WORKSPACE_DIR="${V0_STATE_DIR}/workspace/${REPO_NAME}"
+
+  # Create workspace for merge operations
+  echo ""
+  echo "Creating workspace for merge operations..."
+  if ws_ensure_workspace; then
+    echo -e "Workspace created at ${C_DIM}${V0_WORKSPACE_DIR}${C_RESET}"
+    echo -e "  Mode: ${C_CYAN}${workspace_mode}${C_RESET}"
+  else
+    echo -e "${C_YELLOW}Warning: Failed to create workspace${C_RESET}"
+    echo "  Workspace will be created on first merge operation."
   fi
 
   # Security warning about autonomous workers

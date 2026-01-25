@@ -9,6 +9,7 @@
 # Expected environment variables:
 # V0_DIR - Path to v0 installation
 # V0_ROOT - Path to project root
+# V0_WORKSPACE_DIR - Path to workspace directory for merge operations
 # V0_GIT_REMOTE - Git remote name
 # V0_DEVELOP_BRANCH - Main development branch name
 # BUILD_DIR - Path to build directory
@@ -102,8 +103,15 @@ mq_process_branch_merge() {
     mq_log_event "merge:started: ${branch} (branch)"
     mq_emit_event "merge:started" "${branch}"
 
-    # Ensure we're in the project root
-    cd "${V0_ROOT}"
+    # Ensure workspace exists and switch to it
+    if ! ws_ensure_workspace; then
+        echo "[$(date +%H:%M:%S)] Failed to create workspace" >&2
+        mq_update_entry_status "${branch}" "${MQ_STATUS_FAILED}"
+        mq_log_event "merge:failed: ${branch} (workspace creation failed)"
+        mq_emit_event "merge:failed" "${branch}"
+        return 1
+    fi
+    cd "${V0_WORKSPACE_DIR}"
 
     # Ensure we're on the main branch
     local current_branch

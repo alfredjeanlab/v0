@@ -11,8 +11,15 @@ V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
-# Find main repo - git merge operations must run from main repo, not worktrees
-MAIN_REPO=$(v0_find_main_repo "${V0_ROOT}")
+# Ensure workspace exists for merge operations
+# All merges happen in the workspace, not V0_ROOT
+if ! ws_ensure_workspace; then
+    echo "Error: Failed to create workspace for merge operations" >&2
+    exit 1
+fi
+
+# All git operations run in the workspace from this point forward
+cd "${V0_WORKSPACE_DIR}"
 
 # Source the merge modules
 source "${V0_DIR}/packages/merge/lib/merge.sh"
@@ -80,9 +87,6 @@ else
     echo "Note: No worktree found. Attempting direct branch merge."
 fi
 
-# All git operations must run from main repo (not a worktree)
-cd "${MAIN_REPO}"
-
 # Worktree-specific checks (skip if no worktree)
 if [[ "${HAS_WORKTREE}" = true ]]; then
     # Check for and clean up mid-rebase state
@@ -136,7 +140,7 @@ if mg_has_conflicts "${BRANCH}"; then
         mg_wait_for_resolve_session "${MG_RESOLVE_SESSION}"
         mg_cleanup_resolve_session "${TREE_DIR}"
 
-        cd "${MAIN_REPO}"
+        cd "${V0_WORKSPACE_DIR}"
 
         # Check success by outcome
         if mg_worktree_has_conflicts "${WORKTREE}"; then

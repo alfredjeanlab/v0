@@ -9,6 +9,7 @@
 # Expected environment variables:
 # V0_DIR - Path to v0 installation
 # V0_ROOT - Path to project root
+# V0_WORKSPACE_DIR - Path to workspace directory
 # V0_GIT_REMOTE - Git remote name
 # V0_DEVELOP_BRANCH - Main development branch name
 # MERGEQ_DIR - Directory for merge queue state
@@ -30,7 +31,7 @@ mq_launch_branch_conflict_resolution() {
     cat > "${resolve_script}" <<RESOLVE_EOF
 #!/bin/bash
 set -e
-cd "${V0_ROOT}"
+cd "${V0_WORKSPACE_DIR}"
 
 # Clean up any incomplete merge/rebase state from previous failed attempts
 if [[ -d ".git/rebase-merge" ]] || [[ -d ".git/rebase-apply" ]]; then
@@ -75,9 +76,9 @@ echo "0" > "${MERGEQ_DIR}/resolve-${branch//\//-}.exit"
 RESOLVE_EOF
     chmod +x "${resolve_script}"
 
-    # Launch in tmux
+    # Launch in tmux (from workspace directory)
     echo "[$(date +%H:%M:%S)] Launching claude in tmux session: ${resolve_session}"
-    tmux new-session -d -s "${resolve_session}" -c "${V0_ROOT}" "${resolve_script}; echo \$? > '${MERGEQ_DIR}/resolve-${branch//\//-}.exit'"
+    tmux new-session -d -s "${resolve_session}" -c "${V0_WORKSPACE_DIR}" "${resolve_script}; echo \$? > '${MERGEQ_DIR}/resolve-${branch//\//-}.exit'"
 
     echo "${resolve_session}"
 }

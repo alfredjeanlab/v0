@@ -8,7 +8,7 @@
 
 # Expected environment variables:
 # V0_DIR - Path to v0 installation
-# MAIN_REPO - Path to main git repository
+# V0_WORKSPACE_DIR - Path to workspace directory (replaces MAIN_REPO)
 # MERGEQ_DIR - Directory for merge queue state
 # DAEMON_PID_FILE - Path to daemon PID file (typically ${MERGEQ_DIR}/.daemon.pid)
 # DAEMON_LOG_FILE - Path to daemon log file (typically ${MERGEQ_DIR}/logs/daemon.log)
@@ -51,12 +51,16 @@ mq_start_daemon() {
     mq_ensure_queue_exists
     echo "Starting merge queue worker..."
 
-    # Start the daemon from the main repo (not a worktree)
-    # The daemon must be able to checkout the main branch, which is only
-    # possible from the main repo (worktrees can't checkout branches that are
-    # already checked out elsewhere)
+    # Ensure workspace exists for merge operations
+    if ! ws_ensure_workspace; then
+        echo "Error: Failed to create workspace for merge operations" >&2
+        return 1
+    fi
+
+    # Start the daemon from the workspace directory
+    # The workspace is dedicated to merge operations and is always on V0_DEVELOP_BRANCH
     local old_pwd="${PWD}"
-    cd "${MAIN_REPO}"
+    cd "${V0_WORKSPACE_DIR}"
     nohup "${V0_DIR}/bin/v0-mergeq" --watch >> "${DAEMON_LOG_FILE}" 2>&1 &
     local daemon_pid=$!
     cd "${old_pwd}"

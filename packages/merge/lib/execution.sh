@@ -10,7 +10,34 @@
 # BUILD_DIR - Path to build directory
 # V0_GIT_REMOTE - Git remote name
 # V0_DEVELOP_BRANCH - Main development branch name
+# V0_WORKSPACE_DIR - Path to workspace directory
 # C_RED, C_BOLD, C_RESET - Color codes from v0-common.sh
+
+# mg_ensure_workspace
+# Ensure workspace exists and is ready for merge operations
+# Changes to workspace directory
+# Returns 0 on success, 1 on failure
+mg_ensure_workspace() {
+    # Ensure workspace exists
+    if ! ws_ensure_workspace; then
+        echo "Error: Failed to create workspace" >&2
+        return 1
+    fi
+
+    # Change to workspace directory
+    cd "${V0_WORKSPACE_DIR}" || {
+        echo "Error: Failed to change to workspace directory: ${V0_WORKSPACE_DIR}" >&2
+        return 1
+    }
+
+    # Sync to develop branch
+    if ! ws_sync_to_develop; then
+        echo "Error: Failed to sync workspace to ${V0_DEVELOP_BRANCH}" >&2
+        return 1
+    fi
+
+    return 0
+}
 
 # mg_acquire_lock <branch>
 # Acquire merge lock

@@ -186,9 +186,10 @@ mg_resolve_operation_to_worktree() {
 
         if [[ "${merge_status}" = "conflict" ]] || [[ "${merge_status}" = "failed" ]] || [[ "${merge_status}" = "verification_failed" ]]; then
             # Check if the merge_commit is actually on main (verification may have been transient)
+            # Use workspace for git operations (if available), fall back to V0_ROOT
             local merge_commit main_repo
             merge_commit=$(sm_read_state "${op_name}" "merge_commit")
-            main_repo="${_MG_MAIN_REPO:-${V0_ROOT:-$(pwd)}}"
+            main_repo="${V0_WORKSPACE_DIR:-${V0_ROOT:-$(pwd)}}"
 
             if [[ -n "${merge_commit}" ]] && [[ "${merge_commit}" != "null" ]] && \
                git -C "${main_repo}" merge-base --is-ancestor "${merge_commit}" "${V0_DEVELOP_BRANCH:-main}" 2>/dev/null; then

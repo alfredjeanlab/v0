@@ -7,15 +7,29 @@ V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/packages/cli/lib/v0-common.sh"
 v0_load_config
 
+# Determine the git repo to create worktrees from:
+# - In worktree mode: use V0_ROOT (worktrees are siblings)
+# - In clone mode: use workspace clone (worktrees branch from workspace)
+if [[ "${V0_WORKSPACE_MODE}" == "clone" ]]; then
+  # Ensure workspace exists before creating feature worktrees
+  if ! ws_ensure_workspace; then
+    echo "Error: Failed to create workspace (required for clone mode)" >&2
+    exit 1
+  fi
+  WORKTREE_PARENT="${V0_WORKSPACE_DIR}"
+else
+  WORKTREE_PARENT="${V0_ROOT}"
+fi
+
 # Storage locations (in order of preference):
 # 1. XDG state directory: ~/.local/state/v0/{project}/tree/<name>/{repo}/
 # 2. Git directory fallback: .git/v0-worktrees/<name>/{repo}/
 XDG_ROOT="${V0_STATE_DIR}/tree"
-GIT_ROOT="$(git -C "${V0_ROOT}" rev-parse --git-common-dir 2>/dev/null || echo "${V0_ROOT}/.git")/v0-worktrees"
+GIT_ROOT="$(git -C "${WORKTREE_PARENT}" rev-parse --git-common-dir 2>/dev/null || echo "${WORKTREE_PARENT}/.git")/v0-worktrees"
 
 # Normalize git root path (may be relative)
 if [[ "${GIT_ROOT}" != /* ]]; then
-  GIT_ROOT="${V0_ROOT}/${GIT_ROOT}"
+  GIT_ROOT="${WORKTREE_PARENT}/${GIT_ROOT}"
 fi
 
 usage() {
@@ -82,7 +96,7 @@ done
 [[ -z "${branch}" ]] && branch="${name}"
 
 # Check for old-style worktree and warn
-OLD_TREE="${V0_ROOT}/.tree/${name}"
+OLD_TREE="${WORKTREE_PARENT}/.tree/${name}"
 if [[ -d "${OLD_TREE}" ]]; then
   echo "Warning: Old worktree exists at ${OLD_TREE}" >&2
   echo "Remove with: git worktree remove ${OLD_TREE}/${REPO_NAME}" >&2
@@ -149,8 +163,9 @@ fi
 if [[ ! -d "${worktree}" ]]; then
   # Try creating with new branch first, fall back to existing branch
   # Redirect stdout to stderr so git messages don't pollute our output
-  if ! git worktree add "${worktree}" -b "${branch}" main >&2 2>&1; then
-    if ! git worktree add "${worktree}" "${branch}" >&2 2>&1; then
+  # Use WORKTREE_PARENT as the git repo (V0_ROOT in worktree mode, workspace in clone mode)
+  if ! git -C "${WORKTREE_PARENT}" worktree add "${worktree}" -b "${branch}" main >&2 2>&1; then
+    if ! git -C "${WORKTREE_PARENT}" worktree add "${worktree}" "${branch}" >&2 2>&1; then
       echo "Error: Failed to create worktree at ${worktree}" >&2
       exit 1
     fi

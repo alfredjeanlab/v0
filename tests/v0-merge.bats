@@ -6,13 +6,26 @@ load '../packages/test-support/helpers/test_helper'
 # Path to the script under test
 V0_MERGE="${PROJECT_ROOT}/bin/v0-merge"
 
-# Helper to create an isolated project directory
+# Helper to create an isolated project directory with git repo
 setup_isolated_project() {
     local isolated_dir="${TEST_TEMP_DIR}/isolated"
     mkdir -p "${isolated_dir}/project/.v0/build/operations"
+
+    # Initialize git repo (required for workspace creation)
+    (
+        cd "${isolated_dir}/project"
+        git init --quiet -b master
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        echo "test" > README.md
+        git add README.md
+        git commit --quiet -m "Initial commit"
+    )
+
     cat > "${isolated_dir}/project/.v0.rc" <<EOF
 PROJECT="testproject"
 ISSUE_PREFIX="test"
+V0_DEVELOP_BRANCH="master"
 EOF
     echo "${isolated_dir}/project"
 }

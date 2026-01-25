@@ -9,8 +9,8 @@ A package may only source from packages in lower layers.
 
 ```
 Layer 0: core              # Foundation (no dependencies)
-Layer 1: state, mergeq     # State machine, merge queue
-Layer 2: merge, worker     # Operations that use state/mergeq
+Layer 1: workspace, state, mergeq  # Workspace, state machine, merge queue
+Layer 2: merge, worker     # Operations that use state/mergeq/workspace
 Layer 3: feature, hooks, status  # High-level features
 Layer 4: cli               # Entry point, sources all
 ```

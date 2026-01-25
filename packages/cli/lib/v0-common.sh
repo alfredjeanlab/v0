@@ -66,6 +66,9 @@ source "${V0_INSTALL_DIR}/packages/core/lib/prune-daemon.sh"
 # shellcheck source=packages/core/lib/git-verify.sh
 source "${V0_INSTALL_DIR}/packages/core/lib/git-verify.sh"
 
+# shellcheck source=packages/workspace/lib/workspace.sh
+source "${V0_INSTALL_DIR}/packages/workspace/lib/workspace.sh"
+
 # ============================================================================
 # Session and Branch Utilities
 # ============================================================================
