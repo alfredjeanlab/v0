@@ -16,7 +16,7 @@ done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
 # Commands that require a project (.v0.rc)
-PROJECT_COMMANDS="plan tree merge mergeq status build feature resume fix attach cancel shutdown startup hold roadmap pull push archive"
+PROJECT_COMMANDS="plan tree merge mergeq status build feature resume fix attach cancel stop start hold roadmap pull push archive"
 
 # Commands that work in standalone mode (no .v0.rc needed)
 STANDALONE_COMMANDS="chore"
@@ -70,8 +70,8 @@ Commands:
                   --remote <name>     Git remote name (default: origin)
   status        Show operation status
   watch         Continuously watch status (like 'status --watch')
-  startup       Start workers (fix, chore, mergeq)
-  shutdown      Stop all v0 processes for this project
+  start         Start workers (fix, chore, mergeq)
+  stop          Stop all v0 processes for this project
 
   fix           Sequential bug fixing worker
   chore         Sequential chore processing worker
@@ -203,7 +203,7 @@ shift
 
 case "${CMD}" in
   # Project-required commands
-  plan|tree|merge|mergeq|status|watch|build|fix|attach|cancel|shutdown|startup|prune|monitor|hold|roadmap|pull|push|archive)
+  plan|tree|merge|mergeq|status|watch|build|fix|attach|cancel|stop|start|prune|monitor|hold|roadmap|pull|push|archive)
     # Check if we're in a project - if not, show error
     if ! v0_find_project_root >/dev/null 2>&1; then
         v0_check_standalone_mode "${CMD}"
@@ -252,6 +252,13 @@ case "${CMD}" in
       merge|mergeq) shift; exec "${V0_DIR}/bin/v0-status" --merge "$@" ;;
       *) exec "${V0_DIR}/bin/v0-status" "$@" ;;
     esac
+    ;;
+  # Hidden aliases (old names, not shown in help)
+  startup)
+    exec "${V0_DIR}/bin/v0-start" "$@"
+    ;;
+  shutdown)
+    exec "${V0_DIR}/bin/v0-stop" "$@"
     ;;
   *)
     # Sanitize command for display

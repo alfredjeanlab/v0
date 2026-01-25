@@ -19,7 +19,7 @@ source "${V0_DIR}/packages/worker/lib/worker-common.sh"
 
 usage() {
   v0_help <<'EOF'
-Usage: v0 shutdown [options]
+Usage: v0 stop [options]
 
 Stop all v0 workers, daemons, and sessions for the current project.
 
@@ -41,9 +41,9 @@ Options:
   -h, --help     Show this help
 
 Examples:
-  v0 shutdown              # Stop all v0 processes and clean up
-  v0 shutdown --dry-run    # Preview what would be stopped
-  v0 shutdown --force      # Force kill and delete all branches
+  v0 stop              # Stop all v0 processes and clean up
+  v0 stop --dry-run    # Preview what would be stopped
+  v0 stop --force      # Force kill and delete all branches
 EOF
   exit 0
 }
@@ -67,7 +67,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Run 'v0 shutdown --help' for usage" >&2
+      echo "Run 'v0 stop --help' for usage" >&2
       exit 1
       ;;
   esac

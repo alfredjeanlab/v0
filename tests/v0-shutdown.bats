@@ -26,7 +26,7 @@ EOF
         "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --help
     '
     assert_success  # help exits with 0
-    assert_output --partial "Usage: v0 shutdown"
+    assert_output --partial "Usage: v0 stop"
     assert_output --partial "Stop all v0 workers"
 }
 
@@ -39,7 +39,7 @@ EOF
         "'"${PROJECT_ROOT}"'/bin/v0-shutdown" -h
     '
     assert_success
-    assert_output --partial "Usage: v0 shutdown"
+    assert_output --partial "Usage: v0 stop"
 }
 
 # ============================================================================
@@ -82,7 +82,26 @@ EOF
 # Integration with main v0 command
 # ============================================================================
 
-@test "v0 shutdown command is routed correctly" {
+@test "v0 stop command is routed correctly" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0" stop --help
+    '
+    assert_success
+    assert_output --partial "Usage: v0 stop"
+}
+
+@test "v0 --help shows stop command" {
+    run "${PROJECT_ROOT}/bin/v0" --help
+    assert_success
+    assert_output --partial "stop"
+    assert_output --partial "Stop all v0 processes"
+}
+
+@test "shutdown is a hidden alias for stop" {
     local project_dir
     project_dir=$(setup_isolated_project)
 
@@ -91,14 +110,14 @@ EOF
         "'"${PROJECT_ROOT}"'/bin/v0" shutdown --help
     '
     assert_success
-    assert_output --partial "Usage: v0 shutdown"
+    assert_output --partial "Usage: v0 stop"
 }
 
-@test "v0 --help shows shutdown command" {
+@test "v0 --help does not show shutdown (hidden alias)" {
     run "${PROJECT_ROOT}/bin/v0" --help
     assert_success
-    assert_output --partial "shutdown"
-    assert_output --partial "Stop all v0 processes"
+    refute_output --partial "shutdown"
+    assert_output --partial "stop"
 }
 
 # ============================================================================

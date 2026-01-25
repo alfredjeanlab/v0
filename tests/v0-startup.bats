@@ -26,7 +26,7 @@ EOF
         "'"$PROJECT_ROOT"'/bin/v0-startup" --help
     '
     assert_success
-    assert_output --partial "Usage: v0 startup"
+    assert_output --partial "Usage: v0 start"
     assert_output --partial "Start v0 workers"
 }
 
@@ -39,7 +39,7 @@ EOF
         "'"$PROJECT_ROOT"'/bin/v0-startup" -h
     '
     assert_success
-    assert_output --partial "Usage: v0 startup"
+    assert_output --partial "Usage: v0 start"
 }
 
 # ============================================================================
@@ -92,7 +92,26 @@ EOF
 # Integration with main v0 command
 # ============================================================================
 
-@test "v0 startup command is routed correctly" {
+@test "v0 start command is routed correctly" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"$project_dir"'"
+        "'"$PROJECT_ROOT"'/bin/v0" start --help
+    '
+    assert_success
+    assert_output --partial "Usage: v0 start"
+}
+
+@test "v0 --help shows start command" {
+    run "$PROJECT_ROOT/bin/v0" --help
+    assert_success
+    assert_output --partial "start"
+    assert_output --partial "Start workers"
+}
+
+@test "startup is a hidden alias for start" {
     local project_dir
     project_dir=$(setup_isolated_project)
 
@@ -101,14 +120,14 @@ EOF
         "'"$PROJECT_ROOT"'/bin/v0" startup --help
     '
     assert_success
-    assert_output --partial "Usage: v0 startup"
+    assert_output --partial "Usage: v0 start"
 }
 
-@test "v0 --help shows startup command" {
+@test "v0 --help does not show startup (hidden alias)" {
     run "$PROJECT_ROOT/bin/v0" --help
     assert_success
-    assert_output --partial "startup"
-    assert_output --partial "Start workers"
+    refute_output --partial "startup"
+    assert_output --partial "start"
 }
 
 # ============================================================================

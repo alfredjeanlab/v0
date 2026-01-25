@@ -16,7 +16,7 @@ source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 usage() {
   v0_help <<'EOF'
-Usage: v0 startup [workers...]
+Usage: v0 start [workers...]
 
 Start v0 workers for the current project.
 
@@ -32,10 +32,10 @@ Options:
   -h, --help     Show this help
 
 Examples:
-  v0 startup              # Start all workers
-  v0 startup fix          # Start only the fix worker
-  v0 startup fix chore    # Start fix and chore workers
-  v0 startup --dry-run    # Preview what would be started
+  v0 start              # Start all workers
+  v0 start fix          # Start only the fix worker
+  v0 start fix chore    # Start fix and chore workers
+  v0 start --dry-run    # Preview what would be started
 EOF
   exit 0
 }
@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option or worker: $1" >&2
-      echo "Run 'v0 startup --help' for usage" >&2
+      echo "Run 'v0 start --help' for usage" >&2
       exit 1
       ;;
   esac
