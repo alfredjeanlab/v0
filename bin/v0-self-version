@@ -20,13 +20,23 @@ source "${V0_DIR}/packages/cli/lib/update-common.sh"
 if [[ -t 1 ]]; then
   CYAN='\033[0;36m'
   NC='\033[0m'
+  # Help output colors
+  C_RESET='\033[0m'
+  C_HELP_SECTION='\033[38;5;74m'
+  C_HELP_COMMAND='\033[38;5;250m'
+  C_HELP_DEFAULT='\033[38;5;243m'
 else
   CYAN=''
   NC=''
+  C_RESET=''
+  C_HELP_SECTION=''
+  C_HELP_COMMAND=''
+  C_HELP_DEFAULT=''
 fi
+source "${V0_DIR}/packages/cli/lib/help-colors.sh"
 
 show_help() {
-  cat <<'EOF'
+  v0_help <<'EOF'
 v0 self version - Show version information
 
 Usage:
