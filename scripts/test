@@ -2,7 +2,13 @@
 # v0 Incremental Test Runner
 # SPDX-License-Identifier: MIT
 #
-# Usage: scripts/test [--bust] [--verbose] [package...]
+# Usage: scripts/test [--bust TARGET] [--verbose] [package...]
+#
+# WARNING FOR AI AGENTS:
+#   NEVER use `--bust` without a specific TARGET argument!
+#   ALWAYS use `--bust <target>` to bust only the specific test you need.
+#   Using `--bust` alone busts ALL caches which is WASTEFUL and SLOW.
+#   Example: `scripts/test --bust v0-merge` NOT `scripts/test --bust`
 #
 # Runs tests incrementally, caching successful results and only re-running
 # when source files or dependencies change.
