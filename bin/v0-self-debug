@@ -6,7 +6,6 @@
 # Usage:
 #   v0 self debug <operation-name>   # Debug specific operation
 #   v0 self debug plan               # Debug most recent plan operation
-#   v0 self debug decompose          # Debug most recent decompose failure
 #   v0 self debug fix                # Debug fix worker issues
 #   v0 self debug chore              # Debug chore worker issues
 #   v0 self debug mergeq             # Debug merge queue (includes 'merge')
@@ -43,7 +42,6 @@ v0 self debug - Generate comprehensive debug reports for v0 operations
 Usage:
   v0 self debug <operation-name>   Debug specific operation by name
   v0 self debug plan               Debug most recent plan operation
-  v0 self debug decompose          Debug most recent decompose failure
   v0 self debug fix                Debug fix worker issues
   v0 self debug chore              Debug chore worker issues
   v0 self debug mergeq             Debug merge queue daemon
@@ -134,10 +132,6 @@ resolve_target() {
             # Find most recent plan-type operation
             # Use || true to prevent set -e from exiting on failure
             find_most_recent_by_type "plan" || true
-            ;;
-        decompose)
-            # Find most recent operation in decomposing phase
-            find_most_recent_by_phase "decomposing" || true
             ;;
         merge)
             # Alias for mergeq
