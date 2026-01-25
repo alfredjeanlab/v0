@@ -637,3 +637,68 @@ EOF
     run git -C "$TEST_TEMP_DIR/repo" log -1 --format=%s
     assert_output "Main commit"
 }
+
+@test "v0_reset_to_develop falls back to local main when no remote" {
+    # Bug: When develop branch doesn't exist and there's no remote,
+    # creating the branch should fall back to local main, not fail
+    mkdir -p "$TEST_TEMP_DIR/repo"
+    (
+        cd "$TEST_TEMP_DIR/repo"
+        git init --quiet --initial-branch=main
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        echo "local main content" > file.txt
+        git add file.txt
+        git commit --quiet -m "Local main commit"
+        # No remote configured
+    )
+
+    # Source the function
+    source "$PROJECT_ROOT/packages/worker/lib/worker-common.sh"
+    export V0_GIT_REMOTE="origin"
+    export V0_DEVELOP_BRANCH="v0/develop"
+
+    run v0_reset_to_develop "$TEST_TEMP_DIR/repo"
+    assert_success
+    assert_output --partial "creating from main"
+
+    # Verify develop branch was created from local main
+    run git -C "$TEST_TEMP_DIR/repo" branch --list "v0/develop"
+    assert_output --partial "v0/develop"
+
+    # Verify we're at the local main commit
+    run git -C "$TEST_TEMP_DIR/repo" log -1 --format=%s
+    assert_output "Local main commit"
+}
+
+@test "v0_reset_to_develop falls back to HEAD when no main branch" {
+    # Edge case: No develop branch, no origin/main, no local main
+    mkdir -p "$TEST_TEMP_DIR/repo"
+    (
+        cd "$TEST_TEMP_DIR/repo"
+        git init --quiet --initial-branch=other
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        echo "other branch content" > file.txt
+        git add file.txt
+        git commit --quiet -m "Other branch commit"
+        # No main branch, no remote
+    )
+
+    # Source the function
+    source "$PROJECT_ROOT/packages/worker/lib/worker-common.sh"
+    export V0_GIT_REMOTE="origin"
+    export V0_DEVELOP_BRANCH="v0/develop"
+
+    run v0_reset_to_develop "$TEST_TEMP_DIR/repo"
+    assert_success
+    assert_output --partial "creating from main"
+
+    # Verify develop branch was created from HEAD
+    run git -C "$TEST_TEMP_DIR/repo" branch --list "v0/develop"
+    assert_output --partial "v0/develop"
+
+    # Verify we're at the HEAD commit
+    run git -C "$TEST_TEMP_DIR/repo" log -1 --format=%s
+    assert_output "Other branch commit"
+}

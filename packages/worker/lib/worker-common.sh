@@ -244,7 +244,12 @@ v0_reset_to_develop() {
   else
     echo "Note: Branch '${V0_DEVELOP_BRANCH}' not found, creating from main" >&2
     "${git_cmd[@]}" fetch "${V0_GIT_REMOTE}" main 2>/dev/null || true
-    "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" "${V0_GIT_REMOTE}/main" 2>/dev/null || true
+    # Try to create branch with fallbacks: remote main -> local main -> HEAD
+    if ! "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" "${V0_GIT_REMOTE}/main" 2>/dev/null; then
+      if ! "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" main 2>/dev/null; then
+        "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" HEAD
+      fi
+    fi
     "${git_cmd[@]}" reset --hard "${V0_DEVELOP_BRANCH}"
   fi
 }
