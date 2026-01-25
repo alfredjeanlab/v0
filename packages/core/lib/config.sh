@@ -96,7 +96,7 @@ v0_load_config() {
   # Defaults (can be overridden in .v0.rc)
   V0_BUILD_DIR=".v0/build"
   V0_PLANS_DIR="plans"
-  V0_DEVELOP_BRANCH="v0/develop"
+  V0_DEVELOP_BRANCH="main"
   V0_FEATURE_BRANCH="feature/{name}"
   V0_BUGFIX_BRANCH="fix/{id}"
   V0_CHORE_BRANCH="chore/{id}"
@@ -177,8 +177,8 @@ v0_detect_develop_branch() {
     return 0
   fi
 
-  # Fallback to v0/develop
-  echo "v0/develop"
+  # Fallback to main
+  echo "main"
 }
 
 # Ensure v0/develop branch exists, creating from current HEAD if needed

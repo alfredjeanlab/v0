@@ -9,7 +9,7 @@
 # pp_get_agent_branch
 # Returns the agent branch name (from V0_DEVELOP_BRANCH config)
 pp_get_agent_branch() {
-    echo "${V0_DEVELOP_BRANCH:-agent}"
+    echo "${V0_DEVELOP_BRANCH:-main}"
 }
 
 # pp_resolve_target_branch [branch]

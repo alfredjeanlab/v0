@@ -13,7 +13,7 @@
 #
 # Returns: 0 if status line was displayed, 1 if nothing to display
 show_branch_status() {
-    local develop_branch="${V0_DEVELOP_BRANCH:-agent}"
+    local develop_branch="${V0_DEVELOP_BRANCH:-main}"
     local remote="${V0_GIT_REMOTE:-origin}"
     local current_branch
 

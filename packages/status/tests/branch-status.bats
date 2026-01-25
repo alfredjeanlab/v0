@@ -272,14 +272,14 @@ EOF
     assert_output --partial "⇡1"
 }
 
-@test "show_branch_status defaults V0_DEVELOP_BRANCH to agent" {
+@test "show_branch_status defaults V0_DEVELOP_BRANCH to main" {
     unset V0_DEVELOP_BRANCH
 
     # Source the library again to pick up default
     source_lib "branch-status.sh"
 
-    # Now if we're on 'agent' branch, it should skip
-    setup_git_mock "agent" "1" "2"
+    # Now if we're on 'main' branch, it should skip
+    setup_git_mock "main" "1" "2"
 
     run show_branch_status
     assert_failure

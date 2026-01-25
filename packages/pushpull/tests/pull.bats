@@ -36,7 +36,7 @@ teardown() {
     unset V0_DEVELOP_BRANCH
     run pp_get_agent_branch
     assert_success
-    assert_output "agent"
+    assert_output "main"
 }
 
 @test "pp_get_agent_branch uses custom branch name" {
