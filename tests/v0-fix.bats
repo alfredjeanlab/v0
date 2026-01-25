@@ -169,3 +169,129 @@ teardown() {
     # Should attempt something related to the issue
     [[ "${output}" == *"TEST-123"* ]] || [[ "${output}" == *"Worker"* ]] || [[ "${output}" == *"fix"* ]] || true
 }
+
+# ============================================================================
+# --after Flag Tests
+# ============================================================================
+
+@test "v0-fix: --after flag appears in help" {
+    run "${V0_FIX}" --help 2>&1 || true
+    assert_output --partial "--after"
+    assert_output --partial "Block this bug"
+}
+
+@test "v0-fix: --after with single ID creates bug with dependency" {
+    # Create mock wk that tracks calls
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_FIX}" --after test-123 "Bug blocked by task" 2>&1 || true
+
+    # Verify wk dep was called with blocked-by
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "dep"
+        assert_output --partial "blocked-by"
+        assert_output --partial "test-123"
+    fi
+}
+
+@test "v0-fix: --after accepts comma-separated IDs" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_FIX}" --after test-1,test-2 "Bug with multiple blockers" 2>&1 || true
+
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "test-1"
+        assert_output --partial "test-2"
+    fi
+}
+
+@test "v0-fix: multiple --after flags are merged" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_FIX}" --after test-1 --after test-2 "Bug with merged blockers" 2>&1 || true
+
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "test-1"
+        assert_output --partial "test-2"
+    fi
+}
+
+@test "v0-fix: --after=value syntax works" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_FIX}" --after=test-123 "Bug with equals syntax" 2>&1 || true
+
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "test-123"
+    fi
+}
+
+@test "v0-fix: shows 'Blocked by' when --after succeeds" {
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "new" ]]; then
+    echo "Created test-999"
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    run "${V0_FIX}" --after test-123 "Blocked bug" 2>&1 || true
+    assert_output --partial "Blocked by"
+}
