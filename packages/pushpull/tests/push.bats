@@ -78,3 +78,45 @@ teardown() {
     # bats test_tags=todo:implement
     skip "Requires more complex git setup with remote"
 }
+
+@test "pp_do_push updates local agent branch if it exists" {
+    # Set up git repo
+    init_mock_git_repo
+
+    # Create a bare remote to push to
+    git clone --bare "${TEST_TEMP_DIR}/project" "${TEST_TEMP_DIR}/remote.git" --quiet
+    cd "${TEST_TEMP_DIR}/project"
+    git remote set-url origin "${TEST_TEMP_DIR}/remote.git"
+
+    # Create agent branch at current commit
+    git branch "v0/develop"
+
+    # Make a new commit on main
+    echo "new content" > newfile.txt
+    git add newfile.txt
+    git commit -m "New commit on main" --quiet
+
+    # At this point:
+    # - main is at the new commit
+    # - v0/develop is at the old commit
+    local main_commit
+    main_commit=$(git rev-parse main)
+    local agent_commit_before
+    agent_commit_before=$(git rev-parse "v0/develop")
+
+    # Verify they're different
+    [[ "$main_commit" != "$agent_commit_before" ]]
+
+    # Set up environment
+    export V0_GIT_REMOTE="origin"
+    export V0_DEVELOP_BRANCH="v0/develop"
+
+    # Run push
+    run pp_do_push "main"
+    assert_success
+
+    # Verify local agent branch was updated
+    local agent_commit_after
+    agent_commit_after=$(git rev-parse "v0/develop")
+    [[ "$agent_commit_after" == "$main_commit" ]]
+}
