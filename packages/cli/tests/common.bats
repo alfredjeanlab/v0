@@ -907,6 +907,34 @@ EOF
     assert_output --partial "does not exist locally"
 }
 
+@test "v0_verify_push respects V0_DEVELOP_BRANCH" {
+    source_lib "v0-common.sh"
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
+
+    # Create develop branch and add commit
+    git checkout -b develop
+    echo "develop" > develop.txt
+    git add develop.txt
+    git commit -m "Develop commit"
+    local develop_commit
+    develop_commit=$(git rev-parse HEAD)
+
+    # Set V0_DEVELOP_BRANCH to develop
+    export V0_DEVELOP_BRANCH="develop"
+
+    # Commit on develop branch should pass
+    run v0_verify_push "${develop_commit}"
+    assert_success
+
+    # Switch to main and verify develop commit is not on main
+    git checkout main
+    export V0_DEVELOP_BRANCH="main"
+    run v0_verify_push "${develop_commit}"
+    assert_failure
+    assert_output --partial "is not on main branch"
+}
+
 # ============================================================================
 # v0_diagnose_push_verification() tests
 # ============================================================================

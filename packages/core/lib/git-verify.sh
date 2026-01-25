@@ -42,13 +42,15 @@ v0_verify_commit_on_branch() {
 }
 
 # v0_verify_push <commit>
-# Verify a pushed commit exists on local main.
-# Returns 0 if commit is on main, 1 if not.
+# Verify a pushed commit exists on the local develop branch.
+# Returns 0 if commit is on develop branch, 1 if not.
+#
+# Uses V0_DEVELOP_BRANCH (defaults to "main") as the target branch.
 #
 # Why this is sufficient:
 # - git push returns 0 only if the push succeeded
 # - If push succeeded, the remote has the commit
-# - We verify locally that the commit is on main (sanity check)
+# - We verify locally that the commit is on the develop branch (sanity check)
 # - Remote state queries (ls-remote, fetch) can return stale data
 #
 # Args:
@@ -62,9 +64,10 @@ v0_verify_push() {
     return 1
   fi
 
-  # Verify commit is on local main
-  if ! git merge-base --is-ancestor "${commit}" main 2>/dev/null; then
-    echo "Error: Commit ${commit:0:8} is not on main branch" >&2
+  # Verify commit is on local develop branch
+  local develop_branch="${V0_DEVELOP_BRANCH:-main}"
+  if ! git merge-base --is-ancestor "${commit}" "${develop_branch}" 2>/dev/null; then
+    echo "Error: Commit ${commit:0:8} is not on ${develop_branch} branch" >&2
     return 1
   fi
 
@@ -85,9 +88,10 @@ v0_diagnose_push_verification() {
   echo "" >&2
 
   # Check local refs
+  local develop_branch="${V0_DEVELOP_BRANCH:-main}"
   echo "Local refs:" >&2
   echo "  HEAD: $(git rev-parse HEAD 2>/dev/null || echo 'N/A')" >&2
-  echo "  main: $(git rev-parse main 2>/dev/null || echo 'N/A')" >&2
+  echo "  ${develop_branch}: $(git rev-parse "${develop_branch}" 2>/dev/null || echo 'N/A')" >&2
   echo "  ${remote_branch}: $(git rev-parse "${remote_branch}" 2>/dev/null || echo 'N/A')" >&2
   echo "" >&2
 
@@ -106,10 +110,10 @@ v0_diagnose_push_verification() {
   # Check ancestry
   echo "" >&2
   echo "Ancestry check:" >&2
-  if git merge-base --is-ancestor "${commit}" main 2>/dev/null; then
-    echo "  ${commit:0:8} IS ancestor of local main" >&2
+  if git merge-base --is-ancestor "${commit}" "${develop_branch}" 2>/dev/null; then
+    echo "  ${commit:0:8} IS ancestor of local ${develop_branch}" >&2
   else
-    echo "  ${commit:0:8} is NOT ancestor of local main" >&2
+    echo "  ${commit:0:8} is NOT ancestor of local ${develop_branch}" >&2
   fi
 
   echo "==================================" >&2
@@ -137,5 +141,5 @@ v0_verify_merge_by_op() {
     return 1  # No recorded merge commit
   fi
 
-  v0_verify_commit_on_branch "${merge_commit}" "main" "${require_remote}"
+  v0_verify_commit_on_branch "${merge_commit}" "${V0_DEVELOP_BRANCH:-main}" "${require_remote}"
 }
