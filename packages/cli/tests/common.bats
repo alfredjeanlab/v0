@@ -3,6 +3,16 @@
 
 load '../../test-support/helpers/test_helper'
 
+# Helper: Initialize a git repo with a remote origin
+init_git_repo_with_remote() {
+    init_mock_git_repo "${TEST_TEMP_DIR}/project"
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    git clone --bare . "${TEST_TEMP_DIR}/origin.git" 2>/dev/null
+    git remote remove origin 2>/dev/null || true
+    git remote add origin "${TEST_TEMP_DIR}/origin.git"
+    git push -u origin "$(git rev-parse --abbrev-ref HEAD)" 2>/dev/null
+}
+
 # ============================================================================
 # v0_find_project_root() tests
 # ============================================================================
@@ -324,16 +334,12 @@ EOF
 # v0_expand_branch() tests
 # ============================================================================
 
-@test "v0_expand_branch expands {name} placeholder" {
+@test "v0_expand_branch expands {name} and {id} placeholders" {
     source_lib "v0-common.sh"
 
     run v0_expand_branch "feature/{name}" "auth"
     assert_success
     assert_output "feature/auth"
-}
-
-@test "v0_expand_branch expands {id} placeholder" {
-    source_lib "v0-common.sh"
 
     run v0_expand_branch "fix/{id}" "abc123"
     assert_success
@@ -430,10 +436,14 @@ EOF
 # v0_check_deps() tests
 # ============================================================================
 
-@test "v0_check_deps succeeds when all dependencies present" {
+@test "v0_check_deps succeeds when dependencies present" {
     source_lib "v0-common.sh"
 
-    # These commands should exist on any system
+    # Single dependency
+    run v0_check_deps "echo"
+    assert_success
+
+    # Multiple dependencies
     run v0_check_deps "echo" "cat" "ls"
     assert_success
 }
@@ -454,13 +464,6 @@ EOF
     assert_failure
     assert_output --partial "missing_cmd1"
     assert_output --partial "missing_cmd2"
-}
-
-@test "v0_check_deps succeeds with single valid dependency" {
-    source_lib "v0-common.sh"
-
-    run v0_check_deps "echo"
-    assert_success
 }
 
 # ============================================================================
@@ -939,74 +942,30 @@ EOF
 # v0_diagnose_push_verification() tests
 # ============================================================================
 
-@test "v0_diagnose_push_verification outputs diagnostic info" {
+@test "v0_diagnose_push_verification outputs diagnostic info and shows commit existence" {
     source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    # Create a bare "remote" repo and set up origin
-    git clone --bare . "${TEST_TEMP_DIR}/origin.git"
-    git remote remove origin 2>/dev/null || true
-    git remote add origin "${TEST_TEMP_DIR}/origin.git"
-
-    # Get current branch name
-    local branch
+    init_git_repo_with_remote
+    local branch commit
     branch=$(git rev-parse --abbrev-ref HEAD)
-    git push -u origin "${branch}"
-
-    local commit
     commit=$(git rev-parse HEAD)
 
-    # Capture diagnostic output
     run v0_diagnose_push_verification "${commit}" "origin/${branch}"
 
-    # Check that key diagnostic sections are present
+    # Check diagnostic sections are present
     assert_output --partial "Push Verification Diagnostic"
     assert_output --partial "Commit to verify:"
     assert_output --partial "Local refs:"
     assert_output --partial "Remote state"
     assert_output --partial "Ancestry check:"
-}
-
-@test "v0_diagnose_push_verification shows commit existence" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    # Create a bare "remote" repo and set up origin
-    git clone --bare . "${TEST_TEMP_DIR}/origin.git"
-    git remote remove origin 2>/dev/null || true
-    git remote add origin "${TEST_TEMP_DIR}/origin.git"
-
-    # Get current branch name
-    local branch
-    branch=$(git rev-parse --abbrev-ref HEAD)
-    git push -u origin "${branch}"
-
-    local commit
-    commit=$(git rev-parse HEAD)
-
-    run v0_diagnose_push_verification "${commit}" "origin/${branch}"
     assert_output --partial "exists locally"
 }
 
 @test "v0_diagnose_push_verification handles missing commit" {
     source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    # Create a bare "remote" repo and set up origin
-    git clone --bare . "${TEST_TEMP_DIR}/origin.git"
-    git remote remove origin 2>/dev/null || true
-    git remote add origin "${TEST_TEMP_DIR}/origin.git"
-
-    # Get current branch name
-    local branch
+    init_git_repo_with_remote
+    local branch fake_commit
     branch=$(git rev-parse --abbrev-ref HEAD)
-    git push -u origin "${branch}"
-
-    # Use a fake commit hash that doesn't exist
-    local fake_commit="1234567890abcdef1234567890abcdef12345678"
+    fake_commit="1234567890abcdef1234567890abcdef12345678"
 
     run v0_diagnose_push_verification "${fake_commit}" "origin/${branch}"
     assert_output --partial "NOT FOUND locally"
