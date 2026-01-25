@@ -166,13 +166,13 @@ v0_detect_develop_branch() {
   local remote="${1:-origin}"
 
   # Check if 'develop' exists locally
-  if git branch --list develop 2>/dev/null | grep -q develop; then
+  if git branch --list develop 2>/dev/null | v0_grep_quiet develop; then
     echo "develop"
     return 0
   fi
 
   # Check if 'develop' exists on remote
-  if git ls-remote --heads "${remote}" develop 2>/dev/null | grep -q develop; then
+  if git ls-remote --heads "${remote}" develop 2>/dev/null | v0_grep_quiet develop; then
     echo "develop"
     return 0
   fi
@@ -191,12 +191,12 @@ v0_ensure_agent_branch() {
   fi
 
   # Check if agent branch exists locally
-  if git branch --list agent 2>/dev/null | grep -q agent; then
+  if git branch --list agent 2>/dev/null | v0_grep_quiet agent; then
     return 0
   fi
 
   # Check if agent branch exists on remote
-  if git ls-remote --heads "${remote}" agent 2>/dev/null | grep -q agent; then
+  if git ls-remote --heads "${remote}" agent 2>/dev/null | v0_grep_quiet agent; then
     # Fetch and create local tracking branch
     git fetch "${remote}" agent 2>/dev/null || true
     git branch --track agent "${remote}/agent" 2>/dev/null || true

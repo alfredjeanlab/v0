@@ -177,20 +177,27 @@ else
   prune_completed
 fi
 
-# Prune old mergeq entries (> 6 hours) with terminal status
+# Prune old mergeq and log entries (> 6 hours)
 echo ""
-echo "Pruning old mergeq entries..."
 if [[ -n "${DRY_RUN}" ]]; then
+  # Dry-run mode: run synchronously to show output
+  echo "Pruning old mergeq entries..."
   v0_prune_mergeq --dry-run
-else
-  v0_prune_mergeq
-fi
-
-# Prune old log entries (> 6 hours) from logs with timestamps
-echo ""
-echo "Pruning old log entries..."
-if [[ -n "${DRY_RUN}" ]]; then
+  echo ""
+  echo "Pruning old log entries..."
   v0_prune_logs --dry-run
 else
-  v0_prune_logs
+  # Start prune daemon if not running and trigger immediate run
+  if prune_daemon_start; then
+    prune_daemon_trigger
+    echo "Pruning logs in background..."
+    echo -e "View logs: ${C_DIM}tail -f ${BUILD_DIR}/logs/prune-daemon.log${C_RESET}"
+  else
+    # Fallback to synchronous if daemon fails to start
+    echo "Pruning old mergeq entries..."
+    v0_prune_mergeq
+    echo ""
+    echo "Pruning old log entries..."
+    v0_prune_logs
+  fi
 fi

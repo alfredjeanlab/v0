@@ -206,6 +206,7 @@ source_lib() {
         state-machine.sh)   lib_path="$PROJECT_ROOT/packages/state/lib/state-machine.sh" ;;
         update-common.sh)   lib_path="$PROJECT_ROOT/packages/cli/lib/update-common.sh" ;;
         debug-common.sh)    lib_path="$PROJECT_ROOT/packages/cli/lib/debug-common.sh" ;;
+        grep.sh)            lib_path="$PROJECT_ROOT/packages/core/lib/grep.sh" ;;
         *)
             # Try to find in packages subdirectories
             for pkg in cli state worker mergeq merge feature hooks status; do

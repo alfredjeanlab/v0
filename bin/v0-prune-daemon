@@ -1,0 +1,136 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-prune-daemon - Background pruning daemon
+#
+# Long-running daemon that:
+# - Runs pruning immediately on start
+# - Sleeps for 1 hour
+# - Repeats until signaled to stop
+#
+# Signal handling:
+# - SIGTERM: Graceful shutdown (finish current prune, exit)
+# - SIGUSR1: Wake immediately (for v0 prune to trigger immediate run)
+
+set -e
+
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+v0_load_config
+
+# Daemon configuration
+PRUNE_INTERVAL=3600  # 1 hour in seconds
+PRUNE_LOCK_FILE="${BUILD_DIR}/.prune-daemon.lock"
+PRUNE_PID_FILE="${BUILD_DIR}/.prune-daemon.pid"
+
+# Track state for signal handlers
+SHUTDOWN_REQUESTED=""
+WAKE_REQUESTED=""
+SLEEP_PID=""
+
+# Log with timestamp
+log() {
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
+}
+
+# Cleanup on exit
+cleanup() {
+    log "Daemon shutting down"
+    rm -f "${PRUNE_PID_FILE}"
+    # Release lock if held
+    exec 200>&- 2>/dev/null || true
+}
+
+# Signal handlers
+handle_term() {
+    log "Received SIGTERM, will exit after current operation"
+    SHUTDOWN_REQUESTED=1
+    # Wake from sleep if sleeping
+    if [[ -n "${SLEEP_PID}" ]] && kill -0 "${SLEEP_PID}" 2>/dev/null; then
+        kill "${SLEEP_PID}" 2>/dev/null || true
+    fi
+}
+
+handle_usr1() {
+    log "Received SIGUSR1, waking up"
+    WAKE_REQUESTED=1
+    # Wake from sleep if sleeping
+    if [[ -n "${SLEEP_PID}" ]] && kill -0 "${SLEEP_PID}" 2>/dev/null; then
+        kill "${SLEEP_PID}" 2>/dev/null || true
+    fi
+}
+
+# Set up signal handlers
+trap cleanup EXIT
+trap handle_term SIGTERM SIGINT
+trap handle_usr1 SIGUSR1
+
+# Run pruning with lock to prevent concurrent runs
+do_prune() {
+    # Try to acquire lock (non-blocking)
+    exec 200>"${PRUNE_LOCK_FILE}"
+    if ! flock -n 200; then
+        log "Another prune operation in progress, skipping"
+        exec 200>&-
+        return 0
+    fi
+
+    log "Starting pruning..."
+
+    # Run mergeq pruning
+    local mergeq_output
+    mergeq_output=$(v0_prune_mergeq 2>&1) || true
+    if [[ -n "${mergeq_output}" ]]; then
+        log "${mergeq_output}"
+    fi
+
+    # Run log pruning
+    local logs_output
+    logs_output=$(v0_prune_logs 2>&1) || true
+    if [[ -n "${logs_output}" ]]; then
+        log "${logs_output}"
+    fi
+
+    log "Pruning complete"
+
+    # Release lock
+    flock -u 200
+    exec 200>&-
+}
+
+# Main daemon loop
+main() {
+    log "Prune daemon starting (PID: $$, interval: ${PRUNE_INTERVAL}s)"
+
+    # Write PID file
+    echo "$$" > "${PRUNE_PID_FILE}"
+
+    while true; do
+        # Run pruning
+        do_prune
+
+        # Check for shutdown request
+        if [[ -n "${SHUTDOWN_REQUESTED}" ]]; then
+            break
+        fi
+
+        # Clear wake request before sleeping
+        WAKE_REQUESTED=""
+
+        # Sleep until next cycle (interruptible by signals)
+        log "Sleeping for ${PRUNE_INTERVAL}s until next prune cycle"
+        sleep "${PRUNE_INTERVAL}" &
+        SLEEP_PID=$!
+        wait "${SLEEP_PID}" 2>/dev/null || true
+        SLEEP_PID=""
+
+        # Check for shutdown request after wake
+        if [[ -n "${SHUTDOWN_REQUESTED}" ]]; then
+            break
+        fi
+    done
+
+    log "Daemon exiting normally"
+}
+
+main "$@"

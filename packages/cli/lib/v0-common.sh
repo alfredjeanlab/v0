@@ -35,6 +35,9 @@ else
 fi
 
 # Source modular components
+# shellcheck source=packages/core/lib/grep.sh
+source "${V0_INSTALL_DIR}/packages/core/lib/grep.sh"
+
 # shellcheck source=packages/core/lib/config.sh
 source "${V0_INSTALL_DIR}/packages/core/lib/config.sh"
 
@@ -43,6 +46,9 @@ source "${V0_INSTALL_DIR}/packages/core/lib/logging.sh"
 
 # shellcheck source=packages/core/lib/pruning.sh
 source "${V0_INSTALL_DIR}/packages/core/lib/pruning.sh"
+
+# shellcheck source=packages/core/lib/prune-daemon.sh
+source "${V0_INSTALL_DIR}/packages/core/lib/prune-daemon.sh"
 
 # shellcheck source=packages/core/lib/git-verify.sh
 source "${V0_INSTALL_DIR}/packages/core/lib/git-verify.sh"

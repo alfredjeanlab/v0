@@ -343,12 +343,19 @@ if [[ -z "${DRY_RUN}" ]]; then
     echo "Stopped coffee (system can sleep)"
   fi
 
-  # Prune old mergeq entries (> 6 hours) with terminal status
+  # Wait for background pruning to complete if running
+  if prune_daemon_running; then
+    echo ""
+    echo "Waiting for background pruning to complete..."
+    prune_daemon_wait
+    echo "Background pruning stopped"
+  fi
+
+  # Final synchronous prune to catch anything new
   echo ""
   echo "Pruning old mergeq entries..."
   v0_prune_mergeq
 
-  # Prune old log entries (> 6 hours) from logs with timestamps
   echo ""
   echo "Pruning old log entries..."
   v0_prune_logs
@@ -368,7 +375,12 @@ if [[ -z "${DRY_RUN}" ]]; then
     echo "Shutdown complete"
   fi
 else
-  # Dry-run mode: show what would be pruned
+  # Dry-run mode: show what would be done
+  if prune_daemon_running; then
+    echo ""
+    echo "Would stop prune daemon"
+  fi
+
   echo ""
   echo "Pruning old mergeq entries..."
   v0_prune_mergeq --dry-run

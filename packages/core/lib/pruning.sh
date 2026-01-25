@@ -57,7 +57,7 @@ v0_prune_logs() {
 
     # Check if file has ISO 8601 timestamps by looking at first line with a timestamp
     local first_ts_line
-    first_ts_line=$(grep -m1 '^\[20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z\]' "${log_file}" 2>/dev/null || true)
+    first_ts_line=$(v0_grep_first '^\[20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z\]' "${log_file}" 2>/dev/null || true)
     [[ -z "${first_ts_line}" ]] && continue
 
     # Process the file: keep lines with recent timestamps or no timestamp
@@ -70,7 +70,7 @@ v0_prune_logs() {
     while IFS= read -r line; do
       # Extract timestamp if line starts with [YYYY-MM-DDTHH:MM:SSZ]
       local ts
-      ts=$(echo "${line}" | grep -oE '^\[20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z\]' 2>/dev/null || true)
+      ts=$(echo "${line}" | v0_grep_extract '^\[20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z\]' 2>/dev/null || true)
 
       if [[ -z "${ts}" ]]; then
         # Line doesn't start with timestamp - keep it (could be continuation)
