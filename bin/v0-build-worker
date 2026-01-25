@@ -516,7 +516,7 @@ WRAPPER
   sm_transition_to_executing "${NAME}" "${SESSION}"
 
   log "Build phase started: tmux session ${SESSION}"
-  log "Watch live: v0 attach feature ${NAME}"
+  log "Watch live: v0 attach ${NAME}"
 }
 
 main() {

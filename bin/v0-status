@@ -897,13 +897,13 @@ show_status() {
     if [[ "${machine}" = "${local_machine}" ]]; then
       if tmux has-session -t "${session}" 2>/dev/null; then
         echo "Session: Running (${session})"
-        echo "Attach:  v0 attach feature ${NAME}"
+        echo "Attach:  v0 attach ${NAME}"
       else
         echo "Session: Stopped (was ${session})"
       fi
     else
       echo "Session: ${session} (on ${machine})"
-      echo "Attach:  ssh ${machine} -t 'v0 attach feature ${NAME}'"
+      echo "Attach:  ssh ${machine} -t 'v0 attach ${NAME}'"
     fi
   fi
 
