@@ -161,7 +161,7 @@ v0_is_standalone() {
 }
 
 # Detect the best default branch for development
-# Returns: branch name (develop if exists, otherwise main)
+# Returns: branch name (develop if exists, otherwise v0/develop for new projects)
 v0_detect_develop_branch() {
   local remote="${1:-origin}"
 
@@ -177,8 +177,8 @@ v0_detect_develop_branch() {
     return 0
   fi
 
-  # Fallback to main
-  echo "main"
+  # Fallback to v0/develop for new projects
+  echo "v0/develop"
 }
 
 # Ensure v0/develop branch exists, creating from current HEAD if needed
@@ -273,9 +273,9 @@ v0_init_config() {
     echo "Created .gitignore with .v0/"
   fi
 
-  # Auto-detect branch if not specified
+  # Default to v0/develop for new projects
   if [[ -z "${develop_branch}" ]]; then
-    develop_branch="$(v0_detect_develop_branch "${git_remote}")"
+    develop_branch="v0/develop"
   fi
 
   # Create v0/develop branch if it doesn't exist (only for 'v0/develop' branch)

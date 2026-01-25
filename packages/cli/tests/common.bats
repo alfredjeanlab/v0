@@ -634,7 +634,7 @@ EOF
     assert_output "develop"
 }
 
-@test "v0_detect_develop_branch returns main when develop does not exist" {
+@test "v0_detect_develop_branch returns v0/develop when develop does not exist" {
     init_mock_git_repo "${TEST_TEMP_DIR}/project"
     cd "${TEST_TEMP_DIR}/project" || return 1
 
@@ -642,7 +642,7 @@ EOF
 
     run v0_detect_develop_branch
     assert_success
-    assert_output "main"
+    assert_output "v0/develop"
 }
 
 @test "v0_detect_develop_branch checks remote when local branch not found" {
@@ -692,17 +692,18 @@ EOF
     assert_success
 }
 
-@test "v0_init_config auto-detects develop branch" {
+@test "v0_init_config always uses v0/develop as default" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
+    # Even if 'develop' branch exists, init should use v0/develop
     git branch develop
 
     source_lib_with_mocks "v0-common.sh"
 
     v0_init_config "${test_dir}"
 
-    run grep 'V0_DEVELOP_BRANCH="develop"' "${test_dir}/.v0.rc"
+    run grep 'V0_DEVELOP_BRANCH="v0/develop"' "${test_dir}/.v0.rc"
     assert_success
 }
 
@@ -737,7 +738,7 @@ EOF
     assert_success
 }
 
-@test "v0_init_config defaults to main when develop does not exist" {
+@test "v0_init_config defaults to v0/develop when develop does not exist" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
@@ -748,15 +749,15 @@ EOF
 
     source_lib "v0-common.sh"
 
-    # Run init (should auto-detect main as the default)
+    # Run init (should default to v0/develop)
     v0_init_config "${test_dir}"
 
-    # Verify .v0.rc contains main as the develop branch
-    run grep 'V0_DEVELOP_BRANCH="main"' "${test_dir}/.v0.rc"
+    # Verify .v0.rc contains v0/develop as the develop branch
+    run grep 'V0_DEVELOP_BRANCH="v0/develop"' "${test_dir}/.v0.rc"
     assert_success
 }
 
-@test "v0_init_config writes explicit main branch to .v0.rc" {
+@test "v0_init_config writes explicit v0/develop branch to .v0.rc" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
@@ -769,8 +770,8 @@ EOF
 
     v0_init_config "${test_dir}"
 
-    # Should contain explicit V0_DEVELOP_BRANCH="main"
-    run grep 'V0_DEVELOP_BRANCH="main"' "${test_dir}/.v0.rc"
+    # Should contain explicit V0_DEVELOP_BRANCH="v0/develop"
+    run grep 'V0_DEVELOP_BRANCH="v0/develop"' "${test_dir}/.v0.rc"
     assert_success
     # Should NOT be commented
     run grep -E '^# V0_DEVELOP_BRANCH=' "${test_dir}/.v0.rc"

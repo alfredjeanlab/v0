@@ -66,7 +66,7 @@ Usage: v0 <command> [args]
 Commands:
   init [path]   Initialize .v0.rc in current directory (or path)
                 Options:
-                  --develop <branch>  Target branch for merges (auto-detects 'develop', fallback 'main')
+                  --develop <branch>  Target branch for merges (default: v0/develop)
                   --remote <name>     Git remote name (default: origin)
   status        Show operation status
   watch         Continuously watch status (like 'status --watch')
@@ -102,7 +102,7 @@ Options:
   --version     Show version
 
 Examples:
-  v0 init                              # Initialize with auto-detected branch
+  v0 init                              # Initialize with v0/develop branch
   v0 init --develop main               # Use 'main' as the development branch
   v0 init ./myproject --remote upstream  # Init in myproject, use 'upstream' remote
   v0 build auth "Add JWT auth"         # Full autonomous pipeline
