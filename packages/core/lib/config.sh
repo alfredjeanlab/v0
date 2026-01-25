@@ -369,13 +369,9 @@ EOF
   V0_WORKSPACE_MODE="${workspace_mode}"
   V0_WORKSPACE_DIR="${V0_STATE_DIR}/workspace/${REPO_NAME}"
 
-  # Create workspace for merge operations
-  echo ""
-  echo "Creating workspace for merge operations..."
-  if ws_ensure_workspace; then
-    echo -e "Workspace created at ${C_DIM}${V0_WORKSPACE_DIR}${C_RESET}"
-    echo -e "  Mode: ${C_CYAN}${workspace_mode}${C_RESET}"
-  else
+  # Create workspace for merge operations (quietly - errors still go to stderr)
+  if ! ws_ensure_workspace > /dev/null; then
+    echo ""
     echo -e "${C_YELLOW}Warning: Failed to create workspace${C_RESET}"
     echo "  Workspace will be created on first merge operation."
   fi
