@@ -255,7 +255,7 @@ jq ".tmux_session = \"${PLAN_SESSION}\"" "${STATE_FILE}" > "${tmp}" && mv "${tmp
 # Use --foreground to preserve the old blocking behavior.
 if [[ -z "${FOREGROUND}" ]]; then
   echo ""
-  echo "Check:     v0 status ${NAME}"
+  echo "Status:    v0 status ${NAME}"
   echo "View logs: tail -f ${STATE_DIR}/logs/plan.log"
   echo ""
   exit 0

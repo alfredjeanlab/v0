@@ -78,7 +78,7 @@ mq_start_daemon() {
 
     echo -e "${C_GREEN}Worker started${C_RESET} ${C_DIM}(pid: ${daemon_pid})${C_RESET}"
     echo ""
-    echo -e "Check:     ${C_BOLD}v0 mergeq --status${C_RESET}"
+    echo -e "Status:    ${C_BOLD}v0 mergeq --status${C_RESET}"
     echo -e "View logs: ${C_BOLD}tail -f ${DAEMON_LOG_FILE}${C_RESET}"
 }
 
