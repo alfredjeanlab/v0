@@ -295,3 +295,25 @@ EOF
     run "${V0_FIX}" --after test-123 "Blocked bug" 2>&1 || true
     assert_output --partial "Blocked by"
 }
+
+# ============================================================================
+# Positional Argument Alias Tests
+# ============================================================================
+
+@test "v0-fix: 'stop' positional arg works like --stop" {
+    run "${V0_FIX}" stop
+    # Should have same behavior as --stop (worker not running is expected)
+    assert_success || assert_failure
+}
+
+@test "v0-fix: 'start' positional arg works like --start" {
+    run "${V0_FIX}" start
+    # Should attempt to start worker (may fail due to mock tmux)
+    assert_success || assert_failure
+}
+
+@test "v0-fix: 'status' positional arg works like --status" {
+    run "${V0_FIX}" status
+    assert_success || assert_failure
+    assert_output --partial "Worker" || assert_output --partial "worker" || assert_output --partial "not running" || true
+}

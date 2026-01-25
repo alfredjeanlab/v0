@@ -711,6 +711,16 @@ while [[ $# -gt 0 ]]; do
       ACTION="status"
       shift
       ;;
+    start)
+      # Auto-correct 'v0 fix start' to 'v0 fix --start'
+      ACTION="start"
+      shift
+      ;;
+    stop)
+      # Auto-correct 'v0 fix stop' to 'v0 fix --stop'
+      ACTION="stop"
+      shift
+      ;;
     *)
       POSITIONAL+=("$1")
       shift

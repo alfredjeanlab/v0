@@ -884,6 +884,16 @@ while [[ $# -gt 0 ]]; do
       ACTION="status"
       shift
       ;;
+    start)
+      # Auto-correct 'v0 chore start' to 'v0 chore --start'
+      ACTION="start"
+      shift
+      ;;
+    stop)
+      # Auto-correct 'v0 chore stop' to 'v0 chore --stop'
+      ACTION="stop"
+      shift
+      ;;
     *)
       POSITIONAL+=("$1")
       shift

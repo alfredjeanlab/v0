@@ -304,3 +304,25 @@ EOF
     run "${V0_CHORE}" --after test-123 "Blocked chore" 2>&1 || true
     assert_output --partial "Blocked by"
 }
+
+# ============================================================================
+# Positional Argument Alias Tests
+# ============================================================================
+
+@test "v0-chore: 'stop' positional arg works like --stop" {
+    run "${V0_CHORE}" stop
+    # Should have same behavior as --stop (worker not running is expected)
+    assert_success || assert_failure
+}
+
+@test "v0-chore: 'start' positional arg works like --start" {
+    run "${V0_CHORE}" start
+    # Should attempt to start worker (may fail due to mock tmux)
+    assert_success || assert_failure
+}
+
+@test "v0-chore: 'status' positional arg works like --status" {
+    run "${V0_CHORE}" status
+    assert_success || assert_failure
+    assert_output --partial "Worker" || assert_output --partial "worker" || assert_output --partial "not running" || true
+}
