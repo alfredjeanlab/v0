@@ -24,7 +24,7 @@ Layer 4: cli               # Entry point, sources all
 
 ## Package Structure
 
-```
+```example
 packages/<name>/
   lib/           # Shell library files (.sh)
   tests/         # Unit tests (.bats)

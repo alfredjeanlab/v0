@@ -4,7 +4,7 @@ A tool to ease you in to multi-agent vibe coding.
 
 Orchestrates Claude workers in tmux sessions for planning, feature development, bug fixing, and chore processing. Uses git worktrees for isolated development and a merge queue for automatic integration.
 
-## Project Structure
+## Directory Structure
 
 ```
 bin/                    # CLI commands (v0, v0-plan, v0-feature, v0-fix, etc.)
@@ -48,9 +48,16 @@ scripts/test --bust v0-merge    # Clear cache for one target
 - `make lint` - ShellCheck on all scripts
 - `scripts/test` - Incremental test runner with caching
 
-## Before Committing
+## Landing the Plane
 
 - [ ] Run `make check` (lint + test + quench)
 - [ ] New lib code needs unit tests in `packages/<pkg>/tests/`
 - [ ] New bin commands need integration tests in `tests/`
 - [ ] Tag unimplemented tests: `# bats test_tags=todo:implement`
+
+## Commits
+
+Use conventional commit format: `type(scope): description`
+Types: feat, fix, chore, docs, test, refactor
+
+
