@@ -149,9 +149,9 @@ echo ""
 echo -e "${C_BOLD}${C_CYAN}=== Feature '${NAME}' queued for planning ===${C_RESET}"
 echo -e "Worker PID: ${C_DIM}${WORKER_PID}${C_RESET}"
 echo ""
-echo -e "Check status: ${C_BOLD}v0 status ${NAME}${C_RESET}"
-echo -e "View logs:    ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
-echo -e "Attach:       ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+echo -e "Check:     ${C_BOLD}v0 status ${NAME}${C_RESET}"
+echo -e "Attach:    ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+echo -e "View logs: ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
 echo ""
 ```
 

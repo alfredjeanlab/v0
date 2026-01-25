@@ -360,8 +360,8 @@ if [[ -n "${RESUME}" ]]; then
   if [[ -n "${WORKER_PID}" ]] && [[ "${WORKER_PID}" != "null" ]] && kill -0 "${WORKER_PID}" 2>/dev/null; then
     echo "Background worker already running (PID: ${WORKER_PID})"
     echo ""
-    echo "View logs:    tail -f ${WORKER_LOG}"
-    echo "Check status: v0 status ${NAME}"
+    echo "Check:     v0 status ${NAME}"
+    echo "View logs: tail -f ${WORKER_LOG}"
     echo ""
     echo "To force restart, first kill the worker:"
     echo "  kill ${WORKER_PID}"
@@ -392,9 +392,9 @@ if [[ -n "${RESUME}" ]]; then
       echo -e "${C_BOLD}${C_CYAN}=== Resuming '${NAME}' at phase: ${PHASE} ===${C_RESET}"
       echo -e "Worker PID: ${C_DIM}${WORKER_PID}${C_RESET}"
       echo ""
-      echo -e "Check status: ${C_BOLD}v0 status ${NAME}${C_RESET}"
-      echo -e "View logs:    ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
-      echo -e "Attach:       ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+      echo -e "Check:     ${C_BOLD}v0 status ${NAME}${C_RESET}"
+      echo -e "Attach:    ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+      echo -e "View logs: ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
       echo ""
 
       if [[ -n "${ATTACH}" ]]; then
@@ -634,9 +634,9 @@ else
     echo -e "${C_BOLD}${C_CYAN}=== Feature '${NAME}' queued for planning ===${C_RESET}"
     echo -e "Worker PID: ${C_DIM}${WORKER_PID}${C_RESET}"
     echo ""
-    echo -e "Check status: ${C_BOLD}v0 status ${NAME}${C_RESET}"
-    echo -e "View logs:    ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
-    echo -e "Attach:       ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+    echo -e "Check:     ${C_BOLD}v0 status ${NAME}${C_RESET}"
+    echo -e "Attach:    ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+    echo -e "View logs: ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
     echo ""
 
     if [[ -n "${ATTACH}" ]]; then
@@ -923,7 +923,7 @@ if [[ "${PHASE}" = "queued" ]] && [[ -z "${ENQUEUE_ONLY}" ]]; then
     echo -e "  ${C_BOLD}v0 attach ${NAME}${C_RESET}"
     echo -e "  ${C_DIM}(Ctrl-B D to detach)${C_RESET}"
     echo ""
-    echo "Check status:"
+    echo "Check:"
     echo -e "  ${C_BOLD}v0 status ${NAME}${C_RESET}"
     echo ""
     echo "Stop:"
