@@ -70,7 +70,7 @@ if pp_agent_has_diverged; then
     if [[ "${FORCE}" = true ]]; then
         echo -e "${C_YELLOW}Warning:${C_RESET} Force pushing will overwrite agent commits."
     else
-        echo -e "${C_RED}Error:${C_RESET} Agent branch has new commits since last push."
+        echo -e "${C_RED}Error:${C_RESET} Agent branch has new commits since last pull."
         echo ""
         echo "To see what would be lost:"
         echo "  git log HEAD..${V0_GIT_REMOTE}/${AGENT_BRANCH}"

@@ -24,10 +24,10 @@ pp_set_last_push_commit() {
 }
 
 # pp_agent_has_diverged
-# Check if agent branch has commits since last push
-# Returns 0 if diverged (has new commits), 1 if not
+# Check if agent branch has commits we haven't incorporated
+# Returns 0 if diverged (has commits not in HEAD), 1 if not
 pp_agent_has_diverged() {
-    local agent_branch remote_ref last_push current_agent
+    local agent_branch remote_ref
     local remote="${V0_GIT_REMOTE:-origin}"
     agent_branch=$(pp_get_agent_branch)
     remote_ref="${remote}/${agent_branch}"
@@ -35,47 +35,26 @@ pp_agent_has_diverged() {
     # Fetch latest state
     git fetch "${remote}" "${agent_branch}" 2>/dev/null || true
 
-    last_push=$(pp_get_last_push_commit)
-    if [[ -z "${last_push}" ]]; then
-        # No record of last push - check if agent has any commits not on current branch
-        # If agent is ancestor of HEAD, no divergence
-        if git merge-base --is-ancestor "${remote_ref}" HEAD 2>/dev/null; then
-            return 1  # Not diverged
-        fi
-        return 0  # Diverged (agent has commits not in HEAD)
+    # If agent is an ancestor of HEAD, we've already incorporated all agent commits
+    # (either via pull, merge, or local commits that include the agent's work)
+    if git merge-base --is-ancestor "${remote_ref}" HEAD 2>/dev/null; then
+        return 1  # Not diverged - we have all agent commits
     fi
 
-    current_agent=$(git rev-parse "${remote_ref}" 2>/dev/null || echo "")
-    if [[ "${current_agent}" == "${last_push}" ]]; then
-        return 1  # Not diverged
-    fi
-
-    # Agent has moved - check if there are commits on agent since our last push
-    local new_commits
-    new_commits=$(git log --oneline "${last_push}..${remote_ref}" 2>/dev/null | wc -l | tr -d ' ')
-    if [[ "${new_commits}" -gt 0 ]]; then
-        return 0  # Diverged
-    fi
-
-    return 1  # Not diverged
+    # Agent has commits not in HEAD
+    return 0  # Diverged
 }
 
 # pp_show_divergence
-# Show commits on agent branch since last push
+# Show commits on agent branch not yet in HEAD
 pp_show_divergence() {
-    local agent_branch remote_ref last_push
+    local agent_branch remote_ref
     local remote="${V0_GIT_REMOTE:-origin}"
     agent_branch=$(pp_get_agent_branch)
     remote_ref="${remote}/${agent_branch}"
-    last_push=$(pp_get_last_push_commit)
 
-    if [[ -n "${last_push}" ]]; then
-        echo "Commits on agent since last push:"
-        git log --oneline "${last_push}..${remote_ref}"
-    else
-        echo "Commits on agent not in current branch:"
-        git log --oneline "HEAD..${remote_ref}"
-    fi
+    echo "Commits on agent not in current branch:"
+    git log --oneline "HEAD..${remote_ref}"
 }
 
 # pp_do_push <source_branch>
