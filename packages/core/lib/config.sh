@@ -233,7 +233,7 @@ v0_init_config() {
   local issue_prefix
   if [[ -f "${target_dir}/.wok/config.toml" ]]; then
     # Read prefix from existing wk config
-    issue_prefix=$(grep -E '^prefix' "${target_dir}/.wok/config.toml" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/' || true)
+    issue_prefix=$(v0_grep '^prefix' "${target_dir}/.wok/config.toml" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/' || true)
     if [[ -z "${issue_prefix}" ]]; then
       issue_prefix="${project_name}"
     fi
@@ -244,7 +244,7 @@ v0_init_config() {
       echo "Created wk configuration at ${target_dir}/.wok"
 
       # Read the prefix that wk determined
-      issue_prefix=$(grep -E '^prefix' "${target_dir}/.wok/config.toml" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/' || true)
+      issue_prefix=$(v0_grep '^prefix' "${target_dir}/.wok/config.toml" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/' || true)
       if [[ -z "${issue_prefix}" ]]; then
         issue_prefix="${project_name}"
       fi
