@@ -153,19 +153,19 @@ create_test_state() {
 @test "sm_allowed_transitions returns valid transitions for init" {
     run sm_allowed_transitions "init"
     assert_success
-    assert_output "planned blocked failed"
+    assert_output "planned failed"
 }
 
 @test "sm_allowed_transitions returns valid transitions for planned" {
     run sm_allowed_transitions "planned"
     assert_success
-    assert_output "queued executing blocked failed"
+    assert_output "queued executing failed"
 }
 
 @test "sm_allowed_transitions returns valid transitions for queued" {
     run sm_allowed_transitions "queued"
     assert_success
-    assert_output "executing blocked failed"
+    assert_output "executing failed"
 }
 
 @test "sm_allowed_transitions returns valid transitions for executing" {
@@ -388,13 +388,6 @@ create_test_state() {
     assert_output "init"
 }
 
-@test "sm_get_resume_phase returns blocked_phase for blocked operations" {
-    create_test_state "test-op" "blocked" '"blocked_phase": "queued", "after": "parent"'
-
-    run sm_get_resume_phase "test-op"
-    assert_output "queued"
-}
-
 @test "sm_clear_error_state resets phase and clears error" {
     create_test_state "test-op" "failed" '"error": "Some error", "plan_file": "plans/test.md"'
 
@@ -410,103 +403,14 @@ create_test_state() {
 # ============================================================================
 # Blocking/Dependency Tests
 # ============================================================================
-
-@test "sm_is_blocked returns true for blocked phase" {
-    create_test_state "test-op" "blocked" '"after": "parent-op"'
-
-    run sm_is_blocked "test-op"
-    assert_success
-}
-
-@test "sm_is_blocked returns true when after is set" {
-    create_test_state "test-op" "init" '"after": "parent-op"'
-
-    run sm_is_blocked "test-op"
-    assert_success
-}
-
-@test "sm_is_blocked returns false when not blocked" {
-    create_test_state "test-op" "init"
-
-    run sm_is_blocked "test-op"
-    assert_failure
-}
-
-@test "sm_get_blocker returns blocking operation" {
-    create_test_state "test-op" "blocked" '"after": "parent-op"'
-
-    run sm_get_blocker "test-op"
-    assert_output "parent-op"
-}
+# Note: Blocking is now tracked via wok, not state.json.
+# These functions require wok integration and are tested via integration tests.
 
 @test "sm_get_blocker_status returns phase of blocker" {
     create_test_state "parent-op" "executing"
 
     run sm_get_blocker_status "parent-op"
     assert_output "executing"
-}
-
-@test "sm_get_blocker_status returns unknown for missing operation" {
-    run sm_get_blocker_status "nonexistent"
-    assert_failure
-    assert_output "unknown"
-}
-
-@test "sm_is_blocker_merged returns true when blocker is merged" {
-    create_test_state "child-op" "blocked" '"after": "parent-op"'
-    create_test_state "parent-op" "merged"
-
-    run sm_is_blocker_merged "child-op"
-    assert_success
-}
-
-@test "sm_is_blocker_merged returns false when blocker not merged" {
-    create_test_state "child-op" "blocked" '"after": "parent-op"'
-    create_test_state "parent-op" "executing"
-
-    run sm_is_blocker_merged "child-op"
-    assert_failure
-}
-
-@test "sm_is_blocker_merged returns true when no blocker" {
-    create_test_state "test-op" "init"
-
-    run sm_is_blocker_merged "test-op"
-    assert_success
-}
-
-@test "sm_unblock_operation clears blocked state" {
-    create_test_state "test-op" "blocked" '"after": "parent-op", "blocked_phase": "queued"'
-
-    sm_unblock_operation "test-op"
-
-    run sm_read_state "test-op" "phase"
-    assert_output "queued"
-
-    run jq -r '.after' "${BUILD_DIR}/operations/test-op/state.json"
-    assert_output "null"
-}
-
-@test "sm_unblock_operation defaults to init if no blocked_phase" {
-    create_test_state "test-op" "blocked" '"after": "parent-op"'
-
-    sm_unblock_operation "test-op"
-
-    run sm_read_state "test-op" "phase"
-    assert_output "init"
-}
-
-@test "sm_find_dependents finds operations waiting for merged op" {
-    create_test_state "parent-op" "merged"
-    create_test_state "child1" "blocked" '"after": "parent-op"'
-    create_test_state "child2" "blocked" '"after": "parent-op"'
-    create_test_state "unrelated" "blocked" '"after": "other-op"'
-
-    run sm_find_dependents "parent-op"
-    assert_success
-    assert_output --partial "child1"
-    assert_output --partial "child2"
-    refute_output --partial "unrelated"
 }
 
 # ============================================================================
@@ -623,13 +527,6 @@ create_test_state() {
     assert_output "new||"
 }
 
-@test "sm_get_display_status returns blocked with blocker name" {
-    create_test_state "test-op" "blocked" '"after": "parent-op"'
-
-    run sm_get_display_status "test-op"
-    assert_output "blocked|yellow|[waiting: parent-op]"
-}
-
 @test "sm_get_display_status returns merged for merged phase" {
     create_test_state "test-op" "merged"
 
@@ -743,13 +640,13 @@ create_test_state() {
     assert_failure
 }
 
-@test "sm_migrate_state migrates v0 to v1" {
+@test "sm_migrate_state migrates to current version" {
     create_test_state "test-op" "init"
 
     sm_migrate_state "test-op"
 
     run sm_get_state_version "test-op"
-    assert_output "1"
+    assert_output "2"
 
     # Should have _migrated_at field
     migrated_at=$(sm_read_state "test-op" "_migrated_at")

@@ -662,7 +662,7 @@ Run tests incrementally with caching.
 
 Options:
     --init         Install BATS and generate fixtures, then exit
-    --bust [NAME]  Clear cache (all, or specific target)
+    --bust TARGET  Clear cache for specific target (required)
     --verbose      Show detailed debug output
     -j, --jobs N   Number of parallel jobs (default: auto)
     -h, --help     Show this help message
@@ -702,8 +702,10 @@ main() {
                     bust_target="$2"
                     shift 2
                 else
-                    bust_target="all"
-                    shift
+                    log_error "--bust requires a TARGET argument"
+                    log_error "Usage: scripts/test --bust <target>"
+                    log_error "Example: scripts/test --bust v0-merge"
+                    exit 1
                 fi
                 ;;
             --verbose|-v)
