@@ -1,0 +1,89 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-pull - Pull changes from agent branch into user branch
+set -e
+
+# Find v0 installation directory
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Source common functions and load config
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+v0_load_config
+
+# Source pushpull package
+source "${V0_DIR}/packages/pushpull/lib/pushpull.sh"
+
+show_help() {
+    cat <<EOF
+Usage: v0 pull [branch] [--resolve]
+
+Pull changes from the agent branch (${V0_DEVELOP_BRANCH}) into the current
+branch or [branch] if specified.
+
+Options:
+  --resolve    If conflicts exist, run claude to resolve them (foreground)
+  --help, -h   Show this help
+
+Examples:
+  v0 pull                  # Pull into current branch
+  v0 pull main             # Pull into main branch
+  v0 pull --resolve        # Pull with LLM conflict resolution
+EOF
+}
+
+usage() {
+    show_help
+    exit 1
+}
+
+# Parse arguments
+TARGET_BRANCH=""
+RESOLVE=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --resolve) RESOLVE=true; shift ;;
+        --help|-h) show_help; exit 0 ;;
+        -*) echo "Unknown option: $1"; usage ;;
+        *)
+            if [[ -z "${TARGET_BRANCH}" ]]; then
+                TARGET_BRANCH="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Resolve target branch
+TARGET_BRANCH=$(pp_resolve_target_branch "${TARGET_BRANCH}")
+AGENT_BRANCH=$(pp_get_agent_branch)
+
+echo "Pulling ${V0_GIT_REMOTE}/${AGENT_BRANCH} into ${TARGET_BRANCH}..."
+
+# Checkout target branch if not current
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "${TARGET_BRANCH}" != "${CURRENT_BRANCH}" ]]; then
+    git checkout "${TARGET_BRANCH}"
+fi
+
+# Fetch latest
+pp_fetch_agent_branch
+
+# Attempt pull
+if pp_do_pull "${AGENT_BRANCH}"; then
+    echo "Pull complete."
+elif [[ "${RESOLVE}" = true ]]; then
+    echo "Conflicts detected. Starting foreground resolution..."
+    if pp_run_foreground_resolve "${AGENT_BRANCH}" "${TARGET_BRANCH}"; then
+        echo "Pull complete (after resolution)."
+    else
+        echo "Error: Conflict resolution failed"
+        exit 1
+    fi
+else
+    echo "Error: Merge would have conflicts."
+    echo "To resolve with agent assistance:"
+    echo "  v0 pull --resolve"
+    exit 1
+fi

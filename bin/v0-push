@@ -1,0 +1,88 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-push - Reset agent branch to match user branch
+set -e
+
+# Find v0 installation directory
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Source common functions and load config
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+v0_load_config
+
+# Source pushpull package
+source "${V0_DIR}/packages/pushpull/lib/pushpull.sh"
+
+show_help() {
+    cat <<EOF
+Usage: v0 push [branch] [-f|--force]
+
+Reset the agent branch (${V0_DEVELOP_BRANCH}) to match the current branch
+or [branch] if specified.
+
+Options:
+  -f, --force    Force push even if agent has new commits
+  --help, -h     Show this help
+
+Examples:
+  v0 push                  # Push current branch to agent
+  v0 push main             # Push main to agent
+  v0 push --force          # Force push (overwrites agent commits)
+EOF
+}
+
+usage() {
+    show_help
+    exit 1
+}
+
+# Parse arguments
+SOURCE_BRANCH=""
+FORCE=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--force) FORCE=true; shift ;;
+        --help|-h) show_help; exit 0 ;;
+        -*) echo "Unknown option: $1"; usage ;;
+        *)
+            if [[ -z "${SOURCE_BRANCH}" ]]; then
+                SOURCE_BRANCH="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Resolve source branch
+SOURCE_BRANCH=$(pp_resolve_target_branch "${SOURCE_BRANCH}")
+AGENT_BRANCH=$(pp_get_agent_branch)
+
+echo "Pushing ${SOURCE_BRANCH} to ${V0_GIT_REMOTE}/${AGENT_BRANCH}..."
+
+# Check for divergence
+if pp_agent_has_diverged; then
+    echo ""
+    pp_show_divergence
+    echo ""
+
+    if [[ "${FORCE}" = true ]]; then
+        echo -e "${C_YELLOW}Warning:${C_RESET} Force pushing will overwrite agent commits."
+    else
+        echo -e "${C_RED}Error:${C_RESET} Agent branch has new commits since last push."
+        echo ""
+        echo "To see what would be lost:"
+        echo "  git log HEAD..${V0_GIT_REMOTE}/${AGENT_BRANCH}"
+        echo ""
+        echo "To force push (overwrites agent work):"
+        echo "  v0 push --force"
+        exit 1
+    fi
+fi
+
+if pp_do_push "${SOURCE_BRANCH}"; then
+    echo "Push complete."
+else
+    exit 1
+fi

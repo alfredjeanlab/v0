@@ -16,7 +16,7 @@ done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
 # Commands that require a project (.v0.rc)
-PROJECT_COMMANDS="plan tree decompose merge mergeq status feature resume fix attach cancel shutdown startup hold roadmap"
+PROJECT_COMMANDS="plan tree decompose merge mergeq status feature resume fix attach cancel shutdown startup hold roadmap pull push"
 
 # Commands that work in standalone mode (no .v0.rc needed)
 STANDALONE_COMMANDS="chore"
@@ -81,6 +81,8 @@ Commands:
   decomp[ose]   Convert plan to issues
   merge         Merge worktree branch to main
   mergeq        Merge queue daemon
+  pull          Pull agent branch changes into current branch
+  push          Reset agent branch to match current branch
 
   attach        Attach to a running tmux session (fix, chore, mergeq, feature)
   cancel        Cancel a running operation
@@ -207,7 +209,7 @@ shift
 
 case "${CMD}" in
   # Project-required commands
-  plan|tree|decompose|merge|mergeq|status|watch|feature|fix|attach|cancel|shutdown|startup|prune|monitor|hold|roadmap)
+  plan|tree|decompose|merge|mergeq|status|watch|feature|fix|attach|cancel|shutdown|startup|prune|monitor|hold|roadmap|pull|push)
     # Check if we're in a project - if not, show error
     if ! v0_find_project_root >/dev/null 2>&1; then
         v0_check_standalone_mode "${CMD}"
