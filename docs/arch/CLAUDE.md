@@ -11,7 +11,6 @@
 - [v0-cancel](commands/v0-cancel.md) - Cancel operations
 - [v0-chore](commands/v0-chore.md) - Chore worker
 - [v0-coffee](commands/v0-coffee.md) - System wake lock
-- [v0-decompose](commands/v0-decompose.md) - Convert plans to issues
 - [v0-feature](commands/v0-feature.md) - Feature pipeline
 - [v0-fix](commands/v0-fix.md) - Bug fix worker
 - [v0-hold](commands/v0-hold.md) - Pause operations

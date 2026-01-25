@@ -77,11 +77,10 @@ flowchart TD
 - Plan saved to `plans/<name>.md`
 - Plan auto-committed to git
 
-### Decomposition Phase (`planned` → `queued`)
+### Issue Filing Phase (`planned` → `queued`)
 
-- Plan decomposed into individual issues using `wk`
-- Issues labeled with `plan:<name>`
-- Epic issue created to track the feature
+- Single feature issue created with plan contents as description
+- Issue labeled with `plan:<name>`
 
 ### Execution Phase (`queued` → `executing` → `completed`)
 
@@ -111,7 +110,7 @@ v0 feature api "Build API" --after auth
 - Then proceeds with planning
 
 **Eager mode** (`--eager`):
-- Planning and decomposition run first
+- Planning runs first
 - Operation blocks at `queued` before execution
 - Useful when you want to review the plan while waiting
 
