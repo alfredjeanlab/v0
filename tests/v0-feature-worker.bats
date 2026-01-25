@@ -99,3 +99,20 @@ EOF
     # Even though we run from worktree, V0_ROOT should point to main repo
     assert_output --partial "export V0_ROOT='$V0_ROOT'"
 }
+
+# ============================================================================
+# Stale Session Handling Tests (Phase 2: Build)
+# ============================================================================
+
+@test "run_build_phase kills stale tmux session instead of returning early" {
+    # Verify that v0-build-worker handles stale sessions by killing them
+    # rather than returning early (which would leave the operation stuck)
+    run grep -A 3 'if tmux has-session -t "\${SESSION}"' "$PROJECT_ROOT/bin/v0-build-worker"
+    assert_success
+
+    # Should kill the session, not return early
+    assert_output --partial "kill-session"
+
+    # Should NOT return 0 (which would leave phase unchanged)
+    refute_output --partial "return 0"
+}

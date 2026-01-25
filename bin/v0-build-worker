@@ -384,8 +384,8 @@ run_build_phase() {
   SESSION=$(v0_session_name "${NAME}" "feature")
 
   if tmux has-session -t "${SESSION}" 2>/dev/null; then
-    log "Error: tmux session '${SESSION}' already exists"
-    return 0
+    log "Stale tmux session '${SESSION}' exists, killing it"
+    tmux kill-session -t "${SESSION}" 2>/dev/null || true
   fi
 
   tree_output=""
