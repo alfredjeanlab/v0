@@ -95,7 +95,7 @@ show_status() {
     fi
 
     local found_any=""
-    echo "Held Operations:"
+    echo "Held Plans:"
     echo ""
 
     for state_file in "${BUILD_DIR}"/operations/*/state.json; do

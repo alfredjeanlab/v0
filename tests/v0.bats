@@ -163,7 +163,7 @@ load '../packages/test-support/helpers/test_helper'
     create_v0rc "testproject" "test"
     run "${PROJECT_ROOT}/bin/v0" show
     # Don't require assert_success since status may return non-zero in certain states
-    assert_output --partial "Operations:"
+    assert_output --partial "Plans:"
 }
 
 @test "v0 show with feature name routes to status" {

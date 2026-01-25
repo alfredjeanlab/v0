@@ -91,6 +91,43 @@ EOF
 }
 
 # ============================================================================
+# State Label Tests (ahead/behind)
+# ============================================================================
+
+@test "show_branch_status shows 'ahead' label when only agent ahead" {
+    # Agent has 2 commits that feature-branch doesn't (left=2)
+    setup_git_mock "feature-branch" "2" "0"
+
+    run show_branch_status
+    assert_success
+    assert_output --partial "⇡2"
+    assert_output --partial "ahead"
+    refute_output --partial "behind"
+}
+
+@test "show_branch_status shows 'behind' label when only agent behind" {
+    # Current branch has 3 commits that agent doesn't (right=3)
+    setup_git_mock "feature-branch" "0" "3"
+
+    run show_branch_status
+    assert_success
+    assert_output --partial "⇣3"
+    assert_output --partial "behind"
+    refute_output --partial "ahead"
+}
+
+@test "show_branch_status shows 'behind' label when diverged (behind takes priority)" {
+    # Agent ahead by 2, behind by 3 - "behind" label takes priority
+    setup_git_mock "feature-branch" "2" "3"
+
+    run show_branch_status
+    assert_success
+    assert_output --partial "⇡2"
+    assert_output --partial "⇣3"
+    assert_output --partial "behind"
+}
+
+# ============================================================================
 # In Sync and Skip Conditions
 # ============================================================================
 

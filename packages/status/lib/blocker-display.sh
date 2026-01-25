@@ -19,37 +19,39 @@ _status_get_blocker_display() {
   blockers=$(echo "${issue_json}" | jq -r '.blockers // []')
   [[ "${blockers}" == "[]" ]] && return
 
-  # Get first blocker ID
-  local first_blocker
-  first_blocker=$(echo "${blockers}" | jq -r '.[0]')
-  [[ -z "${first_blocker}" ]] && return
-
-  # Check if blocker is open (one more wk call)
-  local blocker_json
-  blocker_json=$(wk show "${first_blocker}" -o json 2>/dev/null) || {
-    echo "${first_blocker}"
-    return
-  }
-
-  local status
-  status=$(echo "${blocker_json}" | jq -r '.status // "unknown"')
-  case "${status}" in
-    done|closed)
-      # First blocker is closed, would need to check more
-      # For performance, just return empty (not blocked by first)
+  # Check each blocker until we find an open one
+  local blocker_id
+  for blocker_id in $(echo "${blockers}" | jq -r '.[]'); do
+    local blocker_json
+    blocker_json=$(wk show "${blocker_id}" -o json 2>/dev/null) || {
+      # wk failed, assume blocker is open
+      echo "${blocker_id}"
       return
-      ;;
-  esac
+    }
 
-  # Try to resolve to operation name via plan: label
-  local plan_label
-  plan_label=$(echo "${blocker_json}" | jq -r '.labels // [] | .[] | select(startswith("plan:"))' | head -1)
+    local status
+    status=$(echo "${blocker_json}" | jq -r '.status // "unknown"')
+    case "${status}" in
+      done|closed)
+        # This blocker is resolved, check next
+        continue
+        ;;
+    esac
 
-  if [[ -n "${plan_label}" ]]; then
-    echo "${plan_label#plan:}"
-  else
-    echo "${first_blocker}"
-  fi
+    # Found an open blocker - resolve to op name and return
+    local plan_label
+    plan_label=$(echo "${blocker_json}" | jq -r '.labels // [] | .[] | select(startswith("plan:"))' | head -1)
+
+    if [[ -n "${plan_label}" ]]; then
+      echo "${plan_label#plan:}"
+    else
+      echo "${blocker_id}"
+    fi
+    return
+  done
+
+  # All blockers resolved
+  return
 }
 
 # _status_batch_get_blockers <epic_ids_file>

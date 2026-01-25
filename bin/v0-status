@@ -244,16 +244,16 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   # If no operations, show compact "None" format like other sections
   if [[ "${has_operations}" = false ]]; then
     if [[ -n "${BLOCKED}" ]]; then
-      echo -e "Blocked Operations: ${C_DIM}None${C_RESET}"
+      echo -e "Blocked Plans: ${C_DIM}None${C_RESET}"
     else
-      echo -e "Operations: ${C_DIM}None${C_RESET}"
+      echo -e "Plans: ${C_DIM}None${C_RESET}"
     fi
   else
     # Operations exist - show full format with header and details
     if [[ -n "${BLOCKED}" ]]; then
-      echo "Blocked Operations:"
+      echo "Blocked Plans:"
     else
-      echo "Operations:"
+      echo "Plans:"
     fi
     echo ""
 
@@ -609,7 +609,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     # If all queues are empty, show each on its own line
     if [[ "${bugs_empty}" = true ]] && [[ "${chores_empty}" = true ]] && [[ "${merges_empty}" = true ]]; then
       [[ "${has_operations}" = true ]] && echo ""
-      echo -e "Bugfix: ${C_DIM}None${C_RESET}"
+      echo -e "Bugs: ${C_DIM}None${C_RESET}"
       echo -e "Chores: ${C_DIM}None${C_RESET}"
       echo -e "Merges: ${C_DIM}None${C_RESET}"
     else

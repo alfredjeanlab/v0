@@ -268,12 +268,34 @@ create_v0rc_content() {
 
 # Create a state.json file for an operation
 # Usage: create_operation_state "operation-name" '{"name": "op", "phase": "init"}'
+#    OR: create_operation_state "operation-name" "phase" ["epic_id"]
+# The second form creates a minimal state.json for blocking tests
 create_operation_state() {
     local op_name="$1"
-    local json_content="$2"
     local op_dir="$TEST_TEMP_DIR/project/.v0/build/operations/$op_name"
     mkdir -p "$op_dir"
-    echo "$json_content" > "$op_dir/state.json"
+
+    # Check if second arg looks like JSON
+    if [[ "$2" == "{"* ]]; then
+        # Original signature: full JSON content
+        echo "$2" > "$op_dir/state.json"
+    else
+        # New signature: phase and optional epic_id
+        local phase="$2"
+        local epic_id="${3:-}"
+
+        local epic_json="null"
+        [[ -n "${epic_id}" ]] && [[ "${epic_id}" != "null" ]] && epic_json="\"${epic_id}\""
+
+        cat > "$op_dir/state.json" <<EOF
+{
+  "name": "${op_name}",
+  "phase": "${phase}",
+  "epic_id": ${epic_json},
+  "_schema_version": 2
+}
+EOF
+    fi
 }
 
 # Create a queue.json file
@@ -524,4 +546,27 @@ EOF
     done
 
     export PATH="$mock_dir:$PATH"
+}
+
+# ============================================================================
+# Wok Mock Helpers
+# ============================================================================
+
+# Set up mock data directory and enable mock wk
+# Call this in setup() after _base_setup
+setup_wk_mocks() {
+    export MOCK_DATA_DIR="${TEST_TEMP_DIR}/mock-data"
+    mkdir -p "${MOCK_DATA_DIR}/wk"
+    # Add mock-bin to PATH so wk command uses our mock
+    export PATH="${TESTS_DIR}/helpers/mock-bin:${PATH}"
+}
+
+# mock_wk_show <issue_id> <json_response>
+# Set up mock response for wk show <issue_id> -o json
+mock_wk_show() {
+    local issue_id="$1"
+    local response="$2"
+
+    mkdir -p "${MOCK_DATA_DIR}/wk"
+    echo "${response}" > "${MOCK_DATA_DIR}/wk/${issue_id}.json"
 }
