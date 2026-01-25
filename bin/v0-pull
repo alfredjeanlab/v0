@@ -64,6 +64,11 @@ echo "Pulling ${V0_GIT_REMOTE}/${AGENT_BRANCH} into ${TARGET_BRANCH}..."
 # Checkout target branch if not current
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [[ "${TARGET_BRANCH}" != "${CURRENT_BRANCH}" ]]; then
+    # Verify target branch exists locally before attempting checkout
+    if ! git show-ref --verify --quiet "refs/heads/${TARGET_BRANCH}" 2>/dev/null; then
+        echo "Error: Branch '${TARGET_BRANCH}' does not exist locally"
+        exit 1
+    fi
     git checkout "${TARGET_BRANCH}"
 fi
 

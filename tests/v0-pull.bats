@@ -94,3 +94,32 @@ setup() {
     # bats test_tags=todo:implement
     skip "Requires claude mock and complex git setup"
 }
+
+# ============================================================================
+# Branch Validation Tests
+# ============================================================================
+
+@test "v0-pull: fails when target branch does not exist locally" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Initialize a real git repo (bypass mock git which doesn't actually create repos)
+    (
+        cd "${project_dir}"
+        /usr/bin/git init --quiet
+        /usr/bin/git config user.email "test@example.com"
+        /usr/bin/git config user.name "Test User"
+        echo "test" > README.md
+        /usr/bin/git add README.md
+        /usr/bin/git commit --quiet -m "Initial commit"
+    )
+
+    # Run pull with a branch that doesn't exist (remove mock-bin from PATH)
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        export PATH="${PATH#*mock-bin:}"
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_PULL}"'" nonexistent-branch
+    '
+    assert_failure
+    assert_output --partial "Branch 'nonexistent-branch' does not exist locally"
+}
