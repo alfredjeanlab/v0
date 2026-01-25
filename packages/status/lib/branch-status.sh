@@ -71,14 +71,14 @@ show_branch_status() {
     if [[ "${agent_ahead}" != "0" ]]; then
         # Agent has commits to pull
         if [[ -n "${is_tty}" ]]; then
-            suggestion="(use ${C_CYAN}v0 pull${C_RESET} to merge them to ${C_MAGENTA}${current_branch}${C_RESET})"
+            suggestion="(use ${C_CYAN}v0 pull${C_RESET} to merge them to ${C_GREEN}${current_branch}${C_RESET})"
         else
             suggestion="(use v0 pull to merge them to ${current_branch})"
         fi
     elif [[ "${agent_behind}" != "0" ]]; then
         # Agent is strictly behind, suggest push
         if [[ -n "${is_tty}" ]]; then
-            suggestion="(use ${C_CYAN}v0 push${C_RESET} to send them to ${C_MAGENTA}${develop_branch}${C_RESET})"
+            suggestion="(use ${C_CYAN}v0 push${C_RESET} to send them to ${C_GREEN}${develop_branch}${C_RESET})"
         else
             suggestion="(use v0 push to send them to ${develop_branch})"
         fi
@@ -86,7 +86,7 @@ show_branch_status() {
 
     # Output from agent's perspective
     if [[ -n "${is_tty}" ]]; then
-        echo -e "Changes: ${C_MAGENTA}${develop_branch}${C_RESET} is ${display} ${suggestion}"
+        echo -e "Changes: ${C_GREEN}${develop_branch}${C_RESET} is ${display} ${suggestion}"
     else
         echo -e "Changes: ${develop_branch} is ${display} ${suggestion}"
     fi
