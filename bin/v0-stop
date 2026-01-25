@@ -1,1 +1,91 @@
-v0-shutdown
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-stop - Stop v0 workers
+set -e
+
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+
+# Valid worker types
+VALID_WORKERS="fix chore mergeq"
+
+usage() {
+  v0_help <<'EOF'
+Usage: v0 stop [worker] [options]
+
+Stop v0 workers.
+
+Workers:
+  fix       Stop the bug fix worker
+  chore     Stop the chore worker
+  mergeq    Stop the merge queue daemon
+
+If no worker is specified, performs full shutdown (equivalent to 'v0 shutdown').
+
+Options:
+  --force        Force stop (for full shutdown: delete branches with unmerged commits)
+  --dry-run      Show what would be stopped without stopping
+  -h, --help     Show this help
+
+Examples:
+  v0 stop               # Stop all workers (full shutdown)
+  v0 stop fix           # Stop only the fix worker
+  v0 stop chore         # Stop only the chore worker
+  v0 stop --force       # Force stop all workers
+  v0 stop --dry-run     # Preview what would be stopped
+EOF
+  exit 0
+}
+
+DRY_RUN=""
+FORCE=""
+WORKER=""
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN="--dry-run"
+      shift
+      ;;
+    --force)
+      FORCE="--force"
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    fix|chore|mergeq)
+      if [[ -n "${WORKER}" ]]; then
+        echo "Error: Only one worker can be specified" >&2
+        echo "To stop all workers, run: v0 shutdown" >&2
+        exit 1
+      fi
+      WORKER="$1"
+      shift
+      ;;
+    *)
+      echo "Unknown option or worker: $1" >&2
+      echo "Valid workers: ${VALID_WORKERS}" >&2
+      echo "Run 'v0 stop --help' for usage" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Dispatch to appropriate command
+if [[ -z "${WORKER}" ]]; then
+  # No worker specified, full shutdown
+  exec "${V0_DIR}/bin/v0-shutdown" ${FORCE} ${DRY_RUN}
+else
+  # Specific worker
+  if [[ -n "${DRY_RUN}" ]]; then
+    echo "Would run: v0 ${WORKER} --stop"
+  else
+    if [[ -n "${FORCE}" ]]; then
+      echo "Note: --force has no effect on individual worker stop" >&2
+    fi
+    exec "${V0_DIR}/bin/v0-${WORKER}" --stop
+  fi
+fi

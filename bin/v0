@@ -70,8 +70,8 @@ Commands:
                   --remote <name>     Git remote name (default: origin)
   status        Show operation status
   watch         Continuously watch status (like 'status --watch')
-  start         Start workers (fix, chore, mergeq)
-  stop          Stop all v0 processes for this project
+  start         Start worker(s) (v0 start [fix|chore|mergeq])
+  stop          Stop worker(s) (v0 stop [fix|chore|mergeq])
 
   fix           Sequential bug fixing worker
   chore         Sequential chore processing worker

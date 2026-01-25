@@ -1,1 +1,81 @@
-v0-startup
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-start - Start v0 workers
+set -e
+
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+
+# Valid worker types
+VALID_WORKERS="fix chore mergeq"
+
+usage() {
+  v0_help <<'EOF'
+Usage: v0 start [worker] [options]
+
+Start v0 workers.
+
+Workers:
+  fix       Start the bug fix worker
+  chore     Start the chore worker
+  mergeq    Start the merge queue daemon
+
+If no worker is specified, starts all workers (equivalent to 'v0 startup').
+
+Options:
+  --dry-run      Show what would be started without starting
+  -h, --help     Show this help
+
+Examples:
+  v0 start              # Start all workers
+  v0 start fix          # Start only the fix worker
+  v0 start chore        # Start only the chore worker
+  v0 start --dry-run    # Preview what would be started
+EOF
+  exit 0
+}
+
+DRY_RUN=""
+WORKER=""
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN="--dry-run"
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    fix|chore|mergeq)
+      if [[ -n "${WORKER}" ]]; then
+        echo "Error: Only one worker can be specified" >&2
+        echo "To start multiple workers, run: v0 startup $WORKER $1" >&2
+        exit 1
+      fi
+      WORKER="$1"
+      shift
+      ;;
+    *)
+      echo "Unknown option or worker: $1" >&2
+      echo "Valid workers: ${VALID_WORKERS}" >&2
+      echo "Run 'v0 start --help' for usage" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Dispatch to appropriate command
+if [[ -z "${WORKER}" ]]; then
+  # No worker specified, start all
+  exec "${V0_DIR}/bin/v0-startup" ${DRY_RUN}
+else
+  # Specific worker
+  if [[ -n "${DRY_RUN}" ]]; then
+    echo "Would run: v0 ${WORKER} --start"
+  else
+    exec "${V0_DIR}/bin/v0-${WORKER}" --start
+  fi
+fi
