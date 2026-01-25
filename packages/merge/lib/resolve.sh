@@ -167,6 +167,33 @@ mg_resolve_operation_to_worktree() {
         fi
 
         if [[ "${merge_status}" = "conflict" ]] || [[ "${merge_status}" = "failed" ]] || [[ "${merge_status}" = "verification_failed" ]]; then
+            # Check if the merge_commit is actually on main (verification may have been transient)
+            local merge_commit main_repo
+            merge_commit=$(sm_read_state "${op_name}" "merge_commit")
+            main_repo="${_MG_MAIN_REPO:-${V0_ROOT:-$(pwd)}}"
+
+            if [[ -n "${merge_commit}" ]] && [[ "${merge_commit}" != "null" ]] && \
+               git -C "${main_repo}" merge-base --is-ancestor "${merge_commit}" "${V0_DEVELOP_BRANCH:-main}" 2>/dev/null; then
+                # Branch was actually merged - clean up and report success
+                echo "Operation '${op_name}' was already merged (cleaning up)..."
+
+                # Update mergeq entry to completed
+                if [[ -f "${QUEUE_FILE:-}" ]] && mq_entry_exists "${op_name}"; then
+                    mq_update_entry_status "${op_name}" "completed" 2>/dev/null || true
+                fi
+
+                # Delete remote branch if it still exists
+                if [[ -n "${branch}" ]] && [[ "${branch}" != "null" ]]; then
+                    git -C "${main_repo}" push "${V0_GIT_REMOTE}" --delete "${branch}" 2>/dev/null || true
+                fi
+
+                # Transition operation to merged state
+                sm_transition_to_merged "${op_name}" 2>/dev/null || true
+
+                echo "Cleanup complete. Operation '${op_name}' is now marked as merged."
+                return 1
+            fi
+
             echo "Error: Operation '${op_name}' previously failed to merge (status: ${merge_status})" >&2
             echo "" >&2
             echo "The worktree and branch have been cleaned up." >&2

@@ -271,3 +271,109 @@ EOF
     # Should show the no-worktree message since it resolved directly from branch
     assert_output --partial "No worktree found. Attempting direct branch merge"
 }
+
+# ============================================================================
+# Verification Failed Cleanup Tests
+# ============================================================================
+
+@test "v0-merge: verification_failed with merge_commit on main cleans up" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Initialize git repo
+    cd "${project_dir}"
+    git init --quiet
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit --quiet -m "Initial commit"
+
+    # Get the default branch name (main or master depending on git version)
+    local default_branch
+    default_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    # Update .v0.rc to use the correct develop branch
+    echo "V0_DEVELOP_BRANCH=\"${default_branch}\"" >> "${project_dir}/.v0.rc"
+
+    # Create feature branch and merge it to main
+    git checkout -b feature/already-merged --quiet
+    echo "feature" > feature.txt
+    git add feature.txt
+    git commit --quiet -m "Feature commit"
+    local merge_commit
+    merge_commit=$(git rev-parse HEAD)
+    git checkout "${default_branch}" --quiet
+    git merge --ff-only feature/already-merged --quiet
+
+    # Delete the feature branch (simulating post-merge cleanup)
+    git branch -d feature/already-merged
+
+    # Create operation state with verification_failed status but merge_commit on main
+    mkdir -p "${project_dir}/.v0/build/operations/test-op"
+    cat > "${project_dir}/.v0/build/operations/test-op/state.json" <<EOF
+{
+    "name": "test-op",
+    "phase": "completed",
+    "worktree": "/nonexistent/path",
+    "branch": "feature/already-merged",
+    "merge_status": "verification_failed",
+    "merge_commit": "${merge_commit}"
+}
+EOF
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR -u MERGEQ_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_MERGE}"'" test-op 2>&1
+    '
+    # Should output cleanup message instead of error
+    assert_output --partial "already merged"
+    assert_output --partial "Cleanup complete"
+    refute_output --partial "Error:"
+}
+
+@test "v0-merge: verification_failed without merge_commit on main shows error" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+
+    # Initialize git repo
+    cd "${project_dir}"
+    git init --quiet
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "initial" > file.txt
+    git add file.txt
+    git commit --quiet -m "Initial commit"
+
+    # Get the default branch name
+    local default_branch
+    default_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    # Update .v0.rc to use the correct develop branch
+    echo "V0_DEVELOP_BRANCH=\"${default_branch}\"" >> "${project_dir}/.v0.rc"
+
+    # Create a commit hash that is NOT on main
+    local fake_commit="0000000000000000000000000000000000000000"
+
+    # Create operation state with verification_failed status and non-existent merge_commit
+    mkdir -p "${project_dir}/.v0/build/operations/test-op"
+    cat > "${project_dir}/.v0/build/operations/test-op/state.json" <<EOF
+{
+    "name": "test-op",
+    "phase": "completed",
+    "worktree": "/nonexistent/path",
+    "branch": "feature/not-merged",
+    "merge_status": "verification_failed",
+    "merge_commit": "${fake_commit}"
+}
+EOF
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR -u MERGEQ_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_MERGE}"'" test-op 2>&1
+    '
+    # Should show the original error
+    assert_failure
+    assert_output --partial "Error:"
+    assert_output --partial "previously failed to merge"
+}
