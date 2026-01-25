@@ -10,6 +10,7 @@ Orchestrates Claude workers in tmux sessions for planning, feature development, 
 bin/                    # CLI commands (v0, v0-plan, v0-build, v0-fix, etc.)
 packages/               # Modular shell library packages
   core/                 #   Foundation: config, logging, git-verify
+  workspace/            #   Workspace management for merge operations
   state/                #   State machine for operation lifecycle
   mergeq/               #   Merge queue management
   merge/                #   Merge conflict resolution
@@ -27,7 +28,7 @@ docs/debug/             # Troubleshooting guides
 
 Packages follow a layered dependency model (see `packages/CLAUDE.md`):
 - **Layer 0**: core
-- **Layer 1**: state, mergeq
+- **Layer 1**: workspace, state, mergeq
 - **Layer 2**: merge, worker
 - **Layer 3**: hooks, status
 - **Layer 4**: cli (includes build workflow)
