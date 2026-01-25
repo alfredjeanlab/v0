@@ -350,7 +350,7 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     # Add hold indicator
     hold_icon=""
     if [[ "${held}" = "true" ]]; then
-      hold_icon=" ${C_YELLOW}[HELD]${C_RESET}"
+      hold_icon=" ${C_RED}[HELD]${C_RESET}"
     fi
 
     # Get queue entry status for merge display (only needed when merge_queued)
@@ -881,7 +881,7 @@ show_status() {
   if [[ "${held}" = "true" ]]; then
     echo ""
     echo "Hold:"
-    echo "  Status: HELD (since ${held_at})"
+    echo -e "  Status: ${C_RED}HELD${C_RESET} (since ${held_at})"
     echo "  Release: v0 resume ${NAME}"
   fi
 
