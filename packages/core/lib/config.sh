@@ -199,7 +199,7 @@ v0_ensure_agent_branch() {
   if git ls-remote --heads "${remote}" agent 2>/dev/null | grep -q agent; then
     # Fetch and create local tracking branch
     git fetch "${remote}" agent 2>/dev/null || true
-    git branch agent "${remote}/agent" 2>/dev/null || true
+    git branch --track agent "${remote}/agent" 2>/dev/null || true
     return 0
   fi
 
