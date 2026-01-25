@@ -499,15 +499,6 @@ report_bug() {
     description=""
   fi
 
-  # Normalize whitespace in title: replace newlines and consecutive whitespace with single space
-  title=$(echo "${title}" | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ //;s/ $//')
-
-  # If title still exceeds 120 chars, truncate and put full input in description
-  if [[ ${#title} -gt 120 ]]; then
-    description="${input}"
-    title="${title:0:120}"
-  fi
-
   # Create the bug (allow failure so we can show the error)
   local output id exit_code
   if [[ -n "${description}" ]]; then
