@@ -553,7 +553,7 @@ else
     fi
 
     ISSUE_PATTERN=$(v0_issue_pattern)
-    EXISTING_FEATURE=$(grep -oE "\`${ISSUE_PATTERN}\`" "${PLAN_FILE_ARG}" | head -1 | tr -d '`' || true)
+    EXISTING_FEATURE=$(v0_grep_extract "\`${ISSUE_PATTERN}\`" "${PLAN_FILE_ARG}" | head -1 | tr -d '`' || true)
     if [[ -n "${EXISTING_FEATURE}" ]]; then
       FEATURE_STATUS=$(wk show "${EXISTING_FEATURE}" --output json 2>/dev/null | jq -r '.status // "unknown"' || echo "unknown")
       if [[ "${FEATURE_STATUS}" = "open" ]] || [[ "${FEATURE_STATUS}" = "in_progress" ]]; then
@@ -797,7 +797,7 @@ if [[ "${PHASE}" = "queued" ]] && [[ -z "${ENQUEUE_ONLY}" ]]; then
 
     FEATURE_ID=$(get_state epic_id)
 
-    M4_ARGS="-D EPIC_ID=${FEATURE_ID} -D PLAN_LABEL=plan:${NAME} -D HAS_PLAN=1 -D V0_GIT_REMOTE=${V0_GIT_REMOTE}"
+    M4_ARGS="-D HAS_PLAN=1 -D V0_GIT_REMOTE=${V0_GIT_REMOTE}"
     m4 ${M4_ARGS} "${V0_DIR}/packages/cli/lib/templates/claude.build.m4" > "${TREE_DIR}/CLAUDE.md"
     emit_event "claude.md:created" "${TREE_DIR}/CLAUDE.md"
 

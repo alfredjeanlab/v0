@@ -31,7 +31,7 @@ usage() {
   cat <<EOF
 Usage: v0-build-worker <name>
 
-Background worker for v0 build pipeline (plan -> decompose -> build).
+Background worker for v0 build pipeline (plan -> build).
 This script is launched by v0-build and should not be called directly.
 
 Arguments:
@@ -398,8 +398,8 @@ run_build_phase() {
 
   FEATURE_ID=$(get_state epic_id)
 
-  M4_ARGS="-D EPIC_ID=${FEATURE_ID} -D PLAN_LABEL=plan:${NAME} -D HAS_PLAN=1 -D V0_GIT_REMOTE=${V0_GIT_REMOTE}"
-  m4 ${M4_ARGS} "${V0_DIR}/lib/templates/claude.build.m4" > "${TREE_DIR}/CLAUDE.md"
+  M4_ARGS="-D HAS_PLAN=1 -D V0_GIT_REMOTE=${V0_GIT_REMOTE}"
+  m4 ${M4_ARGS} "${V0_DIR}/packages/cli/lib/templates/claude.build.m4" > "${TREE_DIR}/CLAUDE.md"
   emit_event "claude.md:created" "${TREE_DIR}/CLAUDE.md"
 
   HOOK_SCRIPT="${V0_DIR}/lib/hooks/stop-build.sh"

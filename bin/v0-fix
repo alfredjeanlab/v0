@@ -525,7 +525,7 @@ report_bug() {
   # Extract issue ID - match any prefix-hexid format (e.g., proj-abc1, v0-9e51)
   # This is more robust than v0_issue_pattern which uses ISSUE_PREFIX from .v0.rc,
   # while wk may use a different prefix from .wok/config.toml
-  id=$(echo "${output}" | grep -oE '[a-zA-Z0-9]+-[a-f0-9]+' | head -1)
+  id=$(echo "${output}" | v0_grep_extract '[a-zA-Z0-9]+-[a-f0-9]+' | head -1)
 
   if [[ -z "${id}" ]]; then
     echo "Error: Failed to create bug (no ID returned)"
@@ -619,14 +619,14 @@ show_history() {
     [[ "${count}" -ge "${limit}" ]] && break
 
     local id
-    id=$(echo "${line}" | grep -oE "$(v0_issue_pattern)" | head -1)
+    id=$(echo "${line}" | v0_grep_extract "$(v0_issue_pattern)" | head -1)
     [[ -z "${id}" ]] && continue
 
     local state_file="${BUILD_DIR}/fix/${id}/state.json"
     if [[ -f "${state_file}" ]]; then
       local pushed_at commit_msg
-      pushed_at=$(grep -o '"pushed_at": "[^"]*"' "${state_file}" | cut -d'"' -f4)
-      commit_msg=$(grep -o '"commit_message": "[^"]*"' "${state_file}" | cut -d'"' -f4)
+      pushed_at=$(v0_grep_extract '"pushed_at": "[^"]*"' "${state_file}" | cut -d'"' -f4)
+      commit_msg=$(v0_grep_extract '"commit_message": "[^"]*"' "${state_file}" | cut -d'"' -f4)
 
       # Format date - relative for today, date for older
       local date_str

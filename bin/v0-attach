@@ -41,7 +41,7 @@ EOF
 list_sessions() {
   local prefix="v0-${PROJECT}"
   local sessions
-  sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${prefix}" || true)
+  sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | v0_grep "^${prefix}" || true)
 
   if [[ -z "${sessions}" ]]; then
     echo "No active v0 sessions for project: ${PROJECT}"
