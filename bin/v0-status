@@ -351,7 +351,6 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
           ;;
         *)
           # Get first blocker from wok
-          local blocker_display
           blocker_display=$(_status_get_blocker_display "${epic_id}")
           if [[ -n "${blocker_display}" ]]; then
             after_icon=" ${C_YELLOW}[after ${blocker_display}]${C_RESET}"

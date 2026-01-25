@@ -495,7 +495,6 @@ else
         # Add blocked-by dependencies in wk if --after was specified
         if [[ ${#AFTER_OPS[@]} -gt 0 ]]; then
           for after_op in "${AFTER_OPS[@]}"; do
-            local resolved_id
             if resolved_id=$(v0_resolve_to_wok_id "${after_op}"); then
               if wk dep "${EXISTING_FEATURE}" blocked-by "${resolved_id}" 2>/dev/null; then
                 emit_event "dep:added" "Added blocked-by: ${resolved_id}"
@@ -536,7 +535,6 @@ else
   # Add wok dependencies if --after was specified
   if [[ ${#AFTER_OPS[@]} -gt 0 ]] && [[ -n "${FEATURE_ID}" ]]; then
     for after_op in "${AFTER_OPS[@]}"; do
-      local resolved_id
       if resolved_id=$(v0_resolve_to_wok_id "${after_op}"); then
         if wk dep "${FEATURE_ID}" blocked-by "${resolved_id}" 2>/dev/null; then
           emit_event "dep:added" "Added blocked-by: ${resolved_id}"
