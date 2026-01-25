@@ -1,5 +1,7 @@
 # Implementation Plan: v0 pull / v0 push
 
+**Root Feature:** `v0-9ee7`
+
 ## Overview
 
 Add bidirectional sync commands between user branches and the agent development branch (`V0_DEVELOP_BRANCH`):
