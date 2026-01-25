@@ -116,7 +116,7 @@ show_worker_header_verbose() {
 # show_worker_header_compact <type> <status> <queue_empty>
 # Display compact worker status for default list view
 # Args:
-#   $1 = worker type label ("Bugfix" or "Chores")
+#   $1 = worker type label ("Bugs" or "Chores")
 #   $2 = status from get_worker_status
 #   $3 = "true" if queue is empty, "false" otherwise
 show_worker_header_compact() {
