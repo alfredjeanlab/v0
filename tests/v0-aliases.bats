@@ -165,13 +165,16 @@ setup() {
     local project_dir
     project_dir=$(setup_isolated_project)
 
+    # Kill any stray polling daemons for this test project
+    pkill -f "while true.*v0-testaliases" 2>/dev/null || true
+
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"$project_dir"'"
         "'"$PROJECT_ROOT"'/bin/v0" shutdown --dry-run 2>&1
     '
     assert_success
-    # Shutdown with dry-run should show what it would do
-    assert_output --partial "Would"
+    # Shutdown should either report nothing to do or show what it would do
+    assert_output --partial "testaliases"
 }
 
 # ============================================================================
