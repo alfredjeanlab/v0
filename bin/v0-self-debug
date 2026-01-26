@@ -538,15 +538,18 @@ generate_merge_branch_state() {
     echo "## Merge Branch State"
     echo ""
 
-    local queue_file="${BUILD_DIR}/mergeq/queue.json"
+    # Use main repo's queue file
+    local main_repo
+    main_repo=$(v0_find_main_repo)
+    local queue_file="${main_repo}/${V0_BUILD_DIR}/mergeq/queue.json"
     if [[ ! -f "${queue_file}" ]]; then
         echo "*No queue.json - cannot determine branches*"
         return
     fi
 
-    # Get branches from queue entries
+    # Get branches from queue entries (merge_type=branch entries use operation as branch name)
     local branches
-    branches=$(jq -r '.entries[]? | .branch // empty' "${queue_file}" 2>/dev/null)
+    branches=$(jq -r '.entries[]? | select(.merge_type == "branch") | .operation // empty' "${queue_file}" 2>/dev/null)
 
     if [[ -z "${branches}" ]]; then
         echo "*No branches in queue*"
@@ -577,7 +580,12 @@ generate_merge_branch_state() {
 
 # Generate merge queue state section
 generate_merge_queue_state() {
-    local queue_file="${BUILD_DIR}/mergeq/queue.json"
+    # Merge queue state is always in the main repo's build directory,
+    # not in a worktree's build directory
+    local main_repo
+    main_repo=$(v0_find_main_repo)
+    local mergeq_dir="${main_repo}/${V0_BUILD_DIR}/mergeq"
+    local queue_file="${mergeq_dir}/queue.json"
 
     echo "## Merge Queue State"
     echo ""
@@ -593,7 +601,7 @@ generate_merge_queue_state() {
     fi
 
     # Daemon PID
-    local pid_file="${BUILD_DIR}/mergeq/daemon.pid"
+    local pid_file="${mergeq_dir}/.daemon.pid"
     echo ""
     echo "### Daemon Process"
     echo ""

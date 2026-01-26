@@ -7,7 +7,7 @@
 # merge queue functions. It sources the new modular queue.sh orchestrator.
 
 _MERGEQ_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${_MERGEQ_COMMON_DIR}/mergeq/queue.sh"
+source "${_MERGEQ_COMMON_DIR}/queue.sh"
 
 # Compatibility aliases for old function names
 # These map to the new mq_* prefixed functions

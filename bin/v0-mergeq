@@ -15,8 +15,15 @@ v0_load_config
 # Merge queue state must always be in the main repo's build directory, not
 # in a worktree's build directory. This ensures there's a single daemon and
 # a single queue shared across all worktrees.
-MAIN_REPO=$(v0_find_main_repo)
-export MERGEQ_DIR="${MAIN_REPO}/${V0_BUILD_DIR}/mergeq"
+#
+# If MERGEQ_DIR is already set (e.g., inherited from parent process that
+# started the daemon), use it. Otherwise compute it. This is important because
+# v0_find_main_repo() doesn't work correctly when running from a clone workspace
+# (it returns the clone path instead of the actual main repo).
+if [[ -z "${MERGEQ_DIR:-}" ]]; then
+    MAIN_REPO=$(v0_find_main_repo)
+    export MERGEQ_DIR="${MAIN_REPO}/${V0_BUILD_DIR}/mergeq"
+fi
 export QUEUE_FILE="${MERGEQ_DIR}/queue.json"
 export QUEUE_LOCK="${MERGEQ_DIR}/.queue.lock"
 export DAEMON_PID_FILE="${MERGEQ_DIR}/.daemon.pid"
