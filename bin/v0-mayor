@@ -63,7 +63,7 @@ cat > "${MAYOR_SETTINGS_DIR}/.claude/settings.local.json" <<'SETTINGS'
         "hooks": [
           {"type": "command", "command": "v0 prime"},
           {"type": "command", "command": "wk prime 2>/dev/null || true"},
-          {"type": "command", "command": "v0 status"},
+          {"type": "command", "command": "v0 status 2>/dev/null || echo 'No v0 project in current directory'"},
           {"type": "command", "command": "wok ready 2>/dev/null || echo 'No ready issues'"}
         ]
       }
@@ -74,7 +74,7 @@ cat > "${MAYOR_SETTINGS_DIR}/.claude/settings.local.json" <<'SETTINGS'
         "hooks": [
           {"type": "command", "command": "v0 prime"},
           {"type": "command", "command": "wk prime 2>/dev/null || true"},
-          {"type": "command", "command": "v0 status"},
+          {"type": "command", "command": "v0 status 2>/dev/null || echo 'No v0 project in current directory'"},
           {"type": "command", "command": "wok ready 2>/dev/null || echo 'No ready issues'"}
         ]
       }
