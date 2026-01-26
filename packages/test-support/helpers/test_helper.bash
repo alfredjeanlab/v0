@@ -115,6 +115,7 @@ _base_setup() {
     unset V0_STATE_DIR
     unset V0_GIT_REMOTE
     unset V0_DEVELOP_BRANCH
+    unset V0_WORKSPACE_MODE
 
     # Ensure we start in the project directory
     cd "$TEST_TEMP_DIR/project"
