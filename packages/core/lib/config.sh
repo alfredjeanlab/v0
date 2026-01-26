@@ -309,8 +309,7 @@ v0_init_agent_remote() {
   mkdir -p "$(dirname "${agent_dir}")"
 
   # Create bare clone from local checkout
-  echo "Creating local agent remote at ${agent_dir}..."
-  if ! git clone --bare "${target_dir}" "${agent_dir}" 2>&1; then
+  if ! git clone --bare --quiet "${target_dir}" "${agent_dir}" 2>/dev/null; then
     echo "Error: Failed to create agent remote" >&2
     return 1
   fi
@@ -322,7 +321,7 @@ v0_init_agent_remote() {
     git -C "${target_dir}" remote add agent "${agent_dir}"
   fi
 
-  echo "Added 'agent' remote pointing to ${agent_dir}"
+  echo "Added 'agent' remote at ${agent_dir}"
   return 0
 }
 
