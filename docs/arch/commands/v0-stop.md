@@ -42,4 +42,4 @@ The `--drop-everything` option performs a full reset. Run `v0 init` to reinitial
 
 ## Related
 
-- [v0-startup](v0-startup.md) - Start workers
+- [v0-start](v0-start.md) - Start workers
