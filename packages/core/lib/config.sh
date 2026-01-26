@@ -387,8 +387,8 @@ v0_init_config() {
     # Always write the remote explicitly (agent is the new default)
     remote_line="V0_GIT_REMOTE=\"${git_remote}\"        # Git remote for push/fetch (local agent remote)"
 
-    # Add workspace mode comment explaining the setting
-    workspace_line="# V0_WORKSPACE_MODE=\"${workspace_mode}\"  # 'worktree' or 'clone' (auto-detected)"
+    # Set workspace mode with auto-detected value
+    workspace_line="V0_WORKSPACE_MODE=\"${workspace_mode}\"     # 'worktree' or 'clone' (auto-detected)"
 
     cat > "${config_file}" <<EOF
 # v0 project configuration
