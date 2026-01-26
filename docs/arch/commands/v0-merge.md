@@ -62,18 +62,20 @@ flowchart TD
     subgraph merge_flow[Direct Merge Flow]
         mf_has_wt{Has worktree?}
         mf_has_wt -->|yes| mf_do_merge[mg_do_merge]
-        mf_has_wt -->|no| mf_ff[Fast-forward only]
-        mf_ff -->|success| mf_cleanup_branch
+        mf_has_wt -->|no| mf_ff[mg_do_merge_without_worktree]
+        mf_ff -->|success| mf_finalize[mg_finalize_merge]
         mf_ff -->|fail| mf_need_wt{--resolve?}
         mf_need_wt -->|no| mf_error[Error: cannot fast-forward]
         mf_need_wt -->|yes| mf_temp[Create temp worktree]
-        mf_temp --> mf_do_merge
-        mf_do_merge --> mf_cleanup
+        mf_temp --> mf_do_merge2[mg_do_merge]
+        mf_do_merge --> mf_finalize2[mg_finalize_merge]
+        mf_do_merge2 --> mf_finalize3[mg_finalize_merge]
     end
 
     cf_merge --> post_merge
-    mf_cleanup --> post_merge
-    mf_cleanup_branch --> post_merge
+    mf_finalize --> post_merge
+    mf_finalize2 --> post_merge
+    mf_finalize3 --> post_merge
 
     subgraph post_merge[Post-Merge Steps]
         pm_push[Push to remote]
@@ -91,14 +93,14 @@ flowchart TD
 
 ## Input Resolution
 
-The merge command accepts three types of input:
+The merge command accepts three types of input, resolved via `mg_is_input_path`, `mg_resolve_path_to_worktree`, and `mg_resolve_operation_to_worktree`:
 
 ```mermaid
 flowchart TD
-    input[Input] --> check{Input type?}
+    input[Input] --> check{mg_is_input_path?}
 
-    check -->|"starts with / or ."| path_mode[Path Mode]
-    check -->|"other"| name_mode[Name Mode]
+    check -->|"starts with / or ."| path_mode[mg_resolve_path_to_worktree]
+    check -->|"other"| name_mode[mg_resolve_operation_to_worktree]
 
     path_mode --> is_git{Is git repo?}
     is_git -->|yes| use_as_wt[Use as worktree]
@@ -107,14 +109,14 @@ flowchart TD
 
     name_mode --> has_state{Has state.json?}
     has_state -->|yes| read_wt[Read worktree from state]
-    has_state -->|no| fallback1[Check merge queue]
+    has_state -->|no| fallback1[mg_resolve_queue_entry_to_branch]
 
     read_wt --> wt_exists{Worktree exists?}
     wt_exists -->|yes| use_wt[Use worktree + branch]
     wt_exists -->|no| check_branch[Check branch exists]
 
     fallback1 -->|found| check_branch
-    fallback1 -->|not found| fallback2[Check local/remote branch]
+    fallback1 -->|not found| fallback2[mg_resolve_branch_to_ref]
     fallback2 -->|found| check_branch
     fallback2 -->|not found| error[Error: not found]
 
@@ -123,31 +125,33 @@ flowchart TD
 
     check_phase -->|merged| error_merged[Error: already merged]
     check_phase -->|cancelled| error_cancelled[Error: cancelled]
-    check_phase -->|failed| attempt_recovery[Attempt recovery from remote]
+    check_phase -->|verification_failed| attempt_recovery[Attempt recovery from remote]
 ```
 
 ## Merge Strategy
 
 ```mermaid
 flowchart TD
-    start[mg_do_merge] --> try_ff[Try fast-forward]
+    start[mg_do_merge] --> try_ff[Try git merge --ff-only]
 
     try_ff -->|success| done_ff[Done: FF merge]
-    try_ff -->|fail| try_rebase[Rebase onto develop]
+    try_ff -->|fail| try_rebase[Rebase onto V0_DEVELOP_BRANCH]
 
-    try_rebase -->|success| retry_ff[Retry fast-forward]
-    try_rebase -->|fail| abort_rebase[Abort rebase]
+    try_rebase -->|success| retry_ff[Retry git merge --ff-only]
+    try_rebase -->|fail| abort_rebase[git rebase --abort]
 
     retry_ff -->|success| done_rebase[Done: FF after rebase]
     retry_ff -->|fail| abort_rebase
 
-    abort_rebase --> try_merge[Try regular merge]
+    abort_rebase --> try_merge[Try git merge --no-edit]
 
     try_merge -->|success| done_merge[Done: merge commit]
-    try_merge -->|fail| abort_merge[Abort merge]
+    try_merge -->|fail| abort_merge[git merge --abort]
 
     abort_merge --> error[Error: conflicts]
 ```
+
+For branches without a worktree, `mg_do_merge_without_worktree` is used which only attempts fast-forward merge (no rebase or merge commit fallback, since those require a worktree).
 
 ## Conflict Detection
 
@@ -222,17 +226,19 @@ flowchart TD
 
 ## Post-Merge Operations
 
-After a successful merge, these steps execute in order:
+After a successful merge, `mg_finalize_merge` orchestrates these steps in order:
 
 | Step | Function | Description |
 |------|----------|-------------|
-| 1 | `mg_push_and_verify` | Push to remote, verify commit landed |
-| 2 | `mg_record_merge_commit` | Store merge commit hash in operation state |
-| 3 | `mg_update_operation_state` | Set `phase=merged`, `merged_at` |
-| 4 | `mg_update_queue_entry` | Mark queue entry as `completed` |
-| 5 | `mg_trigger_dependents` | Resume operations blocked by this one |
-| 6 | `mg_notify_merge` | Send desktop notification |
+| 1 | `mg_push_and_verify` | Push HEAD to remote V0_DEVELOP_BRANCH, verify commit landed |
+| 2 | `mg_record_merge_commit` | Store merge commit hash in operation state (if operation exists) |
+| 3 | `mg_update_operation_state` | Call `sm_transition_to_merged` to set `phase=merged`, `merged_at` |
+| 4 | `mg_update_queue_entry` | Mark queue entry as `completed` (skipped if `V0_MERGEQ_CALLER` is set) |
+| 5 | `mg_trigger_dependents` | Resume operations blocked by this one via `v0-feature --resume` |
+| 6 | `mg_notify_merge` | Send desktop notification via `v0_notify` |
 | 7 | `mg_delete_remote_branch` | Clean up remote branch |
+
+After finalization succeeds, `mg_cleanup_merge` removes the worktree, tree directory, and local branch.
 
 ## Error Handling
 

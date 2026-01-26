@@ -66,10 +66,10 @@ Queue entries include:
 ### Pending → Processing
 
 The daemon polls every 30 seconds and picks the highest-priority ready entry:
-1. Checks `is_merge_ready()` - verifies operation is complete
-2. Checks `is_stale()` - cleans entries for already-merged operations
-3. Marks entry as `processing`
-4. Calls `process_merge()`
+1. Checks `mq_is_stale()` - cleans entries for already-merged operations
+2. Checks `mq_is_merge_ready()` - verifies operation is complete
+3. Marks entry as `processing` via `mq_update_entry_status`
+4. Calls `mq_process_merge()`
 
 ### Processing → Completed
 
@@ -100,25 +100,26 @@ Merge has conflicts (see [v0-merge conflict resolution](../commands/v0-merge.md#
 
 ### Conflict → Pending (Auto-Retry)
 
-On next poll cycle:
-1. Daemon checks `conflict_retried` flag
-2. If not retried: marks `conflict_retried=true`, resets to `pending`
-3. If already retried: skips (needs manual intervention)
+On next poll cycle in `mq_process_watch`:
+1. Daemon calls `mq_get_all_conflicts()` and checks each entry's `conflict_retried` flag in state.json
+2. If not retried: sets `conflict_retried=true` via `sm_update_state`, clears `merge_status`, resets to `pending`
+3. If already retried: skips (needs manual intervention via `v0 merge <op> --resolve`)
 
 ### Pending → Resumed
 
-When operation has open issues after queuing:
-1. Daemon detects incomplete work via `open_issues` check
-2. Marks entry as `resumed`
-3. Restarts worker with `v0 feature --resume queued`
-4. Worker completes issues and re-queues
+When operation has open issues after queuing (detected via `sm_merge_ready_reason` returning `open_issues:<count>:<in_progress>`):
+1. Daemon checks if `merge_resumed` flag is already set in state.json
+2. If not yet resumed: sets `merge_resumed=true`, clears `merge_queued`, marks entry as `resumed`
+3. Restarts worker with `nohup v0-feature <op> --resume queued`
+4. Worker completes remaining issues and re-enqueues when done
 
 ### Pending → Completed (Stale Cleanup)
 
-Stale entries are auto-cleaned when:
-- Operation's `merged_at` is set (already merged)
-- State was recreated after queue entry (operation restarted)
-- Branch no longer exists on remote
+Stale entries are auto-cleaned by `mq_is_stale()` when:
+- Operation's `merged_at` is set (already merged, verified via `v0_verify_merge_by_op`)
+- State's `created_at` is newer than queue entry's `enqueued_at` (operation was restarted)
+- For branch patterns: branch no longer exists on remote (verified via `git ls-remote`)
+- No state file exists and operation is not a branch pattern
 
 ## Queue File Schema
 
@@ -170,19 +171,20 @@ Bare branches pushed directly (e.g., `fix/proj-abc1`, `chore/proj-xyz9`):
 
 ## Daemon Behavior
 
-The daemon (`v0 mergeq --watch`) runs continuously:
+The daemon (`v0 mergeq --watch`) runs `mq_process_watch` continuously:
 
 ```
 ┌─────────────────────────────────────────────────┐
 │                 Poll Cycle (30s)                │
 ├─────────────────────────────────────────────────┤
-│ 1. Check conflict entries for auto-retry        │
-│ 2. Get all pending entries (priority order)     │
+│ 1. mq_get_all_conflicts() - check for auto-retry│
+│ 2. mq_get_all_pending() - get entries by        │
+│    priority, then enqueue time                  │
 │ 3. For each pending entry:                      │
-│    - Clean if stale                             │
-│    - Skip if not ready (log reason)             │
-│    - Auto-resume if has open issues             │
-│    - Process first ready entry                  │
+│    - mq_is_stale() - clean if stale             │
+│    - mq_is_merge_ready() - skip if not ready    │
+│    - Auto-resume if open_issues detected        │
+│    - mq_process_merge() for first ready entry   │
 │ 4. Sleep and repeat                             │
 └─────────────────────────────────────────────────┘
 ```
