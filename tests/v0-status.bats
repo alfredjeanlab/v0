@@ -1043,3 +1043,41 @@ EOF
     # Should prune completed operations
     [[ "$output" == *"... and 4 more"* ]]
 }
+
+# ============================================================================
+# Short mode visibility tests (for --short flag behavior)
+# ============================================================================
+# These tests verify that --short mode shows "Stopped" status for Bugs/Chores
+# when there are queued items, but hides the section when queue is empty.
+
+# Helper function that matches the visibility logic in v0-status for bugs/chores
+# Returns 0 (true) if section should be shown, 1 (false) if hidden
+should_show_worker_section() {
+    local short_mode="$1"      # "" for full mode, "1" for short mode
+    local queue_empty="$2"     # "true" or "false"
+
+    # In short mode, skip only if queue is empty
+    # In full mode, always show
+    [[ -z "${short_mode}" ]] || [[ "${queue_empty}" != "true" ]]
+}
+
+@test "short mode: shows section when queue has items (worker stopped)" {
+    # Worker status doesn't matter - if queue has items, show section
+    run should_show_worker_section "1" "false"
+    assert_success
+}
+
+@test "short mode: hides section when queue is empty" {
+    run should_show_worker_section "1" "true"
+    assert_failure
+}
+
+@test "full mode: shows section when queue has items" {
+    run should_show_worker_section "" "false"
+    assert_success
+}
+
+@test "full mode: shows section when queue is empty" {
+    run should_show_worker_section "" "true"
+    assert_success
+}

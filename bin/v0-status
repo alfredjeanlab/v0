@@ -626,8 +626,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
 
       # Bugs section
       fix_status=$(get_worker_status "fix" "${all_sessions}" "${all_polling}")
-      # In short mode, skip if Stopped or None
-      if [[ -z "${SHORT}" ]] || { [[ "${fix_status}" != "stopped" ]] && [[ "${bugs_empty}" != true ]]; }; then
+      # In short mode, skip only if queue is empty (show "Stopped" if queue has items)
+      if [[ -z "${SHORT}" ]] || [[ "${bugs_empty}" != true ]]; then
         show_worker_header_compact "Bugs" "${fix_status}" "${bugs_empty}"
         [[ "${bugs_empty}" != true ]] && show_worker_items_inline "${bugs_in_progress}" "${bugs_open}" 3
         [[ "${bugs_empty}" != true ]] && echo ""
@@ -635,8 +635,8 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
 
       # Chores section
       chore_status=$(get_worker_status "chore" "${all_sessions}" "${all_polling}")
-      # In short mode, skip if Stopped or None
-      if [[ -z "${SHORT}" ]] || { [[ "${chore_status}" != "stopped" ]] && [[ "${chores_empty}" != true ]]; }; then
+      # In short mode, skip only if queue is empty (show "Stopped" if queue has items)
+      if [[ -z "${SHORT}" ]] || [[ "${chores_empty}" != true ]]; then
         show_worker_header_compact "Chores" "${chore_status}" "${chores_empty}"
         [[ "${chores_empty}" != true ]] && show_worker_items_inline "${chores_in_progress}" "${chores_open}" 3
         [[ "${chores_empty}" != true ]] && echo ""
