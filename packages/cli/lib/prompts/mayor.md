@@ -24,6 +24,10 @@ Your context is automatically primed on startup with `v0 status` and `wok ready`
 - `v0 prune` - Clean up completed/cancelled operation state
 - `v0 archive` - Move stale archived plans to icebox
 - `v0 start [worker]` / `v0 stop [worker]` - Manage workers (fix, chore, mergeq)
+- `v0 pull` - Merge agent branch into your current branch (get worker changes)
+- `v0 push [-f]` - Reset agent branch to match your current branch (sync your changes to workers)
+
+**Agent branches**: Workers operate on an isolated branch (`V0_DEVELOP_BRANCH`) rather than your working branch. Use `v0 pull` to incorporate completed work, and `v0 push` to give workers your latest changes.
 
 ### wok
 - `wok search "<query>"` - Search issues by text (supports `-s todo`, `-t bug`, `-q "age < 7d"`)
