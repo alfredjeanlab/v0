@@ -388,6 +388,11 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     IFS='|' read -r raw_display raw_merge_icon <<< \
       "$(_sm_format_phase_display "${phase}" "${op_type}" "${merge_queued}" "${merge_status}" "${merged_at}" "${queue_entry_status}" "${merge_resumed}" "${worktree_missing}")"
 
+    # Override display to "blocked" when there's an open blocker
+    if [[ -n "${after_icon}" ]]; then
+      raw_display="blocked"
+    fi
+
     # Get colors for display
     phase_color=$(_sm_get_phase_color "${raw_display}" "${raw_merge_icon}")
     merge_color=$(_sm_get_merge_icon_color "${raw_merge_icon}")

@@ -122,7 +122,7 @@ _sm_get_phase_color() {
     "completed"|"plan completed"|"merged")
       echo "green"
       ;;
-    "new"|"planned"|"interrupted")
+    "new"|"planned"|"interrupted"|"blocked")
       echo "yellow"
       ;;
     "assigned")
