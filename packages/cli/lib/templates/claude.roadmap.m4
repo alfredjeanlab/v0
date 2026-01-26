@@ -3,14 +3,15 @@ changequote(`[[', `]]')dnl
 
 Orchestrate the roadmap: **ROADMAP_DESCRIPTION**
 
-The roadmap idea is tracked as IDEA_ID.
+ifelse(IDEA_ID, [[none]], [[]], [[The roadmap idea is tracked as IDEA_ID.
 
+]])dnl
 ## Finding Work
 
 ```bash
-# Check roadmap status
+ifelse(IDEA_ID, [[none]], [[# No idea issue created]], [[# Check roadmap status
 wk show IDEA_ID
-
+]])
 # List queued features for this roadmap
 wk list --label roadmap:ROADMAP_NAME
 ```

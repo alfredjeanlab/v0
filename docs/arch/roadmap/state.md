@@ -106,7 +106,8 @@ Note: Unlike operations, roadmaps restart from `init` on recovery rather than re
   "planning_session": "v0-proj-rewrite-roadmap",
   "worktree": "/path/to/worktree/repo",
   "worker_pid": null,
-  "worker_log": "/path/to/roadmaps/rewrite/logs/worker.log"
+  "worker_log": "/path/to/roadmaps/rewrite/logs/worker.log",
+  "error": null
 }
 ```
 
@@ -127,6 +128,7 @@ Note: Unlike operations, roadmaps restart from `init` on recovery rather than re
 | `worktree` | Path to worktree where agent runs |
 | `worker_pid` | PID of background worker process (null when not running) |
 | `worker_log` | Path to worker log file |
+| `error` | Error message when phase is `failed` (null otherwise) |
 
 ## Stop Hook Behavior
 
@@ -144,6 +146,8 @@ The `stop-roadmap.sh` hook prevents premature exit:
 Environment variables used by stop hook:
 - `V0_ROADMAP_NAME`: Roadmap identifier
 - `V0_WORKTREE`: Path to worktree for uncommitted changes check
+- `V0_IDEA_ID`: Wok issue ID for the roadmap idea (may be "none")
+- `V0_GIT_REMOTE`: Git remote name for push commands
 
 ## Worker Lifecycle
 
@@ -161,6 +165,10 @@ The background worker (`v0-roadmap-worker`) manages the state machine:
 │ 6. Update worker_pid on exit                    │
 └─────────────────────────────────────────────────┘
 ```
+
+### Unknown Phase Handling
+
+If the worker encounters an unrecognized phase (e.g., from a corrupted state file or future schema changes), it treats it as `init` and runs orchestration from the beginning. This provides forward-compatible recovery.
 
 ## Status Display
 

@@ -24,7 +24,7 @@ Arguments:
 
 Options:
   --all                 Watch all running v0 projects on the system
-  -n, --interval SECS   Refresh interval in seconds (default: 5)
+  -n, --interval SECS   Refresh interval in seconds (default: 5, or 10 with --all)
   -o, --operation NAME  Watch a specific operation by name
   --fix                 Watch fix worker status only
   --chore               Watch chore worker status only
@@ -85,6 +85,9 @@ fi
 
 # System-wide watch mode
 if [[ -n "${WATCH_ALL}" ]]; then
+  # Use longer interval for --all mode if not explicitly set
+  [[ "${REFRESH_INTERVAL}" -eq 5 ]] && REFRESH_INTERVAL=10
+
   V0_STATE_BASE="${XDG_STATE_HOME:-${HOME}/.local/state}/v0"
 
   # Force colors in subcommands when our stdout is a TTY
@@ -187,7 +190,7 @@ if [[ -n "${WATCH_ALL}" ]]; then
         echo -e "${C_BOLD}▶ ${project}${C_RESET} ${C_DIM}(${v0_root})${C_RESET}"
         echo ""
         # Run v0 status from the project directory
-        (cd "${v0_root}" && "${SCRIPT_DIR}/v0-status" --no-hints --max-ops 5 2>/dev/null) | sed 's/^/  /' || true
+        (cd "${v0_root}" && "${SCRIPT_DIR}/v0-status" --no-hints --max-ops 5 --short 2>/dev/null) | sed 's/^/  /' || true
       done <<< "${projects}"
     fi
 

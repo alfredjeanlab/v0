@@ -290,7 +290,7 @@ WRAPPER
   CLAUDE_ARGS="--model opus --dangerously-skip-permissions --allow-dangerously-skip-permissions"
 
   tmux new-session -d -s "${SESSION}" -c "${TREE_DIR}" \
-    "V0_ROADMAP_NAME='${NAME}' V0_IDEA_ID='${IDEA_ID}' V0_ROOT='${V0_ROOT}' V0_WORKTREE='${WORKTREE}' claude ${CLAUDE_ARGS} 'Orchestrate the roadmap. Follow instructions in CLAUDE.md and ROADMAP.md.'; \
+    "V0_ROADMAP_NAME='${NAME}' V0_IDEA_ID='${IDEA_ID}' V0_ROOT='${V0_ROOT}' V0_WORKTREE='${WORKTREE}' V0_GIT_REMOTE='${V0_GIT_REMOTE}' claude ${CLAUDE_ARGS} 'Orchestrate the roadmap. Follow instructions in CLAUDE.md and ROADMAP.md.'; \
      '${TREE_DIR}/.claude/on-complete.sh'; \
      echo ''; echo 'Session complete. Closing in 5 seconds...'; sleep 5"
 

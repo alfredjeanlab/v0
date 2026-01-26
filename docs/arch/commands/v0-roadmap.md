@@ -33,6 +33,21 @@ Creates in worktree:
 - `ROADMAP.md` - From `lib/prompts/roadmap.md`
 - `done` / `incomplete` - Exit scripts
 
+## Worktree Structure
+
+The `v0-tree` command returns two paths:
+- `TREE_DIR`: Parent directory where the worktree is created
+- `WORKTREE`: The actual git worktree directory (repo checkout)
+
+Files like `CLAUDE.md`, `done`, and `incomplete` are placed in `TREE_DIR`.
+The agent should `cd` into the repository subdirectory for git operations.
+
+Example:
+```
+TREE_DIR=/Users/x/.local/state/v0/proj/tree/roadmap/rewrite/
+WORKTREE=/Users/x/.local/state/v0/proj/tree/roadmap/rewrite/myrepo/
+```
+
 ## Logs
 
 - `.v0/build/roadmaps/<name>/logs/worker.log`

@@ -87,10 +87,16 @@ if [[ -n "${STATUS}" ]]; then
   found=0
   for state_file in "${ROADMAPS_DIR}"/*/state.json; do
     [[ ! -f "${state_file}" ]] && continue
+
+    phase=$(jq -r '.phase' "${state_file}")
+    # Skip terminal/error states per docs
+    case "${phase}" in
+      completed|failed|interrupted) continue ;;
+    esac
+
     found=1
 
     name=$(jq -r '.name' "${state_file}")
-    phase=$(jq -r '.phase' "${state_file}")
     desc=$(jq -r '.roadmap_description' "${state_file}")
     idea_id=$(jq -r '.idea_id // empty' "${state_file}")
     created=$(jq -r '.created_at' "${state_file}")
@@ -294,8 +300,17 @@ if [[ -z "${FOREGROUND}" ]]; then
   if [[ -n "${ATTACH}" ]]; then
     echo "Following worker log (Ctrl+C to detach)..."
     echo ""
-    sleep 1
-    tail -f "${WORKER_LOG}"
+    # Wait for log file to exist (up to 5 seconds)
+    for i in {1..50}; do
+      [[ -f "${WORKER_LOG}" ]] && break
+      sleep 0.1
+    done
+    if [[ -f "${WORKER_LOG}" ]]; then
+      tail -f "${WORKER_LOG}"
+    else
+      echo "Warning: Log file not created within timeout"
+      exit 1
+    fi
   fi
 
   exit 0
