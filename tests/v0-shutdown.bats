@@ -50,6 +50,9 @@ EOF
     local project_dir
     project_dir=$(setup_isolated_project)
 
+    # Kill any stray polling daemons for this test project (from previous test runs)
+    pkill -f "while true.*v0-testshutdown" 2>/dev/null || true
+
     # Run shutdown - should report no sessions for testshutdown project
     run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
         cd "'"${project_dir}"'" || exit 1
@@ -66,6 +69,9 @@ EOF
 @test "shutdown --dry-run does not actually kill sessions" {
     local project_dir
     project_dir=$(setup_isolated_project)
+
+    # Kill any stray polling daemons for this test project (from previous test runs)
+    pkill -f "while true.*v0-testshutdown" 2>/dev/null || true
 
     # Create a mock session name file to track what would be killed
     # Note: In real usage, this would require a real tmux session
