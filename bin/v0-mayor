@@ -83,6 +83,14 @@ cat > "${MAYOR_SETTINGS_DIR}/.claude/settings.local.json" <<'SETTINGS'
 }
 SETTINGS
 
+# Initialize wok workspace link if v0 project has wok tracking
+# This allows the mayor to create/manage bugs from the temp directory
+if [[ -d "${V0_DIR}/.wok" ]]; then
+  # Get prefix from wok config, default to "v0"
+  WOK_PREFIX=$(grep '^prefix' "${V0_DIR}/.wok/config.toml" 2>/dev/null | sed 's/prefix *= *"\(.*\)"/\1/' || echo "v0")
+  wok init --workspace "${V0_DIR}/.wok" --prefix "${WOK_PREFIX}" --path "${MAYOR_SETTINGS_DIR}" >/dev/null 2>&1 || true
+fi
+
 # Cleanup function for temporary settings
 cleanup() {
   rm -rf "${MAYOR_SETTINGS_DIR}"
