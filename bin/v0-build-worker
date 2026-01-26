@@ -551,6 +551,7 @@ main() {
   case "${PHASE}" in
     init)
       check_hold_before_phase || exit 0
+      check_wok_blockers || exit 0
       run_plan_phase || exit 1
       check_hold_before_phase || exit 0
       check_wok_blockers || exit 0
@@ -623,6 +624,7 @@ main() {
           run_build_phase || exit 1
           ;;
         init)
+          check_wok_blockers || exit 0
           run_plan_phase || exit 1
           check_wok_blockers || exit 0
           run_build_phase || exit 1
