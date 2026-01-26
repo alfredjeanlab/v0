@@ -29,6 +29,7 @@ Transform a prompt into an autonomous development pipeline.
 Options:
   --resume [p]   Resume an existing operation, optionally from phase p
                  Valid phases: init, planned, queued
+  --force, -f    Bypass blockers when resuming (use with --resume)
   --no-merge     Don't auto-merge when work completes (default: auto-merge)
   --label <l>    Add label to created issue (can repeat)
   --dry-run      Show what would happen without executing
@@ -53,6 +54,7 @@ Examples:
   v0 build auth --resume                          # Resume from current phase
   v0 build auth --resume --attach                 # Resume and follow logs
   v0 build auth --resume init                     # Restart from planning phase
+  v0 build auth --resume --force                  # Resume despite blockers
   v0 build addx "Add X" --no-merge                # Don't auto-merge
   v0 build api "Build API" --after auth           # Wait for auth before starting
   v0 build refactor --plan plans/refactor.md      # Use existing plan
@@ -71,6 +73,7 @@ AFTER_OPS=()
 PLAN_FILE_ARG=""
 ATTACH=""
 HOLD=""
+FORCE=""
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -100,6 +103,7 @@ while [[ $# -gt 0 ]]; do
     --plan) PLAN_FILE_ARG="$2"; shift 2 ;;
     --hold) HOLD=1; shift ;;
     --attach) ATTACH=1; shift ;;
+    --force|-f) FORCE=1; shift ;;
     -h|--help) usage ;;
     -*) echo "Unknown option: $1"; usage ;;
     *)
@@ -353,6 +357,28 @@ if [[ -n "${RESUME}" ]]; then
     update_state "worker_pid" "null"
   fi
 
+  # Check for wok blockers (replaces old blocked phase handling)
+  EPIC_ID=$(get_state epic_id)
+  if [[ -n "${EPIC_ID}" ]] && [[ "${EPIC_ID}" != "null" ]]; then
+    FIRST_BLOCKER=$(v0_get_first_open_blocker "${EPIC_ID}")
+    if [[ -n "${FIRST_BLOCKER}" ]]; then
+      BLOCKER_NAME=$(v0_blocker_to_op_name "${FIRST_BLOCKER}")
+      if [[ -n "${FORCE}" ]]; then
+        echo "Warning: Ignoring blocker '${BLOCKER_NAME}' (--force)"
+      else
+        echo "Error: Operation is blocked by '${BLOCKER_NAME}'"
+        echo ""
+        echo "To resume anyway, use:"
+        echo "  v0 resume --force ${NAME}"
+        echo ""
+        echo "To remove the blocker, either:"
+        echo "  - Complete the blocking operation"
+        echo "  - Remove the dependency: wk undep ${EPIC_ID} blocked-by ${FIRST_BLOCKER}"
+        exit 1
+      fi
+    fi
+  fi
+
   # Background execution for resume (like new operations)
   # Spawn a worker to continue from current phase unless --dry-run
   if [[ -z "${DRY_RUN}" ]]; then
@@ -420,21 +446,6 @@ if [[ -n "${RESUME}" ]]; then
       echo ""
       echo "Monitor merge queue:"
       echo "  v0 mergeq --status"
-      exit 0
-    fi
-  fi
-
-  # Check for wok blockers (replaces old blocked phase handling)
-  EPIC_ID=$(get_state epic_id)
-  if [[ -n "${EPIC_ID}" ]] && [[ "${EPIC_ID}" != "null" ]]; then
-    FIRST_BLOCKER=$(v0_get_first_open_blocker "${EPIC_ID}")
-    if [[ -n "${FIRST_BLOCKER}" ]]; then
-      BLOCKER_NAME=$(v0_blocker_to_op_name "${FIRST_BLOCKER}")
-      echo "Operation is blocked by '${BLOCKER_NAME}'"
-      echo ""
-      echo "To remove the blocker, either:"
-      echo "  - Complete the blocking operation"
-      echo "  - Remove the dependency: wk undep ${EPIC_ID} blocked-by ${FIRST_BLOCKER}"
       exit 0
     fi
   fi
