@@ -268,3 +268,15 @@ EOF
     assert_output --partial "--force"
     assert_output --partial "Bypass blockers"
 }
+
+@test "v0 resume --force sets ignore_blockers in state for worker" {
+    create_blocked_operation "test-op" "test-blocker456"
+
+    run "${V0_BUILD}" --resume --force test-op 2>&1
+    assert_success
+
+    # Verify ignore_blockers was set in state
+    local state_file="${TEST_TEMP_DIR}/project/.v0/build/operations/test-op/state.json"
+    run jq -r '.ignore_blockers' "${state_file}"
+    assert_output "true"
+}
