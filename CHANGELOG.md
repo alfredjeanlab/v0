@@ -30,6 +30,12 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 
 - **Dedicated merge workspace**: Isolated workspace for merge conflict resolution.
 
+- **`v0 mayor` command**: Interactive orchestration assistant for high-level project guidance.
+
+- **`--force` flag for `v0 resume`**: Bypass blockers when resuming operations.
+
+- **`--drop-workspace` and `--drop-everything` flags for `v0 stop`**: Clean up workspaces and agent branches on shutdown.
+
 ### Changed
 
 - **Renamed `v0 feature` to `v0 build`**: Not always used for features.
@@ -46,6 +52,8 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 
 - **`--after` accepts operation names**: In addition to wok IDs.
 
+- **Worker branch derivation**: Worker branches now derive from the develop branch rather than being independently named.
+
 ### Refactored
 
 - **Monorepo package structure**: Modular shell libraries with incremental test caching.
@@ -60,6 +68,13 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 - `.claude` directory created before writing settings and hooks.
 - Merge verification for already-merged operations.
 - Stale tmux session cleanup when resuming features.
+- Merge operations explicitly push HEAD to develop branch.
+- Branch resolution from remote before reporting `worktree:missing` status.
+- Push before cleanup to preserve worktree on push failure.
+- `v0 stop --drop-everything` properly cleans up agent branches in worktree mode.
+- Inherited `BUILD_DIR` preserved when merge daemon runs in workspace.
+- Extra blank line after 'Plans: None' in status output.
+- Merging behavior for bugs and chores.
 
 ## [0.2.2] - 2026-01-24
 
