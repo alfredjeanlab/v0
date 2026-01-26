@@ -438,6 +438,83 @@ To use shared `origin` instead (legacy behavior):
 V0_GIT_REMOTE="origin"
 ```
 
+## Shutdown and Cleanup
+
+Cleanup behavior differs by workspace mode and option used.
+
+### --drop-workspace
+
+Removes workspace and worktrees but preserves state (logs, build cache).
+
+**Worktree mode:**
+```bash
+# Removes:
+# - All worktrees (workspace, feature trees, worker trees)
+# - Worker branches (*-bugs, *-chores)
+# - Agent develop branch (v0/agent/{user}-{id})
+
+# Preserves:
+# - State directory (~/.local/state/v0/${PROJECT}/)
+# - Build directory (.v0/build/)
+```
+
+**Clone mode:**
+```bash
+# Removes:
+# - Workspace clone
+# - Feature worktrees
+# - Worker branches (*-bugs, *-chores)
+
+# Preserves:
+# - Develop branch (main/develop/master)
+# - State directory
+# - Build directory
+```
+
+### --drop-everything
+
+Full reset - removes all v0 state for the project.
+
+**Worktree mode:**
+```bash
+# Removes:
+# - All worktrees (workspace, feature trees, worker trees)
+# - Worker branches (*-bugs, *-chores)
+# - Agent develop branch (v0/agent/{user}-{id})
+# - State directory (~/.local/state/v0/${PROJECT}/)
+# - Build directory (.v0/build/)
+# - Agent remote
+```
+
+**Clone mode:**
+```bash
+# Removes:
+# - Workspace clone
+# - Feature worktrees
+# - Worker branches (*-bugs, *-chores)
+# - State directory
+# - Build directory
+# - Agent remote
+
+# Preserves:
+# - Develop branch (main/develop/master)
+```
+
+### Why the Difference?
+
+In worktree mode, `v0/agent/*` branches are **user-specific** and isolated. Each user has their own branch (e.g., `v0/agent/alice-a3f2`), so removing it doesn't affect other users.
+
+In clone mode, the develop branch is a **shared branch** (like `main`). Deleting it would affect the entire team.
+
+### Summary
+
+| Option | Mode | Worktree | Branch | State |
+|--------|------|----------|--------|-------|
+| `--drop-workspace` | Worktree | Removed | Removed | Preserved |
+| `--drop-workspace` | Clone | Removed | Preserved | Preserved |
+| `--drop-everything` | Worktree | Removed | Removed | Removed |
+| `--drop-everything` | Clone | Removed | Preserved | Removed |
+
 ## Related Documentation
 
 - [SYSTEM.md](SYSTEM.md) - System architecture overview

@@ -419,3 +419,197 @@ EOF
     assert_output --partial "Deleting local branch: v0/worker/feature"
     refute_output --partial "Warning:"
 }
+
+# ============================================================================
+# Drop-everything with v0/agent/* branches (worktree mode)
+# ============================================================================
+
+# Helper to create git repo with worktree mode config
+setup_worktree_mode_project() {
+    local project_dir="${TEST_TEMP_DIR}/worktree-project"
+    mkdir -p "${project_dir}/.v0/build/operations"
+
+    # Create .v0.rc with worktree mode (v0/agent/* branch)
+    cat > "${project_dir}/.v0.rc" <<EOF
+PROJECT="testshutdown"
+ISSUE_PREFIX="ts"
+V0_DEVELOP_BRANCH="v0/agent/test-user-abc1"
+V0_WORKSPACE_MODE="worktree"
+EOF
+
+    # Initialize git repo with main branch
+    (
+        cd "${project_dir}" || return 1
+        git init --quiet --initial-branch=main
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        echo "initial" > README.md
+        git add README.md
+        git commit --quiet -m "Initial commit"
+    )
+
+    echo "${project_dir}"
+}
+
+@test "shutdown --drop-workspace deletes v0/agent/* branch in worktree mode" {
+    local project_dir
+    project_dir=$(setup_worktree_mode_project)
+
+    # Create the v0/agent/* develop branch
+    (
+        cd "${project_dir}" || return 1
+        git checkout -b v0/agent/test-user-abc1 --quiet
+        echo "agent work" > agent.txt
+        git add agent.txt
+        git commit --quiet -m "Agent work"
+        git checkout main --quiet
+    )
+
+    # Verify branch exists before shutdown
+    run git -C "${project_dir}" branch --list 'v0/agent/test-user-abc1'
+    assert_output --partial "v0/agent/test-user-abc1"
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --drop-workspace 2>&1
+    '
+    assert_success
+    assert_output --partial "Cleaning up agent develop branches (worktree mode)"
+    assert_output --partial "Deleting local branch: v0/agent/test-user-abc1"
+
+    # Verify branch is deleted
+    run git -C "${project_dir}" branch --list 'v0/agent/test-user-abc1'
+    assert_output ""
+}
+
+@test "shutdown --drop-everything deletes v0/agent/* branch in worktree mode" {
+    local project_dir
+    project_dir=$(setup_worktree_mode_project)
+
+    # Create the v0/agent/* develop branch
+    (
+        cd "${project_dir}" || return 1
+        git checkout -b v0/agent/test-user-abc1 --quiet
+        echo "agent work" > agent.txt
+        git add agent.txt
+        git commit --quiet -m "Agent work"
+        git checkout main --quiet
+    )
+
+    # Verify branch exists before shutdown
+    run git -C "${project_dir}" branch --list 'v0/agent/test-user-abc1'
+    assert_output --partial "v0/agent/test-user-abc1"
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --drop-everything 2>&1
+    '
+    assert_success
+    assert_output --partial "Cleaning up agent develop branches (worktree mode)"
+    assert_output --partial "Deleting local branch: v0/agent/test-user-abc1"
+
+    # Verify branch is deleted
+    run git -C "${project_dir}" branch --list 'v0/agent/test-user-abc1'
+    assert_output ""
+}
+
+@test "shutdown --drop-everything does not delete v0/agent/*-bugs or *-chores (already handled)" {
+    local project_dir
+    project_dir=$(setup_worktree_mode_project)
+
+    # Create both the develop branch and worker branches
+    (
+        cd "${project_dir}" || return 1
+        git checkout -b v0/agent/test-user-abc1 --quiet
+        echo "agent work" > agent.txt
+        git add agent.txt
+        git commit --quiet -m "Agent work"
+        git checkout -b v0/agent/test-user-abc1-bugs --quiet
+        echo "bugs work" > bugs.txt
+        git add bugs.txt
+        git commit --quiet -m "Bugs work"
+        git checkout main --quiet
+    )
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --drop-everything --force 2>&1
+    '
+    assert_success
+    # Worker branches are handled in the worker branch section, not agent branch section
+    assert_output --partial "Cleaning up local worker branches"
+    # The agent develop branch should be handled in its own section
+    assert_output --partial "Cleaning up agent develop branches (worktree mode)"
+    assert_output --partial "Deleting local branch: v0/agent/test-user-abc1"
+}
+
+@test "shutdown --drop-workspace does NOT delete develop branch in clone mode" {
+    local project_dir
+    project_dir=$(setup_git_project_with_branches)
+
+    # The setup_git_project_with_branches uses main as develop branch (clone mode)
+    # Verify main branch exists before shutdown
+    run git -C "${project_dir}" branch --list 'main'
+    assert_output --partial "main"
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --drop-workspace 2>&1
+    '
+    assert_success
+    # Should NOT see agent branch cleanup message (clone mode)
+    refute_output --partial "Cleaning up agent develop branches"
+
+    # Verify main branch still exists
+    run git -C "${project_dir}" branch --list 'main'
+    assert_output --partial "main"
+}
+
+@test "shutdown --drop-everything does NOT delete develop branch in clone mode" {
+    local project_dir
+    project_dir=$(setup_git_project_with_branches)
+
+    # The setup_git_project_with_branches uses main as develop branch (clone mode)
+    # Verify main branch exists before shutdown
+    run git -C "${project_dir}" branch --list 'main'
+    assert_output --partial "main"
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --drop-everything 2>&1
+    '
+    assert_success
+    # Should NOT see agent branch cleanup message (clone mode)
+    refute_output --partial "Cleaning up agent develop branches"
+
+    # Verify main branch still exists
+    run git -C "${project_dir}" branch --list 'main'
+    assert_output --partial "main"
+}
+
+@test "shutdown without --drop-everything does NOT delete v0/agent/* branch" {
+    local project_dir
+    project_dir=$(setup_worktree_mode_project)
+
+    # Create the v0/agent/* develop branch
+    (
+        cd "${project_dir}" || return 1
+        git checkout -b v0/agent/test-user-abc1 --quiet
+        echo "agent work" > agent.txt
+        git add agent.txt
+        git commit --quiet -m "Agent work"
+        git checkout main --quiet
+    )
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" 2>&1
+    '
+    assert_success
+    # Should NOT see agent branch cleanup (no --drop-everything)
+    refute_output --partial "Cleaning up agent develop branches"
+
+    # Verify branch still exists
+    run git -C "${project_dir}" branch --list 'v0/agent/test-user-abc1'
+    assert_output --partial "v0/agent/test-user-abc1"
+}

@@ -35,10 +35,21 @@ v0 stop --drop-everything  # Full reset (removes all v0 state)
 | Option | Removes |
 |--------|---------|
 | (default) | Sessions, daemons, worker branches/worktrees |
-| `--drop-workspace` | + `~/.local/state/v0/${PROJECT}/workspace/` and `tree/` |
+| `--drop-workspace` | + workspace, tree/, and develop branch (worktree mode only) |
 | `--drop-everything` | + `~/.local/state/v0/${PROJECT}/` and `.v0/build/` and `agent` remote |
 
-The `--drop-everything` option performs a full reset. Run `v0 init` to reinitialize.
+The `--drop-workspace` option removes the workspace and worktrees but preserves state (logs, build cache). The `--drop-everything` option performs a full reset. Run `v0 init` to reinitialize.
+
+### Workspace Mode Differences
+
+The `--drop-workspace` and `--drop-everything` behavior differs based on workspace mode:
+
+| Mode | Develop Branch | Branch Deleted? |
+|------|----------------|-----------------|
+| **Worktree** | `v0/agent/{user}-{id}` | Yes - user-specific branch is removed |
+| **Clone** | `main`/`develop`/`master` | No - shared branch is preserved |
+
+In worktree mode, `v0/agent/*` branches are user-specific and safe to delete when dropping the workspace. In clone mode, the develop branch is a shared branch (like `main`) that should not be deleted.
 
 ## Related
 

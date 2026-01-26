@@ -339,6 +339,48 @@ if [[ -n "${old_style_branches}" ]]; then
   done <<< "${old_style_branches}"
 fi
 
+# Clean up v0/agent/* branches (user-specific develop branches)
+# Only delete when --drop-workspace or --drop-everything AND using worktree mode
+# In clone mode, the develop branch is main/develop/master which should not be deleted
+if [[ ( -n "${DROP_WORKSPACE}" || -n "${DROP_EVERYTHING}" ) && "${V0_WORKSPACE_MODE}" == "worktree" ]]; then
+  # Find v0/agent/* branches (excluding worker branches already handled above)
+  agent_branches=$(git -C "${V0_ROOT}" branch --list 'v0/agent/*' 2>/dev/null | sed 's/^[* ]*//' | v0_grep -v '\-bugs$\|\-chores$' || true)
+  agent_remote_branches=$(git -C "${V0_ROOT}" branch -r --list "${V0_GIT_REMOTE}/v0/agent/*" 2>/dev/null | sed 's/^[* ]*//' | v0_grep -v '\-bugs$\|\-chores$' || true)
+
+  if [[ -n "${agent_branches}" ]]; then
+    found_anything=1
+    echo ""
+    echo "Cleaning up agent develop branches (worktree mode)..."
+    while IFS= read -r branch; do
+      [[ -z "${branch}" ]] && continue
+
+      if [[ -n "${DRY_RUN}" ]]; then
+        echo "Would delete local branch: ${branch}"
+      else
+        echo "Deleting local branch: ${branch}"
+        git -C "${V0_ROOT}" branch -D "${branch}" 2>/dev/null || true
+      fi
+    done <<< "${agent_branches}"
+  fi
+
+  if [[ -n "${agent_remote_branches}" ]]; then
+    found_anything=1
+    echo ""
+    echo "Cleaning up remote agent develop branches (worktree mode)..."
+    while IFS= read -r branch; do
+      [[ -z "${branch}" ]] && continue
+      branch_name="${branch#"${V0_GIT_REMOTE}"/}"
+
+      if [[ -n "${DRY_RUN}" ]]; then
+        echo "Would delete remote branch: ${branch_name}"
+      else
+        echo "Deleting remote branch: ${branch_name}"
+        git -C "${V0_ROOT}" push "${V0_GIT_REMOTE}" --delete "${branch_name}" 2>/dev/null || true
+      fi
+    done <<< "${agent_remote_branches}"
+  fi
+fi
+
 # Check if coffee is running (so we don't exit early if only coffee needs stopping)
 if coffee_is_running; then
   found_anything=1
