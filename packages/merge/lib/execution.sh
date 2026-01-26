@@ -144,7 +144,10 @@ mg_cleanup_worktree() {
 mg_push_and_verify() {
     local merge_commit="$1"
 
-    if ! git push "${V0_GIT_REMOTE}"; then
+    # Explicitly push HEAD to the develop branch to handle cases where
+    # the local branch name doesn't match the remote tracking branch
+    # (e.g., workspace branch v0/agent/user-id tracking agent/main)
+    if ! git push "${V0_GIT_REMOTE}" "HEAD:${V0_DEVELOP_BRANCH}"; then
         echo "Error: Push failed" >&2
         return 1
     fi
