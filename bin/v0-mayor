@@ -82,5 +82,5 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Run claude with the settings directory
-exec claude --model "${MODEL}" --settings-dir "${MAYOR_SETTINGS_DIR}" "${PROMPT}" "$@"
+# Run claude with the settings file
+exec claude --model "${MODEL}" --settings "${MAYOR_SETTINGS_DIR}/.claude/settings.local.json" "${PROMPT}" "$@"
