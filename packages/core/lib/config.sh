@@ -112,7 +112,7 @@ v0_load_config() {
   V0_CHORE_BRANCH="chore/{id}"
   V0_WORKTREE_INIT="${V0_WORKTREE_INIT:-}"  # Optional worktree init hook
   V0_GIT_REMOTE="origin"                     # Git remote for push/fetch operations
-  V0_WORKSPACE_MODE=""                       # 'worktree' or 'clone' (inferred if empty)
+  V0_WORKSPACE_MODE="${V0_WORKSPACE_MODE:-}" # 'worktree' or 'clone' (inferred if empty)
 
   # Load project config (overrides defaults)
   source "${V0_ROOT}/.v0.rc"

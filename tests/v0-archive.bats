@@ -7,6 +7,10 @@ setup() {
     _base_setup
     setup_v0_env
 
+    # Force worktree mode so the v0/plans branch is created in V0_ROOT
+    # (clone mode would create it in a workspace clone, invisible from V0_ROOT)
+    export V0_WORKSPACE_MODE="worktree"
+
     # Initialize git repo in-place (don't use cached fixture which removes cwd)
     git init --quiet -b main
     git config user.email "test@example.com"
