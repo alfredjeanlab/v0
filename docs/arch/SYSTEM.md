@@ -33,7 +33,7 @@ Each worker follows a common pattern:
 3. Start new process via `nohup` with output to log file
 4. Write new PID to PID file
 
-See: [v0-startup](commands/v0-startup.md), [v0-shutdown](commands/v0-shutdown.md)
+See: [v0-start](commands/v0-start.md), [v0-stop](commands/v0-stop.md)
 
 ## Directory Structure
 
