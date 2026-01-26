@@ -28,6 +28,12 @@ create_feature_issue() {
     return 1
   fi
 
+  # Add plan label so issue can be resolved to operation name
+  # This is needed for dependency tracking when blocked operations are resumed
+  if ! wk label "${issue_id}" "plan:${name}" 2>/dev/null; then
+    echo "create_feature_issue: warning: failed to add label to ${issue_id}" >&2
+  fi
+
   echo "${issue_id}"
 }
 
