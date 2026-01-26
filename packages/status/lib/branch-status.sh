@@ -20,8 +20,12 @@ show_branch_status() {
     # Get current branch
     current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || return 1
 
-    # Skip if we're on the develop branch itself
-    [[ "${current_branch}" = "${develop_branch}" ]] && return 1
+    # Skip if we're on the develop branch itself (worktree mode only)
+    # In clone mode, user is expected to be on the develop branch (e.g., main)
+    # and we still want to show ahead/behind vs origin
+    if [[ "${V0_WORKSPACE_MODE}" != "clone" ]]; then
+        [[ "${current_branch}" = "${develop_branch}" ]] && return 1
+    fi
 
     # Fetch to ensure we have latest remote info (quiet, don't fail on error)
     git fetch "${remote}" "${develop_branch}" --quiet 2>/dev/null || true

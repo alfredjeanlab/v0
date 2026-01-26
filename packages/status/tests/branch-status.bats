@@ -154,6 +154,41 @@ EOF
     assert_failure
 }
 
+@test "show_branch_status shows status in clone mode even when on develop branch" {
+    export V0_WORKSPACE_MODE="clone"
+    export V0_DEVELOP_BRANCH="main"
+    setup_git_mock "main" "5" "3"
+
+    run show_branch_status
+    assert_success
+    assert_output --partial "⇡5"  # agent ahead
+    assert_output --partial "⇣3"  # agent behind
+    assert_output --partial "Changes:"
+    assert_output --partial "main"
+}
+
+@test "show_branch_status suggests pull in clone mode when origin ahead" {
+    export V0_WORKSPACE_MODE="clone"
+    export V0_DEVELOP_BRANCH="main"
+    setup_git_mock "main" "3" "0"
+
+    run show_branch_status
+    assert_success
+    assert_output --partial "v0 pull"
+    assert_output --partial "⇡3"
+}
+
+@test "show_branch_status suggests push in clone mode when local ahead" {
+    export V0_WORKSPACE_MODE="clone"
+    export V0_DEVELOP_BRANCH="main"
+    setup_git_mock "main" "0" "2"
+
+    run show_branch_status
+    assert_success
+    assert_output --partial "v0 push"
+    assert_output --partial "⇣2"
+}
+
 # ============================================================================
 # Suggestion Display Tests
 # ============================================================================
