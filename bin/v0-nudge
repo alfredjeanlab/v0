@@ -30,6 +30,7 @@ Usage: v0-nudge <command>
 Commands:
   start     Start the nudge daemon (background)
   stop      Stop the nudge daemon
+  restart   Restart the nudge daemon (stop + start)
   status    Check if nudge daemon is running
   check     Run one check cycle (for testing/debugging)
 
@@ -273,6 +274,11 @@ cmd_stop() {
   echo "Nudge worker stopped"
 }
 
+cmd_restart() {
+  cmd_stop
+  cmd_start
+}
+
 cmd_status() {
   local pid_file
   pid_file=$(nudge_pid_file)
@@ -316,6 +322,7 @@ cmd_daemon() {
 case "$1" in
   start)   cmd_start ;;
   stop)    cmd_stop ;;
+  restart) cmd_restart ;;
   status)  cmd_status ;;
   check)   cmd_check ;;
   daemon)  cmd_daemon ;;

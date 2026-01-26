@@ -850,6 +850,10 @@ while [[ $# -gt 0 ]]; do
       ACTION="stop"
       shift
       ;;
+    --restart)
+      ACTION="restart"
+      shift
+      ;;
     --status)
       ACTION="status"
       shift
@@ -913,6 +917,11 @@ while [[ $# -gt 0 ]]; do
       ACTION="stop"
       shift
       ;;
+    restart)
+      # Auto-correct 'v0 chore restart' to 'v0 chore --restart'
+      ACTION="restart"
+      shift
+      ;;
     *)
       POSITIONAL+=("$1")
       shift
@@ -927,6 +936,10 @@ case "${ACTION}" in
     ;;
   stop)
     stop_worker
+    ;;
+  restart)
+    stop_worker
+    start_worker
     ;;
   status)
     show_status
