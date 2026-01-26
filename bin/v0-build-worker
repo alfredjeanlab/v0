@@ -216,6 +216,14 @@ repair_stale_wok_blockers() {
 # Check wok blockers before starting new phases
 # Returns 0 if can proceed, 1 if blocked
 check_wok_blockers() {
+  # Skip blocker check if ignore_blockers is set (from --force flag)
+  local ignore_blockers
+  ignore_blockers=$(get_state ignore_blockers)
+  if [[ "${ignore_blockers}" == "true" ]]; then
+    log "Ignoring blockers (--force was used)"
+    return 0
+  fi
+
   local epic_id
   epic_id=$(get_state epic_id)
   [[ -z "${epic_id}" ]] || [[ "${epic_id}" == "null" ]] && return 0

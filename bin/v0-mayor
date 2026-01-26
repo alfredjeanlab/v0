@@ -54,7 +54,7 @@ mkdir -p "${MAYOR_SETTINGS_DIR}/.claude"
 cat > "${MAYOR_SETTINGS_DIR}/.claude/settings.local.json" <<'SETTINGS'
 {
   "permissions": {
-    "allow": ["Bash(v0 *)", "Bash(wok *)", "Bash(bd *)", "Read", "Edit(*/plans/*)", "Write(*/plans/*)"]
+    "allow": ["Bash(v0 *)", "Bash(wok *)", "Bash(bd *)", "Read", "Edit(*/plans/*)", "Write"]
   },
   "hooks": {
     "SessionStart": [

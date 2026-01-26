@@ -392,6 +392,8 @@ if [[ -n "${RESUME}" ]]; then
       BLOCKER_NAME=$(v0_blocker_to_op_name "${FIRST_BLOCKER}")
       if [[ -n "${FORCE}" ]]; then
         echo "Warning: Ignoring blocker '${BLOCKER_NAME}' (--force)"
+        # Store force flag in state so worker knows to ignore blockers
+        update_state "ignore_blockers" "true"
       else
         echo "Error: Operation is blocked by '${BLOCKER_NAME}'"
         echo ""
