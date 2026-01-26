@@ -17,9 +17,9 @@ setup() {
 # v0_generate_user_branch() tests
 # ============================================================================
 
-@test "v0_generate_user_branch returns v0/user/ prefix" {
+@test "v0_generate_user_branch returns v0/agent/ prefix" {
     result=$(v0_generate_user_branch)
-    [[ "$result" == v0/user/* ]]
+    [[ "$result" == v0/agent/* ]]
 }
 
 @test "v0_generate_user_branch includes username" {
@@ -27,7 +27,7 @@ setup() {
     username=$(whoami | tr '[:upper:]' '[:lower:]')
 
     result=$(v0_generate_user_branch)
-    [[ "$result" == v0/user/${username}-* ]]
+    [[ "$result" == v0/agent/${username}-* ]]
 }
 
 @test "v0_generate_user_branch includes 4-char hex id" {
@@ -75,8 +75,8 @@ setup() {
     [[ "$result" == "worktree" ]]
 }
 
-@test "v0_infer_workspace_mode returns worktree for v0/user/*" {
-    result=$(v0_infer_workspace_mode "v0/user/alice-1234")
+@test "v0_infer_workspace_mode returns worktree for v0/agent/*" {
+    result=$(v0_infer_workspace_mode "v0/agent/alice-1234")
     [[ "$result" == "worktree" ]]
 }
 
@@ -159,7 +159,7 @@ setup() {
 # v0_ensure_develop_branch() tests
 # ============================================================================
 
-@test "v0_ensure_develop_branch creates v0/user branch from HEAD" {
+@test "v0_ensure_develop_branch creates v0/agent branch from HEAD" {
     local project_dir="${TEST_TEMP_DIR}/project"
 
     mkdir -p "${project_dir}"
@@ -167,24 +167,24 @@ setup() {
     git -C "${project_dir}" commit --allow-empty -m "Initial commit"
 
     cd "${project_dir}" || return 1
-    v0_ensure_develop_branch "v0/user/test-1234" "origin"
+    v0_ensure_develop_branch "v0/agent/test-1234" "origin"
 
     # Check branch was created
-    run git -C "${project_dir}" branch --list "v0/user/test-1234"
+    run git -C "${project_dir}" branch --list "v0/agent/test-1234"
     assert_success
     [[ -n "$output" ]]
 }
 
-@test "v0_ensure_develop_branch skips remote check for v0/user/* branches" {
+@test "v0_ensure_develop_branch skips remote check for v0/agent/* branches" {
     local project_dir="${TEST_TEMP_DIR}/project"
 
     mkdir -p "${project_dir}"
     git -C "${project_dir}" init --initial-branch=main
     git -C "${project_dir}" commit --allow-empty -m "Initial commit"
 
-    # No remote configured - should still succeed for v0/user/* branches
+    # No remote configured - should still succeed for v0/agent/* branches
     cd "${project_dir}" || return 1
-    run v0_ensure_develop_branch "v0/user/alice-abcd" "origin"
+    run v0_ensure_develop_branch "v0/agent/alice-abcd" "origin"
     assert_success
 }
 
@@ -196,11 +196,11 @@ setup() {
     git -C "${project_dir}" commit --allow-empty -m "Initial commit"
 
     cd "${project_dir}" || return 1
-    v0_ensure_develop_branch "v0/user/test-5678" "origin"
-    v0_ensure_develop_branch "v0/user/test-5678" "origin"
+    v0_ensure_develop_branch "v0/agent/test-5678" "origin"
+    v0_ensure_develop_branch "v0/agent/test-5678" "origin"
 
     # Should still have one branch
-    run git -C "${project_dir}" branch --list "v0/user/test-5678"
+    run git -C "${project_dir}" branch --list "v0/agent/test-5678"
     assert_success
     [[ $(echo "$output" | wc -l | tr -d ' ') -eq 1 ]]
 }

@@ -375,10 +375,10 @@ When multiple users work on the same repository, v0 uses two features to prevent
 By default, `v0 init` generates a unique branch for each user:
 
 ```
-v0/user/{username}-{shortid}
+v0/agent/{username}-{shortid}
 ```
 
-Example: `v0/user/alice-a3f2`, `v0/user/bob-7e91`
+Example: `v0/agent/alice-a3f2`, `v0/agent/bob-7e91`
 
 This prevents branch conflicts when multiple developers run v0 agents on the same repository.
 
@@ -388,7 +388,7 @@ v0_generate_user_branch() {
   local username shortid
   username=$(whoami | tr '[:upper:]' '[:lower:]')
   shortid=$(head -c 2 /dev/urandom | xxd -p)
-  echo "v0/user/${username}-${shortid}"
+  echo "v0/agent/${username}-${shortid}"
 }
 ```
 
@@ -427,7 +427,7 @@ Both features are configured via `.v0.rc`:
 
 ```bash
 # User-specific branch (auto-generated)
-V0_DEVELOP_BRANCH="v0/user/alice-a3f2"
+V0_DEVELOP_BRANCH="v0/agent/alice-a3f2"
 
 # Local agent remote (new default)
 V0_GIT_REMOTE="agent"

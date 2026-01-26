@@ -8,12 +8,12 @@
 V0_STANDALONE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/v0/standalone"
 
 # Generate a unique user-specific branch name
-# Returns: "v0/user/{username}-{shortid}"
+# Returns: "v0/agent/{username}-{shortid}"
 v0_generate_user_branch() {
   local username shortid
   username=$(whoami | tr '[:upper:]' '[:lower:]')
   shortid=$(head -c 2 /dev/urandom | xxd -p)
-  echo "v0/user/${username}-${shortid}"
+  echo "v0/agent/${username}-${shortid}"
 }
 
 # Infer workspace mode based on develop branch
@@ -230,8 +230,8 @@ v0_ensure_develop_branch() {
     return 0
   fi
 
-  # Check if branch exists on remote (skip for local-only branches like v0/user/*)
-  if [[ "${branch}" != v0/user/* ]]; then
+  # Check if branch exists on remote (skip for local-only branches like v0/agent/*)
+  if [[ "${branch}" != v0/agent/* ]]; then
     if git ls-remote --heads "${remote}" "${branch}" 2>/dev/null | v0_grep_quiet "${branch}"; then
       # Fetch and create local tracking branch
       git fetch "${remote}" "${branch}" 2>/dev/null || true

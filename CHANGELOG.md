@@ -10,7 +10,7 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 
 - **`v0 push` and `v0 pull` commands**: Push user branch to agent branch, or pull agent changes into user branch.
 
-- **User-specific branch naming**: `v0 init` now generates unique branch names per user (`v0/user/{username}-{shortid}`) to prevent conflicts when multiple developers use v0 on the same repository.
+- **User-specific branch naming**: `v0 init` now generates unique branch names per user (`v0/agent/{username}-{shortid}`) to prevent conflicts when multiple developers use v0 on the same repository.
 
 - **Local agent remote**: Worker branches are pushed to a local bare repository (`~/.local/state/v0/${PROJECT}/remotes/agent.git`) instead of polluting the shared origin with temporary branches.
 
@@ -38,7 +38,7 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 
 - **Simplified `v0 build` flags**: Removed `--eager`, `--foreground`, `--safe`, `--enqueue` options.
 
-- **Default develop branch**: Changed from `main` to user-specific `v0/user/{username}-{shortid}`.
+- **Default develop branch**: Changed from `main` to user-specific `v0/agent/{username}-{shortid}`.
 
 - **Default git remote**: Changed `V0_GIT_REMOTE` from `"origin"` to `"agent"` (local bare repo).
 

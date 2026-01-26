@@ -41,7 +41,7 @@ v0 init
 ```
 
 This creates:
-- A unique branch for your agents: `v0/user/{you}-{id}`
+- A unique branch for your agents: `v0/agent/{you}-{id}`
 - A local git remote so worker branches stay off origin
 
 To use a shared branch or push to origin instead:
@@ -93,7 +93,7 @@ v0 pull                  # Pull agent changes into current branch
 v0 pull --resolve        # Auto-resolve conflicts with Claude
 ```
 
-Agents work on their own branch (yours is `v0/user/{you}-{id}`), keeping your branches clean. Sync on your terms:
+Agents work on their own branch (yours is `v0/agent/{you}-{id}`), keeping your branches clean. Sync on your terms:
 
 ```bash
 v0 pull                  # Pull agent changes into your branch
@@ -153,21 +153,16 @@ these by editing the file or by passing flags to `v0 init`:
 
 | Setting | Init Flag | Default |
 |---------|-----------|---------|
-| V0_DEVELOP_BRANCH | `--develop <branch>` | `v0/user/{username}-{id}` |
+| V0_DEVELOP_BRANCH | `--develop <branch>` | `v0/agent/{username}-{id}` |
 | V0_GIT_REMOTE | `--remote <name>` | `agent` (local bare repo) |
 
-All available settings:
+Core configuration settings:
 
 ```bash
-PROJECT="myproject"                    # Project name (default: directory name)
-ISSUE_PREFIX="proj"                    # Issue ID prefix (default: project name)
-V0_BUILD_DIR=".v0/build"               # Build state location
-V0_PLANS_DIR="plans"                   # Where plans are written
-V0_DEVELOP_BRANCH="v0/user/alice-a3f2" # Target branch for merges (unique per user)
-V0_GIT_REMOTE="agent"                  # Git remote (local bare repo by default)
-V0_FEATURE_BRANCH="feature/{name}"
-V0_BUGFIX_BRANCH="fix/{id}"
-V0_CHORE_BRANCH="chore/{id}"
+V0_BUILD_DIR=".v0/build"                 # Build state location
+V0_PLANS_DIR="plans"                     # Where plans are written
+V0_DEVELOP_BRANCH="v0/agent/alice-1234"  # Target branch for merges
+V0_GIT_REMOTE="agent"                    # Git remote (local bare repo by default)
 ```
 
 The local `agent` remote keeps worker branches off your shared origin. To use origin instead:

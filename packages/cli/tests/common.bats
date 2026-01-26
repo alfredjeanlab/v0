@@ -699,15 +699,15 @@ EOF
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
-    # Even if 'develop' branch exists, init should use v0/user/*
+    # Even if 'develop' branch exists, init should use v0/agent/*
     git branch develop
 
     source_lib_with_mocks "v0-common.sh"
 
     v0_init_config "${test_dir}"
 
-    # Should use v0/user/{username}-{id} pattern
-    run grep 'V0_DEVELOP_BRANCH="v0/user/' "${test_dir}/.v0.rc"
+    # Should use v0/agent/{username}-{id} pattern
+    run grep 'V0_DEVELOP_BRANCH="v0/agent/' "${test_dir}/.v0.rc"
     assert_success
 }
 
@@ -753,11 +753,11 @@ EOF
 
     source_lib "v0-common.sh"
 
-    # Run init (should generate v0/user/{username}-{id})
+    # Run init (should generate v0/agent/{username}-{id})
     v0_init_config "${test_dir}"
 
-    # Verify .v0.rc contains v0/user/* pattern
-    run grep 'V0_DEVELOP_BRANCH="v0/user/' "${test_dir}/.v0.rc"
+    # Verify .v0.rc contains v0/agent/* pattern
+    run grep 'V0_DEVELOP_BRANCH="v0/agent/' "${test_dir}/.v0.rc"
     assert_success
 }
 
@@ -774,8 +774,8 @@ EOF
 
     v0_init_config "${test_dir}"
 
-    # Should contain explicit V0_DEVELOP_BRANCH="v0/user/*"
-    run grep 'V0_DEVELOP_BRANCH="v0/user/' "${test_dir}/.v0.rc"
+    # Should contain explicit V0_DEVELOP_BRANCH="v0/agent/*"
+    run grep 'V0_DEVELOP_BRANCH="v0/agent/' "${test_dir}/.v0.rc"
     assert_success
     # Should NOT be commented
     run grep -E '^# V0_DEVELOP_BRANCH=' "${test_dir}/.v0.rc"
