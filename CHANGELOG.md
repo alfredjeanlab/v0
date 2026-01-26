@@ -2,19 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.0]
 
-## [0.4.0] - 2026-01-24
+Collaboration-friendly release: agents now work on `v0/develop` instead of polluting `main`, with `v0 push` and `v0 pull` commands to sync changes on your terms. Internals restructured for maintainability.
+
+### Added
+
+- **`v0 push` and `v0 pull` commands**: Push user branch to agent branch, or pull agent changes into user branch.
+
+- **`v0 archive` command**: Move completed plans to icebox for long-term storage.
+
+- **`v0 start` and `v0 stop` commands**: Control workers with `v0 start nudge` and `v0 stop nudge`.
+
+- **`--after` flag for `v0 fix` and `v0 chore`**: Specify dependencies between operations.
+
+- **Background pruning daemon**: Automatic cleanup of stale worktrees and branches.
+
+- **ANSI color support for help output**: Colorized Usage:, options, and defaults in help text.
+
+- **Release script**: Added `scripts/release` for versioning and tagging.
+
+- **Ripgrep wrapper**: Faster grep operations via `v0_grep` function.
+
+- **Dedicated merge workspace**: Isolated workspace for merge conflict resolution.
 
 ### Changed
 
-- **Default branch**: Changed from `main` to `agent`.
+- **Renamed `v0 feature` to `v0 build`**: Not always used for features.
 
-- **CI**: Split into parallel shellcheck, quench, and test jobs.
+- **Removed decompose phase**: Build pipeline simplified to plan -> implement -> verify.
+
+- **Simplified `v0 build` flags**: Removed `--eager`, `--foreground`, `--safe`, `--enqueue` options.
+
+- **Default develop branch**: Changed from `main` to `v0/develop`.
+
+- **Status display**: Renamed "Operations" to "Plans", "Bugfix" to "Bugs", "Check" to "Status".
+
+- **`--after` accepts operation names**: In addition to wok IDs.
+
+### Refactored
+
+- **Monorepo package structure**: Modular shell libraries with incremental test caching.
+
+- **Merge module**: Unified error handling, extracted `mg_finalize_merge` for post-merge steps.
+
+- **State machine**: Migrated blocking to wok, removed blocked phase.
 
 ### Fixed
 
-- `wk` command flags updated from `-f/--format` to `-o/--output`.
+- Wok epic marked as done when operation merges.
+- `.claude` directory created before writing settings and hooks.
+- Merge verification for already-merged operations.
+- Stale tmux session cleanup when resuming features.
 
 ## [0.2.2] - 2026-01-24
 
