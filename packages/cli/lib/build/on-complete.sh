@@ -38,7 +38,8 @@ if [[ -n "\${ALL_OPEN_IDS}" ]]; then
   wk done "\${IDS_ARRAY[@]}" --reason "Auto-closed by on-complete handler" 2>/dev/null || true
 fi
 
-COMPLETED_JSON=\$(wk list --output json --label "plan:\${OP_NAME}" --status done 2>/dev/null | jq '[.issues[].id]' || echo '[]')
+COMPLETED_JSON=\$(wk list --output json --label "plan:\${OP_NAME}" --status done 2>/dev/null | jq '[.issues[].id]' 2>/dev/null)
+COMPLETED_JSON="\${COMPLETED_JSON:-[]}"
 if [[ "\${COMPLETED_JSON}" != "[]" ]]; then
   tmp=\$(mktemp)
   jq ".completed = \${COMPLETED_JSON}" "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
