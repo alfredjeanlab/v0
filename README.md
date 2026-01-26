@@ -87,6 +87,17 @@ v0 fix "Timeout on large uploads"
 # Check on progress
 v0 status
 v0 watch
+
+# When ready, pull completed agent work into your branch
+v0 pull                  # Pull agent changes into current branch
+v0 pull --resolve        # Auto-resolve conflicts with Claude
+```
+
+Agents work on `v0/develop`, keeping your branches clean. Sync on your terms:
+
+```bash
+v0 push                  # Reset agent branch to match yours
+v0 pull                  # Pull agent changes into your branch
 ```
 
 Use `chore` or `fix` for quick tasks.
