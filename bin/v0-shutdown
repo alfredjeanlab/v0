@@ -35,20 +35,33 @@ If they contain commits not in ${V0_DEVELOP_BRANCH:-main}, a warning is shown
 and the branch is preserved. Use --force to delete them anyway.
 
 Options:
-  --force        Force kill and delete branches with unmerged commits
-  --dry-run      Show what would be stopped without stopping
-  -h, --help     Show this help
+  --force             Force kill and delete branches with unmerged commits
+  --drop-workspace    Also remove workspace and all worktrees (workspace can be recreated)
+  --drop-everything   Full reset: remove workspace, build state, and agent remote
+  --dry-run           Show what would be stopped without stopping
+  -h, --help          Show this help
+
+The --drop-* options remove persistent state:
+  --drop-workspace    Removes: ~/.local/state/v0/${PROJECT}/workspace/
+                              ~/.local/state/v0/${PROJECT}/tree/
+  --drop-everything   Removes: ~/.local/state/v0/${PROJECT}/ (entire state dir)
+                              ${V0_ROOT}/.v0/build/ (build state)
+                              'agent' git remote
 
 Examples:
-  v0 stop              # Stop all v0 processes and clean up
-  v0 stop --dry-run    # Preview what would be stopped
-  v0 stop --force      # Force kill and delete all branches
+  v0 stop                    # Stop all v0 processes and clean up
+  v0 stop --dry-run          # Preview what would be stopped
+  v0 stop --force            # Force kill and delete all branches
+  v0 stop --drop-workspace   # Stop and remove workspace (can be recreated)
+  v0 stop --drop-everything  # Full reset (removes all v0 state for project)
 EOF
   exit 0
 }
 
 FORCE=""
 DRY_RUN=""
+DROP_WORKSPACE=""
+DROP_EVERYTHING=""
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -59,6 +72,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=1
+      shift
+      ;;
+    --drop-workspace)
+      DROP_WORKSPACE=1
+      shift
+      ;;
+    --drop-everything)
+      DROP_EVERYTHING=1
       shift
       ;;
     -h|--help)
@@ -382,6 +403,67 @@ if [[ -z "${DRY_RUN}" ]]; then
   echo "Pruning old log entries..."
   v0_prune_logs
 
+  # Handle --drop-workspace: remove workspace and all worktrees
+  if [[ -n "${DROP_WORKSPACE}" || -n "${DROP_EVERYTHING}" ]]; then
+    echo ""
+    echo "Removing workspace and worktrees..."
+
+    # Remove merge workspace
+    if [[ -d "${V0_WORKSPACE_DIR}" ]]; then
+      # If it's a worktree, remove it properly first
+      if [[ -f "${V0_WORKSPACE_DIR}/.git" ]]; then
+        git -C "${V0_ROOT}" worktree remove --force "${V0_WORKSPACE_DIR}" 2>/dev/null || true
+      fi
+      rm -rf "${V0_WORKSPACE_DIR}" 2>/dev/null || true
+      echo "Removed workspace: ${V0_WORKSPACE_DIR}"
+    fi
+
+    # Remove all feature worktrees
+    if [[ -d "${V0_STATE_DIR}/tree" ]]; then
+      for tree_dir in "${V0_STATE_DIR}/tree"/*; do
+        [[ -d "${tree_dir}" ]] || continue
+        # Find and remove worktrees in this tree dir
+        for subdir in "${tree_dir}"/*; do
+          if [[ -d "${subdir}" ]] && { [[ -d "${subdir}/.git" ]] || [[ -f "${subdir}/.git" ]]; }; then
+            git -C "${V0_ROOT}" worktree remove --force "${subdir}" 2>/dev/null || rm -rf "${subdir}" 2>/dev/null || true
+          fi
+        done
+        rm -rf "${tree_dir}" 2>/dev/null || true
+      done
+      rm -rf "${V0_STATE_DIR}/tree" 2>/dev/null || true
+      echo "Removed worktrees: ${V0_STATE_DIR}/tree"
+    fi
+
+    # Clean up workspace parent directory if empty
+    if [[ -d "${V0_STATE_DIR}/workspace" ]]; then
+      rmdir "${V0_STATE_DIR}/workspace" 2>/dev/null || true
+    fi
+  fi
+
+  # Handle --drop-everything: remove all state
+  if [[ -n "${DROP_EVERYTHING}" ]]; then
+    echo ""
+    echo "Removing all v0 state..."
+
+    # Remove build directory
+    if [[ -d "${BUILD_DIR}" ]]; then
+      rm -rf "${BUILD_DIR}" 2>/dev/null || true
+      echo "Removed build state: ${BUILD_DIR}"
+    fi
+
+    # Remove agent remote from git config
+    if git -C "${V0_ROOT}" remote get-url agent &>/dev/null 2>&1; then
+      git -C "${V0_ROOT}" remote remove agent 2>/dev/null || true
+      echo "Removed 'agent' git remote"
+    fi
+
+    # Remove entire state directory (includes agent.git bare repo)
+    if [[ -d "${V0_STATE_DIR}" ]]; then
+      rm -rf "${V0_STATE_DIR}" 2>/dev/null || true
+      echo "Removed state directory: ${V0_STATE_DIR}"
+    fi
+  fi
+
   echo ""
   if [[ -n "${skipped_branches}" ]]; then
     echo "Shutdown complete (some branches preserved)"
@@ -393,6 +475,14 @@ if [[ -z "${DRY_RUN}" ]]; then
     done <<< "${skipped_branches}"
     echo ""
     echo "Use 'v0 stop --force' to delete them anyway."
+  elif [[ -n "${DROP_EVERYTHING}" ]]; then
+    echo "Shutdown complete (all state removed)"
+    echo ""
+    echo "To reinitialize v0 for this project, run: v0 init"
+  elif [[ -n "${DROP_WORKSPACE}" ]]; then
+    echo "Shutdown complete (workspace removed)"
+    echo ""
+    echo "Workspace will be recreated on next merge operation."
   else
     echo "Shutdown complete"
   fi
@@ -410,4 +500,31 @@ else
   echo ""
   echo "Pruning old log entries..."
   v0_prune_logs --dry-run
+
+  # Show what --drop-workspace would do
+  if [[ -n "${DROP_WORKSPACE}" || -n "${DROP_EVERYTHING}" ]]; then
+    echo ""
+    echo "Would remove workspace and worktrees:"
+    if [[ -d "${V0_WORKSPACE_DIR}" ]]; then
+      echo "  Would remove workspace: ${V0_WORKSPACE_DIR}"
+    fi
+    if [[ -d "${V0_STATE_DIR}/tree" ]]; then
+      echo "  Would remove worktrees: ${V0_STATE_DIR}/tree"
+    fi
+  fi
+
+  # Show what --drop-everything would do
+  if [[ -n "${DROP_EVERYTHING}" ]]; then
+    echo ""
+    echo "Would remove all v0 state:"
+    if [[ -d "${BUILD_DIR}" ]]; then
+      echo "  Would remove build state: ${BUILD_DIR}"
+    fi
+    if git -C "${V0_ROOT}" remote get-url agent &>/dev/null 2>&1; then
+      echo "  Would remove 'agent' git remote"
+    fi
+    if [[ -d "${V0_STATE_DIR}" ]]; then
+      echo "  Would remove state directory: ${V0_STATE_DIR}"
+    fi
+  fi
 fi

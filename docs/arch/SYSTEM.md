@@ -252,6 +252,31 @@ The function `v0_find_main_repo()` resolves the main repository from any worktre
 
 See: [WORKSPACE.md](WORKSPACE.md) for detailed workspace architecture.
 
+## State Cleanup
+
+The `v0 stop` command supports progressive cleanup levels:
+
+| Command | What it removes |
+|---------|-----------------|
+| `v0 stop` | Sessions, daemons, worker branches/worktrees |
+| `v0 stop --drop-workspace` | + workspace and feature worktrees |
+| `v0 stop --drop-everything` | + entire state dir, build state, agent remote |
+
+**Directories affected:**
+
+```
+v0 stop --drop-workspace removes:
+  ~/.local/state/v0/${PROJECT}/workspace/   # Merge workspace
+  ~/.local/state/v0/${PROJECT}/tree/        # Feature worktrees
+
+v0 stop --drop-everything additionally removes:
+  ~/.local/state/v0/${PROJECT}/             # Entire state dir (includes agent.git)
+  ${V0_ROOT}/.v0/build/                     # Build state
+  'agent' git remote                        # Local bare repo reference
+```
+
+After `--drop-everything`, run `v0 init` to reinitialize the project.
+
 ## Related Documentation
 
 - [WORKSPACE.md](WORKSPACE.md) - Clone vs worktree workspace modes

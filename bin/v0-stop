@@ -25,16 +25,19 @@ Workers:
 If no worker is specified, performs full shutdown (equivalent to 'v0 shutdown').
 
 Options:
-  --force        Force stop (for full shutdown: delete branches with unmerged commits)
-  --dry-run      Show what would be stopped without stopping
-  -h, --help     Show this help
+  --force             Force stop (delete branches with unmerged commits)
+  --drop-workspace    Also remove workspace and worktrees
+  --drop-everything   Remove workspace, state, and agent remote (full reset)
+  --dry-run           Show what would be stopped without stopping
+  -h, --help          Show this help
 
 Examples:
-  v0 stop               # Stop all workers (full shutdown)
-  v0 stop fix           # Stop only the fix worker
-  v0 stop chore         # Stop only the chore worker
-  v0 stop --force       # Force stop all workers
-  v0 stop --dry-run     # Preview what would be stopped
+  v0 stop                    # Stop all workers (full shutdown)
+  v0 stop fix                # Stop only the fix worker
+  v0 stop --force            # Force stop, delete unmerged branches
+  v0 stop --drop-workspace   # Stop and remove workspace/worktrees
+  v0 stop --drop-everything  # Full reset (removes all v0 state)
+  v0 stop --dry-run          # Preview what would be stopped
 EOF
   exit 0
 }
@@ -42,6 +45,8 @@ EOF
 DRY_RUN=""
 FORCE=""
 WORKER=""
+DROP_WORKSPACE=""
+DROP_EVERYTHING=""
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -52,6 +57,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --force)
       FORCE="--force"
+      shift
+      ;;
+    --drop-workspace)
+      DROP_WORKSPACE="--drop-workspace"
+      shift
+      ;;
+    --drop-everything)
+      DROP_EVERYTHING="--drop-everything"
       shift
       ;;
     -h|--help)
@@ -78,9 +91,12 @@ done
 # Dispatch to appropriate command
 if [[ -z "${WORKER}" ]]; then
   # No worker specified, full shutdown
-  exec "${V0_DIR}/bin/v0-shutdown" ${FORCE} ${DRY_RUN}
+  exec "${V0_DIR}/bin/v0-shutdown" ${FORCE} ${DRY_RUN} ${DROP_WORKSPACE} ${DROP_EVERYTHING}
 else
-  # Specific worker
+  # Specific worker - drop options don't apply
+  if [[ -n "${DROP_WORKSPACE}" || -n "${DROP_EVERYTHING}" ]]; then
+    echo "Note: --drop-workspace and --drop-everything only apply to full shutdown" >&2
+  fi
   if [[ -n "${DRY_RUN}" ]]; then
     # nudge uses 'stop' subcommand, others use '--stop' flag
     if [[ "${WORKER}" = "nudge" ]]; then
