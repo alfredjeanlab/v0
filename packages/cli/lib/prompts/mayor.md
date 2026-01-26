@@ -78,9 +78,3 @@ Batch close example (stale todos older than 30 days):
 wok close $(wok list -s todo -q "age > 30d" -o id --no-limit) --reason="Stale, closing during cleanup"
 ```
 
-## Context Recovery
-
-If you lose context (after compaction or a long pause), run:
-- `v0 prime` - Refresh v0 workflow knowledge
-- `wk prime` - Refresh issue tracking context
-- `v0 status` - See current operation state

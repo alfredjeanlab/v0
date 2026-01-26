@@ -16,8 +16,6 @@ load '../packages/test-support/helpers/test_helper'
 @test "v0 mayor prompt contains required sections" {
     run cat "${PROJECT_ROOT}/packages/cli/lib/prompts/mayor.md"
     assert_success
-    assert_output --partial "v0 prime"
-    assert_output --partial "wk prime"
     assert_output --partial "Dispatching Work"
 }
 
@@ -51,13 +49,6 @@ load '../packages/test-support/helpers/test_helper'
     assert_output --partial "clarifying questions"
     assert_output --partial "breaking down"
     assert_output --partial "Check status"
-}
-
-@test "v0 mayor prompt contains context recovery" {
-    run cat "${PROJECT_ROOT}/packages/cli/lib/prompts/mayor.md"
-    assert_success
-    assert_output --partial "Context Recovery"
-    assert_output --partial "after compaction"
 }
 
 @test "v0-mayor can be called directly with --help" {
