@@ -17,6 +17,54 @@
 # Merge Readiness Checks
 # ============================================================================
 
+# _sm_resolve_merge_branch <op> <worktree> <branch>
+# Internal helper to resolve a branch for merge operations.
+# If branch is not set in state.json, tries conventional branch names on remote.
+# Sets _SM_RESOLVED_BRANCH to the resolved branch name or empty string.
+# Returns 0 if branch found, 1 if not
+_sm_resolve_merge_branch() {
+  local op="$1"
+  local worktree="$2"
+  local branch="$3"
+
+  _SM_RESOLVED_BRANCH=""
+
+  # If we have a valid worktree, no need to resolve branch
+  if [[ -n "${worktree}" ]] && [[ "${worktree}" != "null" ]] && [[ -d "${worktree}" ]]; then
+    _SM_RESOLVED_BRANCH="${branch}"
+    return 0
+  fi
+
+  # No worktree - need a valid branch
+  if [[ -z "${branch}" ]] || [[ "${branch}" = "null" ]]; then
+    # Branch not in state - try conventional branch names on remote
+    # This matches the fallback logic in mg_resolve_operation_to_worktree
+    local remote="${V0_GIT_REMOTE:-origin}"
+    for prefix in "feature" "fix" "chore" "bugfix" "hotfix"; do
+      local candidate="${prefix}/${op}"
+      if git show-ref --verify --quiet "refs/remotes/${remote}/${candidate}" 2>/dev/null; then
+        _SM_RESOLVED_BRANCH="${candidate}"
+        return 0
+      fi
+    done
+    # No conventional branch found
+    return 1
+  fi
+
+  # Have branch from state - verify it exists locally or on remote
+  if git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
+    _SM_RESOLVED_BRANCH="${branch}"
+    return 0
+  fi
+  if git show-ref --verify --quiet "refs/remotes/${V0_GIT_REMOTE:-origin}/${branch}" 2>/dev/null; then
+    _SM_RESOLVED_BRANCH="${branch}"
+    return 0
+  fi
+
+  # Branch in state but doesn't exist
+  return 1
+}
+
 # sm_is_merge_ready <op>
 # Check if operation is ready for merge
 sm_is_merge_ready() {
@@ -34,17 +82,8 @@ sm_is_merge_ready() {
   worktree=$(sm_read_state "${op}" "worktree")
   branch=$(sm_read_state "${op}" "branch")
 
-  if [[ -z "${worktree}" ]] || [[ "${worktree}" = "null" ]] || [[ ! -d "${worktree}" ]]; then
-    # No worktree - check if branch exists
-    if [[ -z "${branch}" ]] || [[ "${branch}" = "null" ]]; then
-      return 1
-    fi
-    # Check if branch exists locally or on remote
-    if ! git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
-      if ! git show-ref --verify --quiet "refs/remotes/${V0_GIT_REMOTE:-origin}/${branch}" 2>/dev/null; then
-        return 1
-      fi
-    fi
+  if ! _sm_resolve_merge_branch "${op}" "${worktree}" "${branch}"; then
+    return 1
   fi
 
   # Guard 3: tmux session must be gone
@@ -95,20 +134,14 @@ sm_merge_ready_reason() {
   worktree=$(sm_read_state "${op}" "worktree")
   branch=$(sm_read_state "${op}" "branch")
 
-  if [[ -z "${worktree}" ]] || [[ "${worktree}" = "null" ]] || [[ ! -d "${worktree}" ]]; then
-    # No worktree - check if branch exists
+  if ! _sm_resolve_merge_branch "${op}" "${worktree}" "${branch}"; then
+    # Determine specific reason
     if [[ -z "${branch}" ]] || [[ "${branch}" = "null" ]]; then
       echo "worktree:missing"
-      return
+    else
+      echo "branch:missing"
     fi
-    # Check if branch exists locally or on remote
-    if ! git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
-      if ! git show-ref --verify --quiet "refs/remotes/${V0_GIT_REMOTE:-origin}/${branch}" 2>/dev/null; then
-        echo "branch:missing"
-        return
-      fi
-    fi
-    # Worktree missing but branch exists - can proceed with branch-only merge
+    return
   fi
 
   # Check tmux session
