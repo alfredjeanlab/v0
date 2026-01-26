@@ -61,34 +61,27 @@ v0_prune_logs() {
     [[ -z "${first_ts_line}" ]] && continue
 
     # Process the file: keep lines with recent timestamps or no timestamp
+    # Use perl for batch processing (avoids spawning grep/date per line)
     local tmp_file
     tmp_file=$(mktemp)
     local lines_before lines_after
 
     lines_before=$(wc -l < "${log_file}" | tr -d ' ')
 
-    while IFS= read -r line; do
-      # Extract timestamp if line starts with [YYYY-MM-DDTHH:MM:SSZ]
-      local ts
-      ts=$(echo "${line}" | v0_grep_extract '^\[20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z\]' 2>/dev/null || true)
-
-      if [[ -z "${ts}" ]]; then
-        # Line doesn't start with timestamp - keep it (could be continuation)
-        echo "${line}" >> "${tmp_file}"
-      else
-        # Parse timestamp and compare with cutoff
-        local ts_clean line_epoch
-        ts_clean="${ts:1:19}"  # Extract YYYY-MM-DDTHH:MM:SS from [YYYY-MM-DDTHH:MM:SSZ]
-
-        # Convert to epoch (macOS vs GNU date)
-        line_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${ts_clean}" +%s 2>/dev/null || \
-                     date -u -d "${ts_clean}" +%s 2>/dev/null || echo 0)
-
-        if [[ "${line_epoch}" -ge "${cutoff_epoch}" ]]; then
-          echo "${line}" >> "${tmp_file}"
-        fi
-      fi
-    done < "${log_file}"
+    # perl processes the entire file in one pass:
+    # - Lines without timestamps are kept (continuation lines)
+    # - Lines with timestamps are kept if timestamp >= cutoff
+    perl -MPOSIX -ne '
+      BEGIN { $cutoff = shift @ARGV; }
+      if (/^\[(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z\]/) {
+        # Parse timestamp and convert to epoch (UTC)
+        my $line_epoch = POSIX::mktime($6, $5, $4, $3, $2-1, $1-1900, 0, 0, 0);
+        print if $line_epoch >= $cutoff;
+      } else {
+        # No timestamp - keep line (continuation)
+        print;
+      }
+    ' "${cutoff_epoch}" "${log_file}" > "${tmp_file}"
 
     lines_after=$(wc -l < "${tmp_file}" | tr -d ' ')
     local removed=$((lines_before - lines_after))
@@ -106,8 +99,8 @@ v0_prune_logs() {
     fi
   done <<< "${log_files}"
 
-  if [[ "${pruned_count}" -eq 0 ]]; then
-    [[ -n "${dry_run}" ]] && echo "No log entries older than 6 hours to prune"
+  if [[ "${pruned_count}" -eq 0 ]] && [[ -n "${dry_run}" ]]; then
+    echo "No log entries older than 6 hours to prune"
   fi
 }
 
