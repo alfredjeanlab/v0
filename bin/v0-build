@@ -139,6 +139,33 @@ if [[ -n "${PLAN_FILE_ARG}" ]]; then
     echo "Error: Plan file not found: ${PLAN_FILE_ARG}"
     exit 1
   fi
+
+  # Check if plan file exists on V0_DEVELOP_BRANCH
+  # This ensures the plan is available to agent workers
+  # Skip this check in test mode
+  if [[ "${V0_TEST_MODE:-}" != "1" ]]; then
+    plan_abs_path=$(realpath "${PLAN_FILE_ARG}")
+    plan_rel_path="${plan_abs_path#"${V0_ROOT}"/}"
+
+    # Only validate if file is inside V0_ROOT
+    if [[ "${plan_abs_path}" == "${V0_ROOT}/"* ]]; then
+      # Fetch latest from remote
+      git -C "${V0_ROOT}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" --quiet 2>/dev/null || true
+
+      # Check if file exists on the remote develop branch
+      if ! git -C "${V0_ROOT}" cat-file -e "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}:${plan_rel_path}" 2>/dev/null; then
+        echo "Error: Plan file not found on ${V0_DEVELOP_BRANCH}"
+        echo ""
+        echo "The plan '${plan_rel_path}' must be committed and pushed before building."
+        echo ""
+        echo "To commit and push the plan:"
+        echo "  git add ${plan_rel_path}"
+        echo "  git commit -m 'Add plan: ${plan_rel_path}'"
+        echo "  v0 push"
+        exit 1
+      fi
+    fi
+  fi
 fi
 
 # Validate --after flags
