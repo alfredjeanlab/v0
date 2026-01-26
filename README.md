@@ -40,15 +40,15 @@ cd /path/to/your/project
 v0 init
 ```
 
-The init command auto-detects your development branch:
-- Uses `develop` if it exists (locally or on remote)
-- Falls back to `main` otherwise
+This creates:
+- A unique branch for your agents: `v0/user/{you}-{id}`
+- A local git remote so worker branches stay off origin
 
-To specify a different branch or remote:
+To use a shared branch or push to origin instead:
 
 ```bash
-v0 init --develop agent              # Use 'agent' branch
-v0 init --develop staging --remote upstream
+v0 init --develop v0/develop         # Shared branch (team coordination)
+v0 init --remote origin              # Push worker branches to origin
 ```
 
 ### Requirements
@@ -93,11 +93,11 @@ v0 pull                  # Pull agent changes into current branch
 v0 pull --resolve        # Auto-resolve conflicts with Claude
 ```
 
-Agents work on `v0/develop`, keeping your branches clean. Sync on your terms:
+Agents work on their own branch (yours is `v0/user/{you}-{id}`), keeping your branches clean. Sync on your terms:
 
 ```bash
-v0 push                  # Reset agent branch to match yours
 v0 pull                  # Pull agent changes into your branch
+v0 push                  # Reset agent branch to match yours
 ```
 
 Use `chore` or `fix` for quick tasks.
@@ -138,7 +138,7 @@ Completed plans are archived to `plans/archive/`.
 v0 talk          # Interactive Haiku for quick questions
 v0 status        # Show all operations
 v0 watch         # Continuously refresh status
-v0 attach fix    # Attach to a worker (fix, chore, mergeq)
+v0 attach fix    # Attach to a worker (fix, chore, mergeq or <feature>)
 v0 coffee        # Keep computer awake
 v0 prune         # Clean up completed state
 v0 stop          # Stop all workers and daemons
@@ -153,21 +153,26 @@ these by editing the file or by passing flags to `v0 init`:
 
 | Setting | Init Flag | Default |
 |---------|-----------|---------|
-| V0_DEVELOP_BRANCH | `--develop <branch>` | auto-detect (develop → main) |
-| V0_GIT_REMOTE | `--remote <name>` | origin |
+| V0_DEVELOP_BRANCH | `--develop <branch>` | `v0/user/{username}-{id}` |
+| V0_GIT_REMOTE | `--remote <name>` | `agent` (local bare repo) |
 
 All available settings:
 
 ```bash
-PROJECT="myproject"         # Project name (default: directory name)
-ISSUE_PREFIX="proj"         # Issue ID prefix (default: project name)
-V0_BUILD_DIR=".v0/build"    # Build state location
-V0_PLANS_DIR="plans"        # Where plans are written
-V0_DEVELOP_BRANCH="main"    # Target branch for merges (auto-detects 'develop', fallback 'main')
-V0_GIT_REMOTE="origin"      # Git remote for push/fetch
+PROJECT="myproject"                    # Project name (default: directory name)
+ISSUE_PREFIX="proj"                    # Issue ID prefix (default: project name)
+V0_BUILD_DIR=".v0/build"               # Build state location
+V0_PLANS_DIR="plans"                   # Where plans are written
+V0_DEVELOP_BRANCH="v0/user/alice-a3f2" # Target branch for merges (unique per user)
+V0_GIT_REMOTE="agent"                  # Git remote (local bare repo by default)
 V0_FEATURE_BRANCH="feature/{name}"
 V0_BUGFIX_BRANCH="fix/{id}"
 V0_CHORE_BRANCH="chore/{id}"
+```
+
+The local `agent` remote keeps worker branches off your shared origin. To use origin instead:
+```bash
+V0_GIT_REMOTE="origin"
 ```
 
 ### Worktree Initialization Hook
