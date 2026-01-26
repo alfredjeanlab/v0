@@ -274,3 +274,77 @@ setup() {
     new_branch=$(git -C "$V0_WORKSPACE_DIR" rev-parse --abbrev-ref HEAD)
     assert_equal "$new_branch" "v0/develop"
 }
+
+# ============================================================================
+# Remote URL Matching Tests
+# ============================================================================
+
+@test "ws_remote_matches returns true for worktree (always synced)" {
+    # Switch V0_ROOT to temp branch so worktree can use main
+    git -C "$TEST_TEMP_DIR/project" checkout -b temp-branch --quiet
+
+    export V0_WORKSPACE_MODE="worktree"
+    ws_ensure_workspace
+
+    run ws_remote_matches
+    assert_success
+}
+
+@test "ws_remote_matches returns true when clone origin matches main repo remote" {
+    # Add a remote to the main repo
+    git -C "$TEST_TEMP_DIR/project" remote add origin "https://example.com/repo.git"
+
+    ws_ensure_workspace
+
+    run ws_remote_matches
+    assert_success
+}
+
+@test "ws_remote_matches fails when clone origin differs from main repo remote" {
+    # Add a remote to the main repo
+    git -C "$TEST_TEMP_DIR/project" remote add origin "https://example.com/repo.git"
+
+    ws_ensure_workspace
+
+    # Change the workspace's origin to a different URL
+    git -C "$V0_WORKSPACE_DIR" remote set-url origin "https://different.example.com/repo.git"
+
+    run ws_remote_matches
+    assert_failure
+    assert_output --partial "differs from"
+}
+
+@test "ws_matches_config fails when remote URL mismatches" {
+    # Add a remote to the main repo
+    git -C "$TEST_TEMP_DIR/project" remote add origin "https://example.com/repo.git"
+
+    ws_ensure_workspace
+
+    # Change the workspace's origin to a different URL
+    git -C "$V0_WORKSPACE_DIR" remote set-url origin "https://different.example.com/repo.git"
+
+    run ws_matches_config
+    assert_failure
+    assert_output --partial "differs from"
+}
+
+@test "ws_ensure_workspace recreates when remote URL changes" {
+    # Add a remote to the main repo
+    git -C "$TEST_TEMP_DIR/project" remote add origin "https://example.com/repo.git"
+
+    ws_ensure_workspace
+
+    # Change the workspace's origin to a different URL (simulating stale workspace)
+    git -C "$V0_WORKSPACE_DIR" remote set-url origin "https://stale.example.com/repo.git"
+
+    # Should auto-recreate
+    run ws_ensure_workspace
+    assert_success
+    assert_output --partial "Recreating workspace"
+
+    # Verify origin now matches
+    local workspace_url main_url
+    workspace_url=$(git -C "$V0_WORKSPACE_DIR" remote get-url origin)
+    main_url=$(git -C "$TEST_TEMP_DIR/project" remote get-url origin)
+    assert_equal "$workspace_url" "$main_url"
+}

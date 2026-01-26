@@ -340,11 +340,21 @@ ws_create_clone() {
 
 On each operation, `ws_ensure_workspace` validates:
 
-1. Workspace exists
-2. Workspace type matches configured mode
-3. Correct branch is checked out
+1. Workspace exists and is a valid git directory
+2. Workspace type matches `V0_WORKSPACE_MODE` (worktree vs clone)
+3. Workspace is on `V0_DEVELOP_BRANCH`
+4. Remote URL matches (clone mode only - worktrees share remotes)
 
-If validation fails, workspace is recreated.
+If any validation fails, the workspace is automatically recreated.
+
+### Remote URL Sync (Clone Mode)
+
+For clone workspaces, `ws_remote_matches()` verifies that the workspace's `origin` URL matches the main repo's `V0_GIT_REMOTE` URL. This handles cases where:
+
+- The remote URL changes in `.v0.rc` or the main repo
+- The workspace was created with a stale remote configuration
+
+Worktrees don't need this check since they share the `.git` directory with the main repo.
 
 ## Summary: When to Use Each Mode
 

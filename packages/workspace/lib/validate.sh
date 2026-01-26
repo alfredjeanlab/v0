@@ -43,8 +43,47 @@ ws_is_on_develop() {
   [[ "${current_branch}" == "${V0_DEVELOP_BRANCH}" ]]
 }
 
+# ws_get_remote_url
+# Get the URL for a remote in a git repository
+# Args: remote_name, directory (defaults to V0_ROOT)
+# Outputs: remote URL or empty if not found
+ws_get_remote_url() {
+  local remote="$1"
+  local dir="${2:-${V0_ROOT}}"
+  git -C "${dir}" remote get-url "${remote}" 2>/dev/null
+}
+
+# ws_remote_matches
+# Check if workspace remote URL matches main repo's remote URL
+# For clone mode: workspace's "origin" should match V0_ROOT's V0_GIT_REMOTE URL
+# For worktree mode: always matches (shares .git directory)
+# Returns: 0 if matches, 1 if mismatch
+ws_remote_matches() {
+  # Worktrees share the .git directory, so remotes are always in sync
+  if ws_is_worktree; then
+    return 0
+  fi
+
+  # For clones, check that workspace's origin matches main repo's configured remote
+  local main_url workspace_url
+  main_url=$(ws_get_remote_url "${V0_GIT_REMOTE}" "${V0_ROOT}")
+  workspace_url=$(ws_get_remote_url "origin" "${V0_WORKSPACE_DIR}")
+
+  if [[ -z "${main_url}" ]]; then
+    # Main repo has no remote configured - can't validate
+    return 0
+  fi
+
+  if [[ "${main_url}" != "${workspace_url}" ]]; then
+    echo "Note: Workspace origin '${workspace_url}' differs from ${V0_GIT_REMOTE} '${main_url}'" >&2
+    return 1
+  fi
+
+  return 0
+}
+
 # ws_matches_config
-# Check if workspace matches current V0_WORKSPACE_MODE and V0_DEVELOP_BRANCH
+# Check if workspace matches current V0_WORKSPACE_MODE, V0_DEVELOP_BRANCH, and remote URL
 # Returns: 0 if matches, 1 if mismatch (workspace should be recreated)
 ws_matches_config() {
   # Check workspace type matches configured mode
@@ -68,6 +107,11 @@ ws_matches_config() {
     local current_branch
     current_branch=$(ws_get_current_branch)
     echo "Note: Workspace is on '${current_branch}' but config expects '${V0_DEVELOP_BRANCH}'" >&2
+    return 1
+  fi
+
+  # Check remote URL matches (clone mode only - worktrees share remotes)
+  if ! ws_remote_matches; then
     return 1
   fi
 
