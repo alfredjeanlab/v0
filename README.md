@@ -132,6 +132,23 @@ v0 build api "Build REST API"          # Plans, executes, merges
 
 Completed plans are archived to `plans/archive/`.
 
+### Mayor (Interactive Orchestration)
+
+For guided, conversational orchestration, use the mayor:
+
+```bash
+v0 mayor                 # Start interactive session
+v0 mayor --model sonnet  # Use faster model
+```
+
+The mayor is Claude running with full v0 context. It helps you:
+- Plan features and break down complex requests
+- Dispatch work to the right workers (fix, chore, build)
+- Monitor progress and manage running operations
+- Organize and prioritize across multiple workstreams
+
+Think of it as a project manager who knows v0 inside and out.
+
 ### Other Commands
 
 ```bash
