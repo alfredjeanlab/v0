@@ -11,8 +11,8 @@ V0_INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # shellcheck source=packages/state/lib/state-machine.sh
 source "${V0_INSTALL_DIR}/packages/state/lib/state-machine.sh"
 
-# Color support (only when stdout is a TTY)
-if [[ -t 1 ]]; then
+# Color support (only when stdout is a TTY, or when V0_FORCE_COLOR is set)
+if [[ -t 1 ]] || [[ -n "${V0_FORCE_COLOR:-}" ]]; then
     C_RESET='\033[0m'
     C_BOLD='\033[1m'
     C_DIM='\033[2m'

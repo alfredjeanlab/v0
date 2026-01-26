@@ -87,6 +87,12 @@ fi
 if [[ -n "${WATCH_ALL}" ]]; then
   V0_STATE_BASE="${XDG_STATE_HOME:-${HOME}/.local/state}/v0"
 
+  # Force colors in subcommands when our stdout is a TTY
+  # (subcommand stdout goes through sed pipe, so isn't a TTY itself)
+  if [[ -t 1 ]]; then
+    export V0_FORCE_COLOR=1
+  fi
+
   # Discover running projects
   discover_running_projects() {
     for root_file in "${V0_STATE_BASE}"/*/.v0.root; do
