@@ -7,12 +7,22 @@
 # Global standalone state directory (no project required)
 V0_STANDALONE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/v0/standalone"
 
+# Generate a unique user-specific branch name
+# Returns: "v0/user/{username}-{shortid}"
+v0_generate_user_branch() {
+  local username shortid
+  username=$(whoami | tr '[:upper:]' '[:lower:]')
+  shortid=$(head -c 2 /dev/urandom | xxd -p)
+  echo "v0/user/${username}-${shortid}"
+}
+
 # Infer workspace mode based on develop branch
 # Returns: "worktree" or "clone"
 v0_infer_workspace_mode() {
   local develop_branch="${1:-${V0_DEVELOP_BRANCH:-main}}"
   case "${develop_branch}" in
     main|develop|master) echo "clone" ;;
+    v0/*) echo "worktree" ;;
     *) echo "worktree" ;;
   esac
 }
@@ -111,7 +121,7 @@ v0_load_config() {
   V0_BUGFIX_BRANCH="fix/{id}"
   V0_CHORE_BRANCH="chore/{id}"
   V0_WORKTREE_INIT="${V0_WORKTREE_INIT:-}"  # Optional worktree init hook
-  V0_GIT_REMOTE="origin"                     # Git remote for push/fetch operations
+  V0_GIT_REMOTE="agent"                      # Git remote for push/fetch operations (local agent remote)
   V0_WORKSPACE_MODE="${V0_WORKSPACE_MODE:-}" # 'worktree' or 'clone' (inferred if empty)
 
   # Load project config (overrides defaults)
@@ -139,6 +149,9 @@ v0_load_config() {
   # Workspace directory for merge operations (keeps V0_ROOT clean)
   V0_WORKSPACE_DIR="${V0_STATE_DIR}/workspace/${REPO_NAME}"
 
+  # Local agent remote directory
+  V0_AGENT_REMOTE_DIR="${V0_STATE_DIR}/remotes/agent.git"
+
   # Full paths
   BUILD_DIR="${V0_ROOT}/${V0_BUILD_DIR}"
   PLANS_DIR="${V0_ROOT}/${V0_PLANS_DIR}"
@@ -154,7 +167,7 @@ v0_load_config() {
   export V0_BUILD_DIR V0_PLANS_DIR V0_DEVELOP_BRANCH V0_FEATURE_BRANCH V0_BUGFIX_BRANCH V0_CHORE_BRANCH
   # shellcheck disable=SC2090  # V0_WORKTREE_INIT is a shell command used with eval
   export V0_WORKTREE_INIT
-  export V0_GIT_REMOTE
+  export V0_GIT_REMOTE V0_AGENT_REMOTE_DIR
   export V0_WORKSPACE_MODE V0_WORKSPACE_DIR
 }
 
@@ -201,38 +214,77 @@ v0_detect_develop_branch() {
   echo "v0/develop"
 }
 
-# Ensure v0/develop branch exists, creating from current HEAD if needed
+# Ensure develop branch exists, creating from current HEAD if needed
+# Args: branch_name [remote]
 v0_ensure_develop_branch() {
-  local remote="${1:-origin}"
+  local branch="${1:-v0/develop}"
+  local remote="${2:-origin}"
 
   # Skip if not in a git repository
   if ! git rev-parse --git-dir &>/dev/null; then
     return 0
   fi
 
-  # Check if v0/develop branch exists locally
-  if git branch --list "v0/develop" 2>/dev/null | v0_grep_quiet "v0/develop"; then
+  # Check if branch exists locally
+  if git branch --list "${branch}" 2>/dev/null | v0_grep_quiet "${branch}"; then
     return 0
   fi
 
-  # Check if v0/develop branch exists on remote
-  if git ls-remote --heads "${remote}" "v0/develop" 2>/dev/null | v0_grep_quiet "v0/develop"; then
-    # Fetch and create local tracking branch
-    git fetch "${remote}" "v0/develop" 2>/dev/null || true
-    git branch --track "v0/develop" "${remote}/v0/develop" 2>/dev/null || true
-    return 0
+  # Check if branch exists on remote (skip for local-only branches like v0/user/*)
+  if [[ "${branch}" != v0/user/* ]]; then
+    if git ls-remote --heads "${remote}" "${branch}" 2>/dev/null | v0_grep_quiet "${branch}"; then
+      # Fetch and create local tracking branch
+      git fetch "${remote}" "${branch}" 2>/dev/null || true
+      git branch --track "${branch}" "${remote}/${branch}" 2>/dev/null || true
+      return 0
+    fi
   fi
 
-  # Create new v0/develop branch from current HEAD (typically main)
+  # Create new branch from current HEAD (typically main)
   local base_branch
   base_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 
-  git branch "v0/develop" "${base_branch}" 2>/dev/null || {
-    echo "Warning: Could not create v0/develop branch" >&2
+  git branch "${branch}" "${base_branch}" 2>/dev/null || {
+    echo "Warning: Could not create ${branch} branch" >&2
     return 1
   }
 
-  echo -e "Created branch ${C_CYAN}v0/develop${C_RESET}"
+  echo -e "Created branch ${C_CYAN}${branch}${C_RESET}"
+}
+
+# Initialize the local bare git "agent" remote
+# This creates a local bare repo that v0 workers use instead of pushing to origin
+# Args: target_dir state_dir [source_remote]
+v0_init_agent_remote() {
+  local target_dir="$1"
+  local state_dir="$2"
+  local source_remote="${3:-origin}"
+
+  local agent_dir="${state_dir}/remotes/agent.git"
+
+  # Skip if already exists
+  if [[ -d "${agent_dir}" ]]; then
+    return 0
+  fi
+
+  mkdir -p "$(dirname "${agent_dir}")"
+
+  # Create bare clone from local checkout
+  echo "Creating local agent remote at ${agent_dir}..."
+  if ! git clone --bare "${target_dir}" "${agent_dir}" 2>&1; then
+    echo "Error: Failed to create agent remote" >&2
+    return 1
+  fi
+
+  # Add 'agent' remote to project
+  if git -C "${target_dir}" remote get-url agent &>/dev/null; then
+    git -C "${target_dir}" remote set-url agent "${agent_dir}"
+  else
+    git -C "${target_dir}" remote add agent "${agent_dir}"
+  fi
+
+  echo "Added 'agent' remote pointing to ${agent_dir}"
+  return 0
 }
 
 # Create .v0.rc template in specified directory
@@ -240,7 +292,7 @@ v0_ensure_develop_branch() {
 v0_init_config() {
   local target_dir="${1:-$(pwd)}"
   local develop_branch="${2:-}"
-  local git_remote="${3:-origin}"
+  local git_remote="${3:-agent}"
   # Normalize the path (convert "." to absolute path)
   target_dir="$(cd "${target_dir}" && pwd)"
   local config_file="${target_dir}/.v0.rc"
@@ -293,14 +345,14 @@ v0_init_config() {
     echo "Created .gitignore with .v0/"
   fi
 
-  # Default to v0/develop for new projects
+  # Generate unique user-specific branch for new projects
   if [[ -z "${develop_branch}" ]]; then
-    develop_branch="v0/develop"
+    develop_branch=$(v0_generate_user_branch)
   fi
 
-  # Create v0/develop branch if it doesn't exist (only for 'v0/develop' branch)
-  if [[ "${develop_branch}" == "v0/develop" ]]; then
-    v0_ensure_develop_branch "${git_remote}"
+  # Create the develop branch if it doesn't exist (for v0/* branches)
+  if [[ "${develop_branch}" == v0/* ]]; then
+    v0_ensure_develop_branch "${develop_branch}" "origin"
   fi
 
   # Always show where agents will merge
@@ -319,11 +371,8 @@ v0_init_config() {
     # Always write branch explicitly (self-documenting config)
     branch_line="V0_DEVELOP_BRANCH=\"${develop_branch}\"     # Target branch for merges"
 
-    if [[ "${git_remote}" != "origin" ]]; then
-      remote_line="V0_GIT_REMOTE=\"${git_remote}\"        # Git remote for push/fetch"
-    else
-      remote_line="# V0_GIT_REMOTE=\"origin\"        # Git remote for push/fetch"
-    fi
+    # Always write the remote explicitly (agent is the new default)
+    remote_line="V0_GIT_REMOTE=\"${git_remote}\"        # Git remote for push/fetch (local agent remote)"
 
     # Add workspace mode comment explaining the setting
     workspace_line="# V0_WORKSPACE_MODE=\"${workspace_mode}\"  # 'worktree' or 'clone' (auto-detected)"
@@ -336,16 +385,22 @@ v0_init_config() {
 PROJECT="${project_name}"
 ISSUE_PREFIX="${issue_prefix}"    # Issue IDs: ${issue_prefix}-abc123
 
-# Optional: Override defaults
-# V0_BUILD_DIR=".v0/build"      # Build state directory
-# V0_PLANS_DIR="plans"          # Implementation plans
+# Build and merge configuration
 ${branch_line}
-# V0_FEATURE_BRANCH="feature/{name}"
-# V0_BUGFIX_BRANCH="fix/{id}"
-# V0_CHORE_BRANCH="chore/{id}"
 ${remote_line}
 ${workspace_line}
-# DISABLE_NOTIFICATIONS=1       # Disable macOS notifications
+
+# Branch naming patterns
+V0_FEATURE_BRANCH="feature/{name}"
+V0_BUGFIX_BRANCH="fix/{id}"
+V0_CHORE_BRANCH="chore/{id}"
+
+# Build state directories
+V0_BUILD_DIR=".v0/build"          # Build state directory
+V0_PLANS_DIR="plans"              # Implementation plans
+
+# Notifications (macOS only)
+# DISABLE_NOTIFICATIONS=1         # Disable macOS notifications
 EOF
 
     echo "Created ${config_file}"
@@ -368,6 +423,15 @@ EOF
   V0_GIT_REMOTE="${git_remote}"
   V0_WORKSPACE_MODE="${workspace_mode}"
   V0_WORKSPACE_DIR="${V0_STATE_DIR}/workspace/${REPO_NAME}"
+
+  # Initialize local agent remote (for git_remote="agent")
+  if [[ "${git_remote}" == "agent" ]]; then
+    if ! v0_init_agent_remote "${target_dir}" "${V0_STATE_DIR}"; then
+      echo ""
+      echo -e "${C_YELLOW}Warning: Failed to create agent remote${C_RESET}"
+      echo "  You can use V0_GIT_REMOTE=\"origin\" to push to the shared remote instead."
+    fi
+  fi
 
   # Create workspace for merge operations (quietly - errors still go to stderr)
   if ! ws_ensure_workspace > /dev/null; then

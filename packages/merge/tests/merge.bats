@@ -479,15 +479,18 @@ resolve_operation_name() {
 # ============================================================================
 
 @test "mg_trigger_dependents resumes dependent operations" {
-    # Setup: Create a mock v0-feature script that records calls
+    # Setup: Create a mock v0-feature script in a temp bin directory
+    # IMPORTANT: Never overwrite real scripts - use PATH override instead
     local call_log="${TEST_TEMP_DIR}/feature-calls.log"
-    mkdir -p "${V0_DIR}/bin"
-    cat > "${V0_DIR}/bin/v0-feature" <<'MOCK'
+    local mock_bin="${TEST_TEMP_DIR}/mock-bin"
+    mkdir -p "${mock_bin}"
+    cat > "${mock_bin}/v0-feature" <<'MOCK'
 #!/bin/bash
 echo "$@" >> "$CALL_LOG"
 MOCK
-    chmod +x "${V0_DIR}/bin/v0-feature"
+    chmod +x "${mock_bin}/v0-feature"
     export CALL_LOG="${call_log}"
+    export PATH="${mock_bin}:${PATH}"
 
     # Setup merged operation with epic_id
     mkdir -p "${BUILD_DIR}/operations/merged-op"
@@ -535,15 +538,18 @@ MOCK
 }
 
 @test "mg_trigger_dependents skips held operations" {
-    # Setup: Create a mock v0-feature script that records calls
+    # Setup: Create a mock v0-feature script in a temp bin directory
+    # IMPORTANT: Never overwrite real scripts - use PATH override instead
     local call_log="${TEST_TEMP_DIR}/feature-calls.log"
-    mkdir -p "${V0_DIR}/bin"
-    cat > "${V0_DIR}/bin/v0-feature" <<'MOCK'
+    local mock_bin="${TEST_TEMP_DIR}/mock-bin"
+    mkdir -p "${mock_bin}"
+    cat > "${mock_bin}/v0-feature" <<'MOCK'
 #!/bin/bash
 echo "$@" >> "$CALL_LOG"
 MOCK
-    chmod +x "${V0_DIR}/bin/v0-feature"
+    chmod +x "${mock_bin}/v0-feature"
     export CALL_LOG="${call_log}"
+    export PATH="${mock_bin}:${PATH}"
 
     # Setup merged operation with epic_id
     mkdir -p "${BUILD_DIR}/operations/merged-op"

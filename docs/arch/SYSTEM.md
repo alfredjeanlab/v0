@@ -56,6 +56,7 @@ See: [v0-startup](commands/v0-startup.md), [v0-shutdown](commands/v0-shutdown.md
 | `~/.local/state/v0/${PROJECT}/` | `V0_STATE_DIR` - project-specific |
 | `~/.local/state/v0/${PROJECT}/workspace/` | Workspace for merge operations |
 | `~/.local/state/v0/${PROJECT}/tree/` | Feature worktrees |
+| `~/.local/state/v0/${PROJECT}/remotes/agent.git` | Local bare repo for worker branches |
 | `~/.local/state/v0/standalone/` | Standalone chore worker state |
 
 ### Key Files
@@ -83,6 +84,7 @@ See: [v0-startup](commands/v0-startup.md), [v0-shutdown](commands/v0-shutdown.md
 |----------|-------------|---------|
 | `V0_ROOT` | Project root directory | (from `.v0.rc` location) |
 | `V0_STATE_DIR` | Global state directory | `~/.local/state/v0/${PROJECT}` |
+| `V0_AGENT_REMOTE_DIR` | Local agent remote | `${V0_STATE_DIR}/remotes/agent.git` |
 | `BUILD_DIR` | Build state directory | `${V0_ROOT}/.v0/build` |
 | `PLANS_DIR` | Plans directory | `${V0_ROOT}/plans` |
 | `REPO_NAME` | Repository name | `$(basename ${V0_ROOT})` |
@@ -91,9 +93,9 @@ See: [v0-startup](commands/v0-startup.md), [v0-shutdown](commands/v0-shutdown.md
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `V0_DEVELOP_BRANCH` | Target branch for merges | `"main"` |
+| `V0_DEVELOP_BRANCH` | Target branch for merges | `v0/user/{username}-{id}` |
 | `V0_WORKSPACE_MODE` | `"worktree"` or `"clone"` | (auto-detected) |
-| `V0_GIT_REMOTE` | Git remote name | `"origin"` |
+| `V0_GIT_REMOTE` | Git remote name | `"agent"` |
 | `V0_FEATURE_BRANCH` | Feature branch pattern | `"feature/{name}"` |
 | `V0_BUGFIX_BRANCH` | Bugfix branch pattern | `"fix/{id}"` |
 | `V0_CHORE_BRANCH` | Chore branch pattern | `"chore/{id}"` |

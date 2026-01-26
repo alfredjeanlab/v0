@@ -1,2 +1,604 @@
 #!/bin/bash
-echo "$@" >> "$CALL_LOG"
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+set -e
+
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+v0_load_config
+
+# Source nudge functions for idle session monitoring
+source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
+
+# Source worker utilities for done/incomplete scripts
+source "${V0_DIR}/packages/worker/lib/worker-common.sh"
+
+# Source build utilities (init, session monitoring, on-complete)
+source "${V0_DIR}/packages/cli/lib/build/build.sh"
+
+# Source issue filing functions
+source "${V0_DIR}/packages/cli/lib/build/issue.sh"
+
+usage() {
+  v0_help <<'EOF'
+Usage: v0 build <name> <prompt> [options]
+       v0 build <name> --resume [phase] [options]
+
+Transform a prompt into an autonomous development pipeline.
+
+Options:
+  --resume [p]   Resume an existing operation, optionally from phase p
+                 Valid phases: init, planned, queued
+  --no-merge     Don't auto-merge when work completes (default: auto-merge)
+  --label <l>    Add label to created issue (can repeat)
+  --dry-run      Show what would happen without executing
+  --after <ops>  Wait for operations to merge before executing
+                 Accepts comma-separated list: --after auth,api
+                 Can be specified multiple times: --after auth --after api
+  --plan <file>  Use existing plan (skips planning if feature ID present)
+  --attach       Follow worker logs after queuing
+
+Modes:
+  Default: Queue build and run in background (exits immediately)
+  --resume: Check state and continue from last phase
+  --no-merge: Skip automatic merge after completion
+  --after: Wait for another operation to merge before executing
+  --plan: Use existing plan file
+    If plan has feature ID (\$ISSUE_PREFIX-xxx): Skip planning, go to execute
+    If no feature ID: Skip planning, file issue, then execute
+
+Examples:
+  v0 build auth "Add JWT authentication"          # Queue and run in background
+  v0 build api "Build REST API"                   # Queue and run in background
+  v0 build auth --resume                          # Resume from current phase
+  v0 build auth --resume --attach                 # Resume and follow logs
+  v0 build auth --resume init                     # Restart from planning phase
+  v0 build addx "Add X" --no-merge                # Don't auto-merge
+  v0 build api "Build API" --after auth           # Wait for auth before starting
+  v0 build refactor --plan plans/refactor.md      # Use existing plan
+EOF
+  exit 1
+}
+
+NAME=""
+PROMPT=""
+RESUME=""
+RESUME_PHASE=""
+NO_MERGE=""
+LABELS=()
+DRY_RUN=""
+AFTER_OPS=()
+PLAN_FILE_ARG=""
+ATTACH=""
+HOLD=""
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --resume)
+      RESUME=1
+      shift
+      if [[ $# -gt 0 ]] && [[ "$1" =~ ^(init|planned|queued)$ ]]; then
+        RESUME_PHASE="$1"
+        shift
+      fi
+      ;;
+    --no-merge) NO_MERGE=1; shift ;;
+    --label) LABELS+=("$2"); shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --after|--blocked-by)
+      # Split comma-separated IDs and add to array
+      IFS=',' read -ra ids <<< "$2"
+      AFTER_OPS+=("${ids[@]}")
+      shift 2
+      ;;
+    --after=*)
+      IFS=',' read -ra ids <<< "${1#--after=}"
+      AFTER_OPS+=("${ids[@]}")
+      shift
+      ;;
+    --plan) PLAN_FILE_ARG="$2"; shift 2 ;;
+    --hold) HOLD=1; shift ;;
+    --attach) ATTACH=1; shift ;;
+    -h|--help) usage ;;
+    -*) echo "Unknown option: $1"; usage ;;
+    *)
+      if [[ -z "${NAME}" ]]; then
+        NAME="$1"
+      elif [[ -z "${PROMPT}" ]]; then
+        PROMPT="$1"
+      else
+        echo "Unexpected argument: $1"; usage
+      fi
+      shift
+      ;;
+  esac
+done
+
+[[ -z "${NAME}" ]] && usage
+
+# Handle direct markdown file path: v0 feature plans/foo.md -> v0 feature foo --plan plans/foo.md
+if [[ "${NAME}" == *.md ]] && [[ -f "${NAME}" ]]; then
+  PLAN_FILE_ARG="${NAME}"
+  NAME=$(basename "${NAME}" .md)
+fi
+
+[[ -z "${PROMPT}" ]] && [[ -z "${RESUME}" ]] && [[ -z "${PLAN_FILE_ARG}" ]] && usage
+
+# Validate --plan flag
+if [[ -n "${PLAN_FILE_ARG}" ]]; then
+  if [[ -n "${RESUME}" ]]; then
+    echo "Error: --plan and --resume are mutually exclusive"
+    exit 1
+  fi
+  if [[ ! -f "${PLAN_FILE_ARG}" ]]; then
+    echo "Error: Plan file not found: ${PLAN_FILE_ARG}"
+    exit 1
+  fi
+fi
+
+# Validate --after flags
+if [[ ${#AFTER_OPS[@]} -gt 0 ]]; then
+  if [[ -z "${RESUME}" ]]; then
+    issue_pattern=$(v0_issue_pattern)
+    for after_op in "${AFTER_OPS[@]}"; do
+      # Skip validation for wok issue IDs (they're resolved at dep time)
+      if [[ "${after_op}" =~ ^${issue_pattern}$ ]]; then
+        continue
+      fi
+      if [[ ! -f "${BUILD_DIR}/operations/${after_op}/state.json" ]]; then
+        echo "Error: Operation '${after_op}' does not exist"
+        echo "Create it first with: v0 feature ${after_op} \"...\""
+        exit 1
+      fi
+    done
+
+    # Check for circular dependencies
+    check_circular_dep() {
+      local checking="$1"
+      local visited="$2"
+
+      if [[ "${visited}" == *":${checking}:"* ]]; then
+        return 1
+      fi
+
+      local check_state="${BUILD_DIR}/operations/${checking}/state.json"
+      [[ ! -f "${check_state}" ]] && return 1
+
+      # Get blockers from wok via epic_id
+      local check_epic_id
+      check_epic_id=$(jq -r '.epic_id // empty' "${check_state}")
+      if [[ -n "${check_epic_id}" ]] && [[ "${check_epic_id}" != "null" ]]; then
+        local check_blockers
+        check_blockers=$(v0_get_blockers "${check_epic_id}")
+        if [[ "${check_blockers}" != "[]" ]]; then
+          for blocker_id in $(echo "${check_blockers}" | jq -r '.[]'); do
+            local blocker_name
+            blocker_name=$(v0_blocker_to_op_name "${blocker_id}")
+            if [[ "${blocker_name}" = "${NAME}" ]]; then
+              return 0
+            fi
+            if check_circular_dep "${blocker_name}" "${visited}:${checking}:"; then
+              return 0
+            fi
+          done
+        fi
+      fi
+      return 1
+    }
+
+    for after_op in "${AFTER_OPS[@]}"; do
+      # Skip wok issue IDs for circular check (handled by wok itself)
+      if [[ "${after_op}" =~ ^${issue_pattern}$ ]]; then
+        continue
+      fi
+      if check_circular_dep "${after_op}" ":"; then
+        echo "Error: Circular dependency detected"
+        echo "  '${NAME}' would wait for '${after_op}'"
+        echo "  but '${after_op}' is (transitively) waiting for '${NAME}'"
+        exit 1
+      fi
+    done
+  fi
+fi
+
+# Require dependencies
+v0_check_deps tmux jq claude m4
+
+# Validate name format
+if [[ ! "${NAME}" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
+  echo "Error: Name must start with a letter and contain only alphanumeric characters and hyphens"
+  exit 1
+fi
+
+# State management
+STATE_DIR="${BUILD_DIR}/operations/${NAME}"
+STATE_FILE="${STATE_DIR}/state.json"
+
+init_state() {
+  mkdir -p "${STATE_DIR}/logs"
+  local machine
+  machine=$(hostname -s)
+
+  local labels_json
+  if [[ ${#LABELS[@]} -eq 0 ]]; then
+    labels_json="[]"
+  else
+    labels_json=$(printf '%s\n' "${LABELS[@]}" | jq -R . | jq -s .)
+  fi
+
+  local merge_queued="true"
+  [[ -n "${NO_MERGE}" ]] && merge_queued="false"
+
+  # Note: after/blocked_phase fields removed in schema v2
+  # Blocking is now tracked exclusively in wok
+
+  cat > "${STATE_FILE}" <<EOF
+{
+  "name": "${NAME}",
+  "machine": "${machine}",
+  "prompt": $(printf '%s' "${PROMPT}" | jq -Rs .),
+  "phase": "init",
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "labels": ${labels_json},
+  "plan_file": null,
+  "epic_id": null,
+  "tmux_session": null,
+  "worktree": null,
+  "current_issue": null,
+  "completed": [],
+  "merge_queued": ${merge_queued},
+  "merge_status": null,
+  "merged_at": null,
+  "merge_error": null,
+  "worker_pid": null,
+  "worker_log": null,
+  "worker_started_at": null,
+  "_schema_version": 2
+}
+EOF
+}
+
+# Thin wrappers over sm_* functions (use centralized state machine)
+update_state() { sm_update_state "${NAME}" "$@"; }
+get_state() { sm_read_state "${NAME}" "$@"; }
+emit_event() {
+  echo "[$(date +%H:%M:%S)] $1: ${2:-}"
+  sm_emit_event "${NAME}" "$@"
+}
+
+# Note: Blocking is now tracked in wok, not state.json
+# Use v0_is_blocked, v0_get_first_open_blocker from v0-common.sh
+
+# Resume logic
+if [[ -n "${RESUME}" ]]; then
+  if [[ ! -f "${STATE_FILE}" ]]; then
+    echo "Error: No operation found for '${NAME}'"
+    exit 1
+  fi
+  # Ensure state is migrated to current schema (converts blocked phase, etc.)
+  sm_ensure_current_schema "${NAME}"
+  PHASE=$(get_state phase)
+  PROMPT=$(get_state prompt)
+  if [[ -n "${RESUME_PHASE}" ]]; then
+    PHASE="${RESUME_PHASE}"
+    update_state "phase" "\"${PHASE}\""
+  fi
+  LABELS=()
+  while IFS= read -r label; do
+    [[ -n "${label}" ]] && LABELS+=("${label}")
+  done < <(jq -r '.labels[]' "${STATE_FILE}" 2>/dev/null || true)
+  # Note: blocking is now tracked in wok, not state.json
+
+  # Add merge_queued field if missing (for operations created by v0 plan)
+  MERGE_QUEUED_STATE=$(get_state merge_queued)
+  if [[ -z "${MERGE_QUEUED_STATE}" ]] || [[ "${MERGE_QUEUED_STATE}" = "null" ]]; then
+    if [[ -n "${NO_MERGE}" ]]; then
+      update_state "merge_queued" 'false'
+    else
+      update_state "merge_queued" 'true'
+    fi
+    emit_event "state:upgraded" "Added missing merge_queued field"
+  fi
+
+  # Clear hold on resume (but remember if it was held for blocked operations)
+  WAS_HELD=""
+  if sm_is_held "${NAME}"; then
+    WAS_HELD=1
+    echo "Clearing hold on '${NAME}'..."
+    sm_clear_hold "${NAME}"
+    echo "Hold cleared"
+  fi
+
+  echo "Resuming '${NAME}' from phase: ${PHASE}"
+
+  # Handle --attach flag for resume mode
+  if [[ -n "${ATTACH}" ]]; then
+    WORKER_PID=$(get_state worker_pid)
+    WORKER_LOG=$(get_state worker_log)
+    if [[ -n "${WORKER_PID}" ]] && [[ "${WORKER_PID}" != "null" ]] && kill -0 "${WORKER_PID}" 2>/dev/null; then
+      echo "Worker is running (PID: ${WORKER_PID})"
+      echo "Following worker log (Ctrl+C to detach)..."
+      echo ""
+      tail -f "${WORKER_LOG}"
+      exit 0
+    elif [[ -n "${WORKER_LOG}" ]] && [[ "${WORKER_LOG}" != "null" ]] && [[ -f "${WORKER_LOG}" ]]; then
+      echo "Worker is not running. Showing recent log:"
+      echo ""
+      tail -50 "${WORKER_LOG}"
+      exit 0
+    else
+      echo "No worker log found"
+      exit 1
+    fi
+  fi
+
+  # Check if background worker is already running
+  WORKER_PID=$(get_state worker_pid)
+  WORKER_LOG=$(get_state worker_log)
+  if [[ -n "${WORKER_PID}" ]] && [[ "${WORKER_PID}" != "null" ]] && kill -0 "${WORKER_PID}" 2>/dev/null; then
+    echo "Background worker already running (PID: ${WORKER_PID})"
+    echo ""
+    echo "Status:    v0 status ${NAME}"
+    echo "View logs: tail -f ${WORKER_LOG}"
+    echo ""
+    echo "To force restart, first kill the worker:"
+    echo "  kill ${WORKER_PID}"
+    echo "  v0 feature ${NAME} --resume"
+    exit 0
+  fi
+
+  # Clear stale worker_pid if process is dead
+  if [[ -n "${WORKER_PID}" ]] && [[ "${WORKER_PID}" != "null" ]]; then
+    update_state "worker_pid" "null"
+  fi
+
+  # Background execution for resume (like new operations)
+  # Spawn a worker to continue from current phase unless --dry-run
+  if [[ -z "${DRY_RUN}" ]]; then
+    # Don't spawn worker for phases that don't need it
+    if [[ "${PHASE}" != "completed" ]] && [[ "${PHASE}" != "merged" ]] && [[ "${PHASE}" != "pending_merge" ]] && [[ "${PHASE}" != "blocked" ]] && [[ "${PHASE}" != "executing" ]]; then
+      WORKER_LOG="${STATE_DIR}/logs/worker.log"
+      mkdir -p "${STATE_DIR}/logs"
+
+      nohup "${V0_DIR}/bin/v0-build-worker" "${NAME}" > "${WORKER_LOG}" 2>&1 &
+      WORKER_PID=$!
+
+      update_state "worker_pid" "${WORKER_PID}"
+      update_state "worker_log" "\"${WORKER_LOG}\""
+
+      echo ""
+      echo -e "${C_BOLD}${C_CYAN}=== Resuming '${NAME}' at phase: ${PHASE} ===${C_RESET}"
+      echo -e "Worker PID: ${C_DIM}${WORKER_PID}${C_RESET}"
+      echo ""
+      echo -e "Status:    ${C_BOLD}v0 status ${NAME}${C_RESET}"
+      echo -e "Attach:    ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+      echo -e "View logs: ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
+      echo ""
+
+      if [[ -n "${ATTACH}" ]]; then
+        echo "Following worker log (Ctrl+C to detach)..."
+        echo ""
+        tail -f "${WORKER_LOG}"
+      fi
+      exit 0
+    fi
+  fi
+
+  FEATURE_BRANCH=$(v0_expand_branch "${V0_FEATURE_BRANCH}" "${NAME}")
+  TREE_DIR="${V0_STATE_DIR}/tree/${FEATURE_BRANCH}"
+  if [[ -d "${TREE_DIR}" ]] && [[ -f "${V0_ROOT}/.claude/settings.json" ]]; then
+    mkdir -p "${TREE_DIR}/.claude"
+    if [[ ! -f "${TREE_DIR}/.claude/settings.local.json" ]]; then
+      cp -f "${V0_ROOT}/.claude/settings.json" "${TREE_DIR}/.claude/settings.local.json"
+    fi
+  fi
+
+  if [[ "${PHASE}" = "pending_merge" ]]; then
+    MERGE_STATUS=$(get_state merge_status)
+    if [[ "${MERGE_STATUS}" = "conflict" ]]; then
+      echo "Retrying merge after conflict..."
+      emit_event "merge:retry" "Retrying merge from pending_merge with conflict"
+      if "${V0_DIR}/bin/v0-mergeq" --enqueue "${NAME}" 2>/dev/null; then
+        echo "Operation '${NAME}' re-added to merge queue"
+      else
+        echo "Warning: Failed to enqueue for merge"
+        echo "Run manually: v0 startup mergeq"
+      fi
+      echo ""
+      echo "Monitor merge queue:"
+      echo "  v0 mergeq --status"
+      echo "  v0 attach mergeq"
+      exit 0
+    else
+      if "${V0_DIR}/bin/v0-mergeq" --enqueue "${NAME}" 2>/dev/null; then
+        echo "Operation '${NAME}' is pending merge (status: ${MERGE_STATUS})"
+      else
+        echo "Warning: Failed to enqueue for merge"
+        echo "Run manually: v0 startup mergeq"
+      fi
+      echo ""
+      echo "Monitor merge queue:"
+      echo "  v0 mergeq --status"
+      exit 0
+    fi
+  fi
+
+  # Check for wok blockers (replaces old blocked phase handling)
+  EPIC_ID=$(get_state epic_id)
+  if [[ -n "${EPIC_ID}" ]] && [[ "${EPIC_ID}" != "null" ]]; then
+    FIRST_BLOCKER=$(v0_get_first_open_blocker "${EPIC_ID}")
+    if [[ -n "${FIRST_BLOCKER}" ]]; then
+      BLOCKER_NAME=$(v0_blocker_to_op_name "${FIRST_BLOCKER}")
+      echo "Operation is blocked by '${BLOCKER_NAME}'"
+      echo ""
+      echo "To remove the blocker, either:"
+      echo "  - Complete the blocking operation"
+      echo "  - Remove the dependency: wk undep ${EPIC_ID} blocked-by ${FIRST_BLOCKER}"
+      exit 0
+    fi
+  fi
+
+  if [[ "${PHASE}" = "executing" ]]; then
+    SESSION=$(get_state tmux_session)
+    if [[ -z "${SESSION}" ]] || ! tmux has-session -t "${SESSION}" 2>/dev/null; then
+      echo "Previous session is no longer active, restarting..."
+      update_state "phase" '"queued"'
+      update_state "tmux_session" 'null'
+      PHASE="queued"
+    fi
+  fi
+
+  # Handle failed/interrupted/cancelled phases - reset to last known good phase
+  if [[ "${PHASE}" = "failed" ]] || [[ "${PHASE}" = "interrupted" ]] || [[ "${PHASE}" = "cancelled" ]]; then
+    echo "Clearing ${PHASE} state and resuming..."
+    # Use state machine functions for resume phase determination
+    PHASE=$(sm_get_resume_phase "${NAME}")
+    sm_clear_error_state "${NAME}"
+    echo "Resuming from ${PHASE}"
+  fi
+else
+  init_state
+  PHASE="init"
+
+  # Set hold if requested
+  if [[ -n "${HOLD}" ]]; then
+    sm_set_hold "${NAME}"
+  fi
+
+  # Check if operation is held (for new operations with existing state)
+  if [[ -f "${STATE_FILE}" ]]; then
+    sm_exit_if_held "${NAME}" "feature"
+  fi
+
+  # Note: wok dependencies added after epic_id is created (see below)
+
+  if [[ -n "${PLAN_FILE_ARG}" ]]; then
+    mkdir -p "${PLANS_DIR}"
+    DEST_PLAN="${PLANS_DIR}/${NAME}.md"
+    if [[ "$(realpath "${PLAN_FILE_ARG}")" != "$(realpath "${DEST_PLAN}" 2>/dev/null)" ]]; then
+      /bin/cp "${PLAN_FILE_ARG}" "${DEST_PLAN}"
+    fi
+    update_state "plan_file" "\"${V0_PLANS_DIR}/${NAME}.md\""
+
+    if [[ -z "${PROMPT}" ]]; then
+      PROMPT="Implement $(basename "${PLAN_FILE_ARG}" .md)"
+      update_state "prompt" "$(printf '%s' "${PROMPT}" | jq -Rs .)"
+    fi
+
+    ISSUE_PATTERN=$(v0_issue_pattern)
+    EXISTING_FEATURE=$(v0_grep_extract "\`${ISSUE_PATTERN}\`" "${PLAN_FILE_ARG}" | head -1 | tr -d '`' || true)
+    if [[ -n "${EXISTING_FEATURE}" ]]; then
+      FEATURE_STATUS=$(wk show "${EXISTING_FEATURE}" --output json 2>/dev/null | jq -r '.status // "unknown"' || echo "unknown")
+      if [[ "${FEATURE_STATUS}" = "open" ]] || [[ "${FEATURE_STATUS}" = "in_progress" ]]; then
+        update_state "epic_id" "\"${EXISTING_FEATURE}\""
+        update_state "phase" '"queued"'
+        emit_event "plan:provided" "Using existing feature ${EXISTING_FEATURE} from ${PLAN_FILE_ARG}"
+        PHASE="queued"
+        # Add blocked-by dependencies in wk if --after was specified
+        if [[ ${#AFTER_OPS[@]} -gt 0 ]]; then
+          for after_op in "${AFTER_OPS[@]}"; do
+            if resolved_id=$(v0_resolve_to_wok_id "${after_op}"); then
+              if wk dep "${EXISTING_FEATURE}" blocked-by "${resolved_id}" 2>/dev/null; then
+                emit_event "dep:added" "Added blocked-by: ${resolved_id}"
+              else
+                emit_event "dep:failed" "Failed to add blocked-by: ${resolved_id}"
+              fi
+            else
+              emit_event "dep:skipped" "Could not resolve '${after_op}' to wok ID"
+            fi
+          done
+        fi
+      else
+        echo "Warning: Feature ${EXISTING_FEATURE} is ${FEATURE_STATUS}, will file new issue"
+        update_state "phase" '"planned"'
+        emit_event "plan:provided" "Feature ${EXISTING_FEATURE} is ${FEATURE_STATUS}, needs new issue"
+        PHASE="planned"
+      fi
+    else
+      update_state "phase" '"planned"'
+      emit_event "plan:provided" "Copied from ${PLAN_FILE_ARG}"
+      PHASE="planned"
+    fi
+  fi
+
+  # Create feature issue immediately (before planning)
+  # This allows showing the issue ID to the user right away
+  FEATURE_ID=$(get_state epic_id)
+  if [[ -z "${FEATURE_ID}" ]] || [[ "${FEATURE_ID}" = "null" ]]; then
+    FEATURE_ID=$(create_feature_issue "${NAME}")
+    if [[ -n "${FEATURE_ID}" ]]; then
+      update_state "epic_id" "\"${FEATURE_ID}\""
+      emit_event "issue:created" "Created feature ${FEATURE_ID}"
+    else
+      emit_event "issue:warning" "Failed to create feature issue"
+    fi
+  fi
+
+  # Add wok dependencies if --after was specified
+  if [[ ${#AFTER_OPS[@]} -gt 0 ]] && [[ -n "${FEATURE_ID}" ]]; then
+    for after_op in "${AFTER_OPS[@]}"; do
+      if resolved_id=$(v0_resolve_to_wok_id "${after_op}"); then
+        if wk dep "${FEATURE_ID}" blocked-by "${resolved_id}" 2>/dev/null; then
+          emit_event "dep:added" "Added blocked-by: ${resolved_id}"
+        else
+          emit_event "dep:failed" "Failed to add blocked-by: ${resolved_id}"
+        fi
+      else
+        emit_event "dep:skipped" "Could not resolve '${after_op}' to wok ID"
+      fi
+    done
+  fi
+
+  # Background execution (default for new operations)
+  # The worker (v0-build-worker) runs plan -> build in background.
+  # This allows the user to queue features and continue with other work.
+  if [[ -z "${DRY_RUN}" ]]; then
+    WORKER_LOG="${STATE_DIR}/logs/worker.log"
+    mkdir -p "${STATE_DIR}/logs"
+
+    nohup "${V0_DIR}/bin/v0-build-worker" "${NAME}" > "${WORKER_LOG}" 2>&1 &
+    WORKER_PID=$!
+
+    update_state "worker_pid" "${WORKER_PID}"
+    update_state "worker_log" "\"${WORKER_LOG}\""
+
+    echo ""
+    if [[ -n "${FEATURE_ID}" ]]; then
+      echo -e "${C_GREEN}Created feature:${C_RESET} ${C_CYAN}${FEATURE_ID}${C_RESET}"
+      echo ""
+    fi
+    echo -e "${C_BOLD}${C_CYAN}=== Feature '${NAME}' queued for planning ===${C_RESET}"
+    echo -e "Worker PID: ${C_DIM}${WORKER_PID}${C_RESET}"
+    echo ""
+    echo -e "Status:    ${C_BOLD}v0 status ${NAME}${C_RESET}"
+    echo -e "Attach:    ${C_BOLD}v0 attach ${NAME}${C_RESET}"
+    echo -e "View logs: ${C_BOLD}tail -f ${WORKER_LOG}${C_RESET}"
+    echo ""
+
+    if [[ -n "${ATTACH}" ]]; then
+      echo "Following worker log (Ctrl+C to detach)..."
+      echo ""
+      tail -f "${WORKER_LOG}"
+    fi
+    exit 0
+  fi
+fi
+
+# Phase 1: Plan (dry-run only - actual execution happens in background worker)
+if [[ "${PHASE}" = "init" ]] && [[ -n "${DRY_RUN}" ]]; then
+  FEATURE_BRANCH=$(v0_expand_branch "${V0_FEATURE_BRANCH}" "${NAME}")
+  PLAN_SESSION=$(v0_session_name "${NAME}" "plan")
+  echo "[DRY-RUN] Would run: v0 plan ${NAME} \"${PROMPT}\" in tmux session ${PLAN_SESSION}"
+  PHASE="queued"
+fi
+
+# Phase 2: Execute (dry-run only - actual execution happens in background worker)
+if [[ "${PHASE}" = "queued" ]] && [[ -n "${DRY_RUN}" ]]; then
+  SESSION=$(v0_session_name "${NAME}" "feature")
+  echo "[DRY-RUN] Would run: tmux new-session -d -s ${SESSION} ... claude ..."
+elif [[ "${PHASE}" = "executing" ]]; then
+  SESSION=$(get_state tmux_session)
+  echo "Operation '${NAME}' is already executing"
+  echo "Attach with: v0 attach ${NAME}"
+fi

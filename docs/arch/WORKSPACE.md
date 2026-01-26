@@ -366,6 +366,78 @@ Worktrees don't need this check since they share the `.git` directory with the m
 | Solo development | Worktree (faster) |
 | CI/CD environments | Clone (isolated) |
 
+## Multi-User Cooperation
+
+When multiple users work on the same repository, v0 uses two features to prevent conflicts:
+
+### User-Specific Branches
+
+By default, `v0 init` generates a unique branch for each user:
+
+```
+v0/user/{username}-{shortid}
+```
+
+Example: `v0/user/alice-a3f2`, `v0/user/bob-7e91`
+
+This prevents branch conflicts when multiple developers run v0 agents on the same repository.
+
+**Branch generation** (`packages/core/lib/config.sh`):
+```bash
+v0_generate_user_branch() {
+  local username shortid
+  username=$(whoami | tr '[:upper:]' '[:lower:]')
+  shortid=$(head -c 2 /dev/urandom | xxd -p)
+  echo "v0/user/${username}-${shortid}"
+}
+```
+
+### Local Agent Remote
+
+Instead of pushing worker branches to the shared `origin` remote, v0 creates a local bare git repository called `agent`:
+
+```
+~/.local/state/v0/${PROJECT}/remotes/agent.git
+```
+
+This prevents polluting the shared remote with temporary worker branches.
+
+**Directory structure**:
+```
+~/.local/state/v0/${PROJECT}/
+├── workspace/           # Merge workspace
+├── tree/               # Feature worktrees
+└── remotes/            # Local remotes
+    └── agent.git/      # Bare repo for worker branches
+```
+
+**Initialization** (`v0 init`):
+1. Creates bare clone: `git clone --bare ${V0_ROOT} ${agent_dir}`
+2. Adds `agent` remote to project: `git remote add agent ${agent_dir}`
+3. Sets `V0_GIT_REMOTE="agent"` in `.v0.rc`
+
+**Sync strategy**:
+- Workers push feature branches to `agent` remote
+- `v0 push` / `v0 pull` sync between user and agent environments
+- No automatic sync with `origin` - user decides when to push upstream
+
+### Configuration
+
+Both features are configured via `.v0.rc`:
+
+```bash
+# User-specific branch (auto-generated)
+V0_DEVELOP_BRANCH="v0/user/alice-a3f2"
+
+# Local agent remote (new default)
+V0_GIT_REMOTE="agent"
+```
+
+To use shared `origin` instead (legacy behavior):
+```bash
+V0_GIT_REMOTE="origin"
+```
+
 ## Related Documentation
 
 - [SYSTEM.md](SYSTEM.md) - System architecture overview

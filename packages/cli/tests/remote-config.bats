@@ -7,13 +7,13 @@ load '../../test-support/helpers/test_helper'
 # V0_GIT_REMOTE Configuration Tests
 # ============================================================================
 
-@test "V0_GIT_REMOTE defaults to origin" {
+@test "V0_GIT_REMOTE defaults to agent" {
     create_v0rc
     cd "${TEST_TEMP_DIR}/project" || return 1
     source_lib "v0-common.sh"
     v0_load_config
 
-    assert_equal "${V0_GIT_REMOTE}" "origin"
+    assert_equal "${V0_GIT_REMOTE}" "agent"
 }
 
 @test "V0_GIT_REMOTE can be customized in .v0.rc" {
@@ -38,7 +38,7 @@ EOF
     # Check that it's in the exported environment
     run bash -c 'echo $V0_GIT_REMOTE'
     assert_success
-    assert_output "origin"
+    assert_output "agent"
 }
 
 @test "V0_GIT_REMOTE custom value is exported for subprocesses" {
@@ -71,7 +71,7 @@ EOF
     assert_file_exists "${TEST_TEMP_DIR}/project/.v0.rc"
     run grep "V0_GIT_REMOTE" "${TEST_TEMP_DIR}/project/.v0.rc"
     assert_success
-    assert_output --partial 'V0_GIT_REMOTE="origin"'
+    assert_output --partial 'V0_GIT_REMOTE="agent"'
 }
 
 # ============================================================================

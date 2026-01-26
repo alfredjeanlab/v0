@@ -695,18 +695,19 @@ EOF
     assert_success
 }
 
-@test "v0_init_config always uses v0/develop as default" {
+@test "v0_init_config generates unique user branch by default" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
-    # Even if 'develop' branch exists, init should use v0/develop
+    # Even if 'develop' branch exists, init should use v0/user/*
     git branch develop
 
     source_lib_with_mocks "v0-common.sh"
 
     v0_init_config "${test_dir}"
 
-    run grep 'V0_DEVELOP_BRANCH="v0/develop"' "${test_dir}/.v0.rc"
+    # Should use v0/user/{username}-{id} pattern
+    run grep 'V0_DEVELOP_BRANCH="v0/user/' "${test_dir}/.v0.rc"
     assert_success
 }
 
@@ -722,8 +723,8 @@ EOF
     # Branch should always be explicit (not commented)
     run grep '^V0_DEVELOP_BRANCH="main"' "${test_dir}/.v0.rc"
     assert_success
-    # Remote should be commented when using default origin
-    run grep -E '^# V0_GIT_REMOTE=' "${test_dir}/.v0.rc"
+    # Remote is always written explicitly now
+    run grep '^V0_GIT_REMOTE="origin"' "${test_dir}/.v0.rc"
     assert_success
 }
 
@@ -741,7 +742,7 @@ EOF
     assert_success
 }
 
-@test "v0_init_config defaults to v0/develop when develop does not exist" {
+@test "v0_init_config generates user-specific branch when develop does not exist" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
@@ -752,15 +753,15 @@ EOF
 
     source_lib "v0-common.sh"
 
-    # Run init (should default to v0/develop)
+    # Run init (should generate v0/user/{username}-{id})
     v0_init_config "${test_dir}"
 
-    # Verify .v0.rc contains v0/develop as the develop branch
-    run grep 'V0_DEVELOP_BRANCH="v0/develop"' "${test_dir}/.v0.rc"
+    # Verify .v0.rc contains v0/user/* pattern
+    run grep 'V0_DEVELOP_BRANCH="v0/user/' "${test_dir}/.v0.rc"
     assert_success
 }
 
-@test "v0_init_config writes explicit v0/develop branch to .v0.rc" {
+@test "v0_init_config writes explicit user branch to .v0.rc" {
     local test_dir="${TEST_TEMP_DIR}/new-project"
     init_mock_git_repo "${test_dir}"
     cd "${test_dir}" || return 1
@@ -773,8 +774,8 @@ EOF
 
     v0_init_config "${test_dir}"
 
-    # Should contain explicit V0_DEVELOP_BRANCH="v0/develop"
-    run grep 'V0_DEVELOP_BRANCH="v0/develop"' "${test_dir}/.v0.rc"
+    # Should contain explicit V0_DEVELOP_BRANCH="v0/user/*"
+    run grep 'V0_DEVELOP_BRANCH="v0/user/' "${test_dir}/.v0.rc"
     assert_success
     # Should NOT be commented
     run grep -E '^# V0_DEVELOP_BRANCH=' "${test_dir}/.v0.rc"

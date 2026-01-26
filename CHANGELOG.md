@@ -4,11 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.0]
 
-Collaboration-friendly release: agents now work on `v0/develop` instead of polluting `main`, with `v0 push` and `v0 pull` commands to sync changes on your terms. Internals restructured for maintainability.
+Collaboration-friendly release: agents now work in isolation with user-specific branches and local remotes, with `v0 push` and `v0 pull` commands to sync changes on your terms. Internals restructured for maintainability.
 
 ### Added
 
 - **`v0 push` and `v0 pull` commands**: Push user branch to agent branch, or pull agent changes into user branch.
+
+- **User-specific branch naming**: `v0 init` now generates unique branch names per user (`v0/user/{username}-{shortid}`) to prevent conflicts when multiple developers use v0 on the same repository.
+
+- **Local agent remote**: Worker branches are pushed to a local bare repository (`~/.local/state/v0/${PROJECT}/remotes/agent.git`) instead of polluting the shared origin with temporary branches.
 
 - **`v0 archive` command**: Move completed plans to icebox for long-term storage.
 
@@ -34,7 +38,9 @@ Collaboration-friendly release: agents now work on `v0/develop` instead of pollu
 
 - **Simplified `v0 build` flags**: Removed `--eager`, `--foreground`, `--safe`, `--enqueue` options.
 
-- **Default develop branch**: Changed from `main` to `v0/develop`.
+- **Default develop branch**: Changed from `main` to user-specific `v0/user/{username}-{shortid}`.
+
+- **Default git remote**: Changed `V0_GIT_REMOTE` from `"origin"` to `"agent"` (local bare repo).
 
 - **Status display**: Renamed "Operations" to "Plans", "Bugfix" to "Bugs", "Check" to "Status".
 
