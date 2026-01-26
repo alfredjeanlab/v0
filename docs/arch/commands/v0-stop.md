@@ -36,7 +36,7 @@ v0 stop --drop-everything  # Full reset (removes all v0 state)
 |--------|---------|
 | (default) | Sessions, daemons, worker branches/worktrees |
 | `--drop-workspace` | + workspace, tree/, and develop branch (worktree mode only) |
-| `--drop-everything` | + `~/.local/state/v0/${PROJECT}/` and `.v0/build/` and `agent` remote |
+| `--drop-everything` | + `~/.local/state/v0/${PROJECT}/` and `.v0/` and `agent` remote |
 
 The `--drop-workspace` option removes the workspace and worktrees but preserves state (logs, build cache). The `--drop-everything` option performs a full reset. Run `v0 init` to reinitialize.
 

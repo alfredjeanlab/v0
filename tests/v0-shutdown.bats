@@ -613,3 +613,46 @@ EOF
     run git -C "${project_dir}" branch --list 'v0/agent/test-user-abc1'
     assert_output --partial "v0/agent/test-user-abc1"
 }
+
+# ============================================================================
+# Worktree branch prefix handling tests
+# ============================================================================
+
+@test "shutdown handles branches with + prefix (checked out in worktree)" {
+    local project_dir
+    project_dir=$(setup_worktree_mode_project)
+
+    # Create the v0/agent/* develop branch
+    (
+        cd "${project_dir}" || return 1
+        git checkout -b v0/agent/test-user-abc1 --quiet
+        echo "agent work" > agent.txt
+        git add agent.txt
+        git commit --quiet -m "Agent work"
+    )
+
+    # Create a worktree that checks out the branch (this adds + prefix in git branch output)
+    local worktree_dir="${TEST_TEMP_DIR}/worktree"
+    mkdir -p "${worktree_dir}"
+    (
+        cd "${project_dir}" || return 1
+        git worktree add "${worktree_dir}/checkout" v0/agent/test-user-abc1 --quiet 2>/dev/null || true
+    )
+
+    # Verify branch shows with + prefix
+    run git -C "${project_dir}" branch --list 'v0/agent/test-user-abc1'
+    # Output should contain the branch (may have + prefix if worktree succeeded)
+    assert_output --partial "v0/agent/test-user-abc1"
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${PROJECT_ROOT}"'/bin/v0-shutdown" --drop-everything --force 2>&1
+    '
+    assert_success
+    assert_output --partial "Cleaning up agent develop branches (worktree mode)"
+    # Should show the branch name without + prefix
+    assert_output --partial "Deleting local branch: v0/agent/test-user-abc1"
+    # Should NOT show + prefix in branch name (that was the bug)
+    refute_output --partial "Deleting local branch: + v0/agent"
+    refute_output --partial "Deleting local branch: +"
+}

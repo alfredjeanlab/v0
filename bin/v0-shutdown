@@ -45,7 +45,7 @@ The --drop-* options remove persistent state:
   --drop-workspace    Removes: ~/.local/state/v0/${PROJECT}/workspace/
                               ~/.local/state/v0/${PROJECT}/tree/
   --drop-everything   Removes: ~/.local/state/v0/${PROJECT}/ (entire state dir)
-                              ${V0_ROOT}/.v0/build/ (build state)
+                              ${V0_ROOT}/.v0/ (build state, last-push marker)
                               'agent' git remote
 
 Examples:
@@ -249,8 +249,8 @@ fi
 
 # Clean up worker branches (local and remote)
 # Patterns: v0/worker/* (legacy), *-bugs, *-chores (user-specific)
-local_branches=$(git -C "${V0_ROOT}" branch --list 'v0/worker/*' '*-bugs' '*-chores' 2>/dev/null | sed 's/^[* ]*//' || true)
-remote_branches=$(git -C "${V0_ROOT}" branch -r --list "${V0_GIT_REMOTE}/v0/worker/*" "${V0_GIT_REMOTE}/*-bugs" "${V0_GIT_REMOTE}/*-chores" 2>/dev/null | sed 's/^[* ]*//' || true)
+local_branches=$(git -C "${V0_ROOT}" branch --list 'v0/worker/*' '*-bugs' '*-chores' 2>/dev/null | sed 's/^[+* ]*//' || true)
+remote_branches=$(git -C "${V0_ROOT}" branch -r --list "${V0_GIT_REMOTE}/v0/worker/*" "${V0_GIT_REMOTE}/*-bugs" "${V0_GIT_REMOTE}/*-chores" 2>/dev/null | sed 's/^[+* ]*//' || true)
 
 # Track branches skipped due to unmerged commits
 skipped_branches=""
@@ -322,7 +322,7 @@ if [[ -n "${remote_branches}" ]]; then
 fi
 
 # Clean up old-style v0-*-worker branches (legacy naming convention)
-old_style_branches=$(git -C "${V0_ROOT}" branch --list 'v0-*-worker' 2>/dev/null | sed 's/^[* ]*//' || true)
+old_style_branches=$(git -C "${V0_ROOT}" branch --list 'v0-*-worker' 2>/dev/null | sed 's/^[+* ]*//' || true)
 if [[ -n "${old_style_branches}" ]]; then
   found_anything=1
   echo ""
@@ -344,8 +344,8 @@ fi
 # In clone mode, the develop branch is main/develop/master which should not be deleted
 if [[ ( -n "${DROP_WORKSPACE}" || -n "${DROP_EVERYTHING}" ) && "${V0_WORKSPACE_MODE}" == "worktree" ]]; then
   # Find v0/agent/* branches (excluding worker branches already handled above)
-  agent_branches=$(git -C "${V0_ROOT}" branch --list 'v0/agent/*' 2>/dev/null | sed 's/^[* ]*//' | v0_grep -v '\-bugs$\|\-chores$' || true)
-  agent_remote_branches=$(git -C "${V0_ROOT}" branch -r --list "${V0_GIT_REMOTE}/v0/agent/*" 2>/dev/null | sed 's/^[* ]*//' | v0_grep -v '\-bugs$\|\-chores$' || true)
+  agent_branches=$(git -C "${V0_ROOT}" branch --list 'v0/agent/*' 2>/dev/null | sed 's/^[+* ]*//' | v0_grep -v '\-bugs$\|\-chores$' || true)
+  agent_remote_branches=$(git -C "${V0_ROOT}" branch -r --list "${V0_GIT_REMOTE}/v0/agent/*" 2>/dev/null | sed 's/^[+* ]*//' | v0_grep -v '\-bugs$\|\-chores$' || true)
 
   if [[ -n "${agent_branches}" ]]; then
     found_anything=1
@@ -487,10 +487,11 @@ if [[ -z "${DRY_RUN}" ]]; then
     echo ""
     echo "Removing all v0 state..."
 
-    # Remove build directory
-    if [[ -d "${BUILD_DIR}" ]]; then
-      rm -rf "${BUILD_DIR}" 2>/dev/null || true
-      echo "Removed build state: ${BUILD_DIR}"
+    # Remove entire .v0 directory (includes build/, last-push, etc.)
+    v0_dir="${V0_ROOT}/.v0"
+    if [[ -d "${v0_dir}" ]]; then
+      rm -rf "${v0_dir}" 2>/dev/null || true
+      echo "Removed .v0 directory: ${v0_dir}"
     fi
 
     # Remove agent remote from git config
@@ -559,8 +560,9 @@ else
   if [[ -n "${DROP_EVERYTHING}" ]]; then
     echo ""
     echo "Would remove all v0 state:"
-    if [[ -d "${BUILD_DIR}" ]]; then
-      echo "  Would remove build state: ${BUILD_DIR}"
+    v0_dir="${V0_ROOT}/.v0"
+    if [[ -d "${v0_dir}" ]]; then
+      echo "  Would remove .v0 directory: ${v0_dir}"
     fi
     if git -C "${V0_ROOT}" remote get-url agent &>/dev/null 2>&1; then
       echo "  Would remove 'agent' git remote"
