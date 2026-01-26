@@ -26,6 +26,7 @@ setup_isolated_project() {
 PROJECT="testproject"
 ISSUE_PREFIX="test"
 V0_DEVELOP_BRANCH="master"
+V0_GIT_REMOTE="origin"
 EOF
     echo "${isolated_dir}/project"
 }
