@@ -89,5 +89,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Run claude with the settings file
-exec claude --model "${MODEL}" --settings "${MAYOR_SETTINGS_DIR}/.claude/settings.local.json" "${PROMPT}" "$@"
+# Run claude from the temp settings directory to ensure a fresh session each time.
+# Claude identifies sessions by project directory, so using a unique temp dir (with PID)
+# ensures SessionStart hooks fire on each invocation rather than resuming stale sessions.
+cd "${MAYOR_SETTINGS_DIR}"
+exec claude --model "${MODEL}" --settings ".claude/settings.local.json" "${PROMPT}" "$@"
