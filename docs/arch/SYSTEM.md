@@ -213,6 +213,24 @@ Feature operations run in tmux sessions:
 | `v0-${PROJECT}-chore-worker` | Chore worker |
 | `v0-${PROJECT}-merge-${branch}` | Conflict resolution |
 
+### Worker Branches
+
+Worker branches are derived from `V0_DEVELOP_BRANCH` using a hyphenated suffix:
+
+| Worker | Branch Pattern | Example |
+|--------|----------------|---------|
+| Fix | `${V0_DEVELOP_BRANCH}-bugs` | `v0/agent/alice-a3f2-bugs` |
+| Chore | `${V0_DEVELOP_BRANCH}-chores` | `v0/agent/alice-a3f2-chores` |
+
+**Why user-specific worker branches?**
+- Prevents conflicts when multiple users share the same remote
+- Prevents conflicts when multiple v0 instances run on the same project
+- Clear ownership (branch path shows who it belongs to)
+
+Legacy branches (`v0/worker/fix`, `v0/worker/chore`) are still cleaned up by `v0 shutdown`.
+
+The helper function `v0_worker_branch()` in `packages/core/lib/config.sh` generates these names.
+
 ### Event Hooks
 
 Claude Code hooks in `packages/hooks/` handle session events:

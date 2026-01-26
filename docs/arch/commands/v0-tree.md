@@ -13,8 +13,8 @@
 ## Usage
 
 ```bash
-v0 tree feature/auth                      # Create worktree
-v0 tree v0-fix-worker --branch v0/worker/fix  # Specify branch
+v0 tree feature/auth                                      # Create worktree
+v0 tree v0-fix-worker --branch v0/agent/alice-a3f2-bugs   # Specify branch
 ```
 
 Outputs two lines: TREE_DIR path, then WORKTREE path.
