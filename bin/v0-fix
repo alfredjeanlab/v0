@@ -170,9 +170,13 @@ fi
 
 BRANCH="fix/\$BUG_ID"
 STATE_DIR="${BUILD_DIR}/fix/\$BUG_ID"
-WORKTREE_ROOT="\$(pwd)"
 
-cd ${REPO_NAME}
+# Derive paths from script location, not current working directory
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+WORKTREE_ROOT="\$SCRIPT_DIR"
+GIT_DIR="\$WORKTREE_ROOT/${REPO_NAME}"
+
+cd "\$GIT_DIR"
 
 # Check if we're on a fix branch that needs to be completed first
 CURRENT_BRANCH=\$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
@@ -271,9 +275,13 @@ fi
 
 BRANCH="fix/\$BUG_ID"
 STATE_DIR="${BUILD_DIR}/fix/\$BUG_ID"
-WORKTREE_ROOT="\$(pwd)"
 
-cd ${REPO_NAME}
+# Derive paths from script location, not current working directory
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+WORKTREE_ROOT="\$SCRIPT_DIR"
+GIT_DIR="\$WORKTREE_ROOT/${REPO_NAME}"
+
+cd "\$GIT_DIR"
 
 # Check for commits beyond develop branch
 COMMITS_AHEAD=\$(git rev-list --count "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}..HEAD" 2>/dev/null || echo "0")

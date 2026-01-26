@@ -187,9 +187,13 @@ fi
 
 BRANCH="chore/\${CHORE_ID}"
 STATE_DIR="${BUILD_DIR}/chore/\${CHORE_ID}"
-WORKTREE_ROOT="\$(pwd)"
 
-cd ${REPO_NAME}
+# Derive paths from script location, not current working directory
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+WORKTREE_ROOT="\${SCRIPT_DIR}"
+GIT_DIR="\${WORKTREE_ROOT}/${REPO_NAME}"
+
+cd "\${GIT_DIR}"
 
 # Reset worktree to latest develop branch
 if git fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
@@ -236,9 +240,13 @@ fi
 
 BRANCH="chore/\${CHORE_ID}"
 STATE_DIR="${BUILD_DIR}/chore/\${CHORE_ID}"
-WORKTREE_ROOT="\$(pwd)"
 
-cd ${REPO_NAME}
+# Derive paths from script location, not current working directory
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+WORKTREE_ROOT="\${SCRIPT_DIR}"
+GIT_DIR="\${WORKTREE_ROOT}/${REPO_NAME}"
+
+cd "\${GIT_DIR}"
 
 # Get commit info before pushing
 COMMIT_SHA=\$(git rev-parse HEAD)
