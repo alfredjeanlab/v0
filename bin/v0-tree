@@ -162,10 +162,10 @@ fi
 
 if [[ ! -d "${worktree}" ]]; then
   # Try creating with new branch first, fall back to existing branch
-  # Redirect stdout to stderr so git messages don't pollute our output
+  # Suppress git output to keep v0 output clean (errors still reported via exit code)
   # Use WORKTREE_PARENT as the git repo (V0_ROOT in worktree mode, workspace in clone mode)
-  if ! git -C "${WORKTREE_PARENT}" worktree add "${worktree}" -b "${branch}" main >&2 2>&1; then
-    if ! git -C "${WORKTREE_PARENT}" worktree add "${worktree}" "${branch}" >&2 2>&1; then
+  if ! git -C "${WORKTREE_PARENT}" worktree add "${worktree}" -b "${branch}" main >/dev/null 2>&1; then
+    if ! git -C "${WORKTREE_PARENT}" worktree add "${worktree}" "${branch}" >/dev/null 2>&1; then
       echo "Error: Failed to create worktree at ${worktree}" >&2
       exit 1
     fi

@@ -220,7 +220,7 @@ ensure_shared_workspace() {
 link_to_workspace() {
   local tree_dir="$1"
   local root_dir="$2"
-  wk init --workspace "${root_dir}/.wok" --path "${tree_dir}" 2>/dev/null || true
+  wk init --workspace "${root_dir}/.wok" --path "${tree_dir}" >/dev/null 2>&1 || true
 }
 
 # Reset worktree to latest develop branch
@@ -235,11 +235,11 @@ v0_reset_to_develop() {
 
   # Try remote develop branch first
   if "${git_cmd[@]}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
-    "${git_cmd[@]}" reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+    "${git_cmd[@]}" reset --hard "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}" >/dev/null
   # Try local develop branch
   elif "${git_cmd[@]}" rev-parse --verify "${V0_DEVELOP_BRANCH}" 2>/dev/null; then
     echo "Note: Remote branch '${V0_DEVELOP_BRANCH}' not found, using local" >&2
-    "${git_cmd[@]}" reset --hard "${V0_DEVELOP_BRANCH}"
+    "${git_cmd[@]}" reset --hard "${V0_DEVELOP_BRANCH}" >/dev/null
   # Create develop branch from main and reset to it
   else
     echo "Note: Branch '${V0_DEVELOP_BRANCH}' not found, creating from main" >&2
@@ -247,10 +247,10 @@ v0_reset_to_develop() {
     # Try to create branch with fallbacks: remote main -> local main -> HEAD
     if ! "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" "${V0_GIT_REMOTE}/main" 2>/dev/null; then
       if ! "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" main 2>/dev/null; then
-        "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" HEAD
+        "${git_cmd[@]}" branch -f "${V0_DEVELOP_BRANCH}" HEAD >/dev/null
       fi
     fi
-    "${git_cmd[@]}" reset --hard "${V0_DEVELOP_BRANCH}"
+    "${git_cmd[@]}" reset --hard "${V0_DEVELOP_BRANCH}" >/dev/null
   fi
 }
 
