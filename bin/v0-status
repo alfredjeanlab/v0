@@ -574,8 +574,9 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   fi  # end: has_operations = true
 
   # Show active roadmaps (only during planning/orchestrating phases)
+  showed_roadmaps=false
   if [[ -z "${BLOCKED}" ]]; then
-    show_active_roadmaps || true
+    show_active_roadmaps && showed_roadmaps=true || true
   fi
 
   # Show fix, chore, and merge worker status in default list (not blocked view)
@@ -608,13 +609,15 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
 
     # If all queues are empty, show each on its own line
     if [[ "${bugs_empty}" = true ]] && [[ "${chores_empty}" = true ]] && [[ "${merges_empty}" = true ]]; then
-      [[ "${has_operations}" = true ]] && echo ""
+      # Only add blank line separator if there was content above (operations or roadmaps)
+      [[ "${has_operations}" = true ]] || [[ "${showed_roadmaps}" = true ]] && echo ""
       echo -e "Bugs: ${C_DIM}None${C_RESET}"
       echo -e "Chores: ${C_DIM}None${C_RESET}"
       echo -e "Merges: ${C_DIM}None${C_RESET}"
     else
       # Show full sections for non-empty queues
-      echo ""
+      # Only add blank line separator if there was content above (operations or roadmaps)
+      [[ "${has_operations}" = true ]] || [[ "${showed_roadmaps}" = true ]] && echo ""
 
       # Bugs section
       fix_status=$(get_worker_status "fix" "${all_sessions}" "${all_polling}")
