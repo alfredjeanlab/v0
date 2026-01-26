@@ -403,6 +403,9 @@ ${branch_line}
 ${remote_line}
 ${workspace_line}
 
+# Worktree hooks
+# V0_WORKTREE_INIT='"\${V0_CHECKOUT_DIR}/scripts/init-worktree"'  # Hook to run after worktree creation
+
 # Branch naming patterns
 V0_FEATURE_BRANCH="feature/{name}"
 V0_BUGFIX_BRANCH="fix/{id}"
