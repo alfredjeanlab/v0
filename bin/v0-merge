@@ -157,8 +157,12 @@ if mg_has_conflicts "${BRANCH}"; then
         if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
             rm -f "${MG_RESOLVE_LOG:-}"
-            mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" "${USING_TEMP_WORKTREE}"
-            mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after resolution)"
+            # Push first, only cleanup on success (so worktree remains for retry on push failure)
+            if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after resolution)"; then
+                mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" "${USING_TEMP_WORKTREE}"
+            else
+                exit 1
+            fi
         fi
     else
         echo
@@ -176,15 +180,23 @@ else
         # With worktree - use standard merge flow
         if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
-            mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
-            mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"
+            # Push first, only cleanup on success (so worktree remains for retry on push failure)
+            if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"; then
+                mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
+            else
+                exit 1
+            fi
         fi
     else
         # Without worktree - use fast-forward merge
         if mg_do_merge_without_worktree "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
-            mg_cleanup_merge "" "" "${BRANCH}"
-            mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"
+            # Push first, only cleanup on success
+            if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"; then
+                mg_cleanup_merge "" "" "${BRANCH}"
+            else
+                exit 1
+            fi
         else
             # Fast-forward failed - need worktree for rebase
             if [[ "${RESOLVE}" = true ]]; then
@@ -196,8 +208,12 @@ else
                 # Do the merge with the temp worktree
                 if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
                     merge_commit=$(mg_get_merge_commit)
-                    mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" true
-                    mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after rebase)"
+                    # Push first, only cleanup on success (so worktree remains for retry on push failure)
+                    if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after rebase)"; then
+                        mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" true
+                    else
+                        exit 1
+                    fi
                 else
                     mg_cleanup_temp_worktree
                     exit 1
