@@ -28,7 +28,6 @@ Your context is automatically primed on startup with `v0 status` and `wok ready`
 ## Monitoring Progress
 
 - `v0 status` - Show all operations
-- `v0 watch` - Continuous status monitoring
 - `v0 attach <type>` - Attach to worker tmux session
 
 ## Managing Work

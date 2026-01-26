@@ -25,7 +25,6 @@ load '../packages/test-support/helpers/test_helper'
     run cat "${PROJECT_ROOT}/packages/cli/lib/prompts/mayor.md"
     assert_success
     assert_output --partial "v0 status"
-    assert_output --partial "v0 watch"
     assert_output --partial "v0 attach"
 }
 
