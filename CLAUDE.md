@@ -6,7 +6,7 @@ Orchestrates Claude workers in tmux sessions for planning, feature development, 
 
 ## Directory Structure
 
-```
+```toc
 bin/                    # CLI commands (v0, v0-plan, v0-build, v0-fix, etc.)
 packages/               # Modular shell library packages
   core/                 #   Foundation: config, logging, git-verify
