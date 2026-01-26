@@ -549,7 +549,14 @@ create_test_state() {
 }
 
 @test "sm_get_status_color returns correct ANSI codes" {
-    # printf outputs the actual escape sequence, not the literal string
+    # Function uses C_* variables set in v0-common.sh
+    # Set them here to test the function's behavior when colors are enabled
+    C_GREEN=$'\033[32m'
+    C_YELLOW=$'\033[33m'
+    C_RED=$'\033[31m'
+    C_CYAN=$'\033[36m'
+    C_DIM=$'\033[2m'
+
     result=$(sm_get_status_color "green")
     [[ "${result}" == $'\033[32m' ]]
 
@@ -558,6 +565,21 @@ create_test_state() {
 
     result=$(sm_get_status_color "red")
     [[ "${result}" == $'\033[31m' ]]
+}
+
+@test "sm_get_status_color returns empty when colors disabled" {
+    # When C_* variables are empty (non-TTY), function should return empty
+    C_GREEN=''
+    C_YELLOW=''
+    C_RED=''
+    C_CYAN=''
+    C_DIM=''
+
+    result=$(sm_get_status_color "green")
+    [[ -z "${result}" ]]
+
+    result=$(sm_get_status_color "red")
+    [[ -z "${result}" ]]
 }
 
 @test "sm_is_active_operation returns true for executing" {

@@ -168,15 +168,16 @@ _sm_get_merge_icon_color() {
 # sm_get_status_color <status>
 # Return ANSI color code for a status
 # Colors: green, yellow, red, cyan, dim
+# Uses C_* variables (set in v0-common.sh) to respect TTY checks
 sm_get_status_color() {
   local status="$1"
 
   case "${status}" in
-    green)  printf '\033[32m' ;;
-    yellow) printf '\033[33m' ;;
-    red)    printf '\033[31m' ;;
-    cyan)   printf '\033[36m' ;;
-    dim)    printf '\033[2m' ;;
+    green)  printf '%s' "${C_GREEN}" ;;
+    yellow) printf '%s' "${C_YELLOW}" ;;
+    red)    printf '%s' "${C_RED}" ;;
+    cyan)   printf '%s' "${C_CYAN}" ;;
+    dim)    printf '%s' "${C_DIM}" ;;
     *)      printf '' ;;
   esac
 }
