@@ -33,5 +33,5 @@ Your context is automatically primed on startup with `v0 status` and `wok ready`
 
 Batch close example (stale todos older than 30 days):
 ```bash
-wok close $(wok list -s todo -q "age > 30d" -o id) --reason="Stale, closing during cleanup"
+wok close $(wok list -s todo -q "age > 30d" -o id --no-limit) --reason="Stale, closing during cleanup"
 ```
