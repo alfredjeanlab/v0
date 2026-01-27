@@ -303,3 +303,118 @@ EOF
     run jq -r '.ignore_blockers' "${state_file}"
     assert_output "true"
 }
+
+# ============================================================================
+# Resume Cancelled Operations Tests
+# ============================================================================
+
+# Helper to create a cancelled operation
+create_cancelled_operation() {
+    local op_name="$1"
+    local epic_id="${2:-test-epic123}"
+
+    local op_dir="${TEST_TEMP_DIR}/project/.v0/build/operations/${op_name}"
+    mkdir -p "${op_dir}/logs"
+    cat > "${op_dir}/state.json" <<EOF
+{
+  "name": "${op_name}",
+  "phase": "cancelled",
+  "epic_id": "${epic_id}",
+  "prompt": "Test operation",
+  "created_at": "2026-01-15T10:00:00Z",
+  "labels": [],
+  "plan_file": "plans/${op_name}.md",
+  "tmux_session": null,
+  "worktree": null,
+  "current_issue": null,
+  "completed": [],
+  "merge_queued": true,
+  "merge_status": null,
+  "merged_at": null,
+  "merge_error": null,
+  "worker_pid": null,
+  "worker_log": null,
+  "worker_started_at": null,
+  "_schema_version": 2
+}
+EOF
+
+    # Set up mock wk data for the epic (no blockers by default)
+    cat > "${MOCK_DATA_DIR}/wk/${epic_id}.json" <<EOF
+{
+  "id": "${epic_id}",
+  "status": "open",
+  "blockers": []
+}
+EOF
+}
+
+@test "v0 resume clears cancelled state and resumes" {
+    create_cancelled_operation "test-op"
+
+    run "${V0_BUILD}" --resume test-op 2>&1
+    assert_success
+    assert_output --partial "Clearing cancelled state"
+    assert_output --partial "Resuming"
+
+    # Verify phase was updated (should be queued since epic_id exists)
+    local state_file="${TEST_TEMP_DIR}/project/.v0/build/operations/test-op/state.json"
+    run jq -r '.phase' "${state_file}"
+    assert_output "queued"
+}
+
+@test "v0 resume cancelled with blockers clears cancelled but shows blocked error" {
+    create_cancelled_operation "test-op" "test-epic123"
+
+    # Add blocker to the operation
+    cat > "${MOCK_DATA_DIR}/wk/test-epic123.json" <<EOF
+{
+  "id": "test-epic123",
+  "status": "open",
+  "blockers": ["test-blocker789"]
+}
+EOF
+    cat > "${MOCK_DATA_DIR}/wk/test-blocker789.json" <<EOF
+{
+  "id": "test-blocker789",
+  "status": "open",
+  "labels": ["plan:blocker-op"]
+}
+EOF
+
+    run "${V0_BUILD}" --resume test-op 2>&1
+    # Should fail due to blocker, but cancelled state should be cleared first
+    assert_failure
+    assert_output --partial "Clearing cancelled state"
+    assert_output --partial "blocked by"
+
+    # Verify phase was updated from cancelled to queued (before blocker check)
+    local state_file="${TEST_TEMP_DIR}/project/.v0/build/operations/test-op/state.json"
+    run jq -r '.phase' "${state_file}"
+    assert_output "queued"
+}
+
+@test "v0 resume cancelled with blockers and --force bypasses blocker" {
+    create_cancelled_operation "test-op" "test-epic123"
+
+    # Add blocker to the operation
+    cat > "${MOCK_DATA_DIR}/wk/test-epic123.json" <<EOF
+{
+  "id": "test-epic123",
+  "status": "open",
+  "blockers": ["test-blocker789"]
+}
+EOF
+    cat > "${MOCK_DATA_DIR}/wk/test-blocker789.json" <<EOF
+{
+  "id": "test-blocker789",
+  "status": "open",
+  "labels": ["plan:blocker-op"]
+}
+EOF
+
+    run "${V0_BUILD}" --resume --force test-op 2>&1
+    assert_success
+    assert_output --partial "Clearing cancelled state"
+    assert_output --partial "Ignoring blocker"
+}

@@ -406,6 +406,17 @@ if [[ -n "${RESUME}" ]]; then
     update_state "worker_pid" "null"
   fi
 
+  # Handle failed/interrupted/cancelled phases - reset to last known good phase
+  # This must happen BEFORE blocker check so cancelled operations can be resumed
+  # (they'll be blocked if they have blockers, but the cancelled state is cleared)
+  if [[ "${PHASE}" = "failed" ]] || [[ "${PHASE}" = "interrupted" ]] || [[ "${PHASE}" = "cancelled" ]]; then
+    echo "Clearing ${PHASE} state and resuming..."
+    # Use state machine functions for resume phase determination
+    PHASE=$(sm_get_resume_phase "${NAME}")
+    sm_clear_error_state "${NAME}"
+    echo "Resuming from ${PHASE}"
+  fi
+
   # Check for wok blockers (replaces old blocked phase handling)
   EPIC_ID=$(get_state epic_id)
   if [[ -n "${EPIC_ID}" ]] && [[ "${EPIC_ID}" != "null" ]]; then
@@ -509,15 +520,6 @@ if [[ -n "${RESUME}" ]]; then
       update_state "tmux_session" 'null'
       PHASE="queued"
     fi
-  fi
-
-  # Handle failed/interrupted/cancelled phases - reset to last known good phase
-  if [[ "${PHASE}" = "failed" ]] || [[ "${PHASE}" = "interrupted" ]] || [[ "${PHASE}" = "cancelled" ]]; then
-    echo "Clearing ${PHASE} state and resuming..."
-    # Use state machine functions for resume phase determination
-    PHASE=$(sm_get_resume_phase "${NAME}")
-    sm_clear_error_state "${NAME}"
-    echo "Resuming from ${PHASE}"
   fi
 else
   init_state
