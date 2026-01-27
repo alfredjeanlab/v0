@@ -18,6 +18,7 @@ source "${_MQ_LIB_DIR}/locking.sh"
 # Level 2 (depends on io, locking)
 source "${_MQ_LIB_DIR}/daemon.sh"
 source "${_MQ_LIB_DIR}/display.sh"
+source "${_MQ_LIB_DIR}/history.sh"
 
 # Level 3 (depends on daemon, display)
 source "${_MQ_LIB_DIR}/readiness.sh"
