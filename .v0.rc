@@ -6,11 +6,12 @@ PROJECT="v0"
 ISSUE_PREFIX="v0"    # Issue IDs: v0-abc123
 
 # Build and merge configuration
-V0_DEVELOP_BRANCH="v0/agent/kestred-d96b"     # Target branch for merges
+# V0_DEVELOP_BRANCH defined in .v0.profile.rc (user-specific)
+[[ -f "${V0_ROOT:-$(dirname "${BASH_SOURCE[0]}")}/.v0.profile.rc" ]] && source "${V0_ROOT:-$(dirname "${BASH_SOURCE[0]}")}/.v0.profile.rc"
 V0_GIT_REMOTE="agent"        # Git remote for push/fetch (local agent remote)
-V0_WORKSPACE_MODE="worktree"  # 'worktree' or 'clone' (auto-detected)
+V0_WORKSPACE_MODE="worktree"     # 'worktree' or 'clone' (auto-detected)
 
-# Initialize worktrees with cached dependencies (runs scripts/init-worktree)
+# Worktree hooks
 V0_WORKTREE_INIT='"${V0_CHECKOUT_DIR}/scripts/init-worktree"'
 
 # Branch naming patterns
