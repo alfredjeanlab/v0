@@ -75,6 +75,16 @@ show_branch_status() {
         [[ -z "${state_label}" ]] && state_label="behind"
     fi
 
+    # Build the branch display name
+    # For common branch names (main, develop, master) that might be confused with
+    # local branches, show full remote ref (remote/branch) for clarity
+    local branch_display="${develop_branch}"
+    case "${develop_branch}" in
+        main|develop|master)
+            branch_display="${remote}/${develop_branch}"
+            ;;
+    esac
+
     # Determine suggestion based on agent's status
     if [[ "${agent_ahead}" != "0" ]]; then
         # Agent has commits to pull
@@ -86,17 +96,17 @@ show_branch_status() {
     elif [[ "${agent_behind}" != "0" ]]; then
         # Agent is strictly behind, suggest push
         if [[ -n "${is_tty}" ]]; then
-            suggestion="${C_DIM}(use${C_RESET} ${C_CYAN}v0 push${C_RESET} ${C_DIM}to send them to${C_RESET} ${C_GREEN}${develop_branch}${C_RESET}${C_DIM})${C_RESET}"
+            suggestion="${C_DIM}(use${C_RESET} ${C_CYAN}v0 push${C_RESET} ${C_DIM}to send them to${C_RESET} ${C_GREEN}${branch_display}${C_RESET}${C_DIM})${C_RESET}"
         else
-            suggestion="(use v0 push to send them to ${develop_branch})"
+            suggestion="(use v0 push to send them to ${branch_display})"
         fi
     fi
 
     # Output from agent's perspective
     if [[ -n "${is_tty}" ]]; then
-        echo -e "Changes: ${C_GREEN}${develop_branch}${C_RESET} is ${display} ${state_label} ${suggestion}"
+        echo -e "Changes: ${C_GREEN}${branch_display}${C_RESET} is ${display} ${state_label} ${suggestion}"
     else
-        echo -e "Changes: ${develop_branch} is ${display} ${state_label} ${suggestion}"
+        echo -e "Changes: ${branch_display} is ${display} ${state_label} ${suggestion}"
     fi
     return 0
 }
