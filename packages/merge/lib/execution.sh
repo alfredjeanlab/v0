@@ -82,7 +82,12 @@ mg_ensure_develop_branch() {
         fi
     fi
 
-    # Pull latest to stay current
+    # Fetch and pull latest to stay current.
+    # The fetch is critical: conflict detection (mg_has_conflicts) runs git merge-tree
+    # against HEAD, so HEAD must reflect the latest remote state. Without this fetch,
+    # the daemon subprocess may have stale refs and report false conflicts.
+    # See: c8784a6 which fixed the analogous issue for readiness checks.
+    git fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
     git pull --ff-only "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
 
     return 0
