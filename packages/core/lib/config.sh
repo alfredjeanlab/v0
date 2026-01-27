@@ -397,8 +397,19 @@ v0_init_config() {
   # Track if branch was auto-generated (no --develop provided)
   local branch_auto_generated=false
   if [[ -z "${develop_branch}" ]]; then
-    develop_branch=$(v0_generate_user_branch)
-    branch_auto_generated=true
+    # Check if .v0.profile.rc exists with a V0_DEVELOP_BRANCH setting
+    local profile_file="${target_dir}/.v0.profile.rc"
+    if [[ -f "${profile_file}" ]]; then
+      # shellcheck source=/dev/null
+      source "${profile_file}"
+      develop_branch="${V0_DEVELOP_BRANCH:-}"
+    fi
+
+    # Only auto-generate if profile didn't provide a branch
+    if [[ -z "${develop_branch}" ]]; then
+      develop_branch=$(v0_generate_user_branch)
+      branch_auto_generated=true
+    fi
   fi
 
   # Create the develop branch if it doesn't exist (for v0/* branches)

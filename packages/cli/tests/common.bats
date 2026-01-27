@@ -815,6 +815,40 @@ EOF
     assert_output "${develop_commit}"
 }
 
+@test "v0_init_config respects existing .v0.profile.rc V0_DEVELOP_BRANCH" {
+    local test_dir="${TEST_TEMP_DIR}/new-project"
+    init_mock_git_repo "${test_dir}"
+    cd "${test_dir}" || return 1
+
+    # Create the branch that will be in .v0.profile.rc
+    git checkout -b "v0/agent/existing-branch"
+    git checkout main
+
+    # Pre-create .v0.profile.rc with a specific branch
+    cat > "${test_dir}/.v0.profile.rc" <<'EOF'
+# v0 user profile (not committed - user-specific settings)
+export V0_DEVELOP_BRANCH="v0/agent/existing-branch"
+EOF
+
+    # Mock wk to avoid actual wk initialization
+    wk() { echo "mock wk $*"; return 0; }
+    export -f wk
+
+    source_lib "v0-common.sh"
+
+    # Run init without --develop (should use existing profile)
+    v0_init_config "${test_dir}"
+
+    # Verify .v0.profile.rc still contains the original branch (not overwritten)
+    run grep 'V0_DEVELOP_BRANCH="v0/agent/existing-branch"' "${test_dir}/.v0.profile.rc"
+    assert_success
+
+    # Verify no new branch was auto-generated in the profile
+    run grep 'V0_DEVELOP_BRANCH="v0/agent/[a-z]*-[a-f0-9]' "${test_dir}/.v0.profile.rc"
+    # This should match the existing-branch pattern, not a new random one
+    refute_output --partial "-[a-f0-9][a-f0-9][a-f0-9][a-f0-9]"
+}
+
 # ============================================================================
 # v0_git_worktree_clean() tests
 # ============================================================================
