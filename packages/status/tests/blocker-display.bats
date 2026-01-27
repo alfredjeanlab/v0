@@ -103,27 +103,34 @@ setup() {
   [[ "${_STATUS_ISSUE_CACHE}" == *"v0-epic"* ]]
 }
 
-@test "_status_lookup_issue returns cached data" {
+@test "_status_cache_lookup returns cached data" {
   mock_wk_show "v0-epic" '{"id": "v0-epic", "status": "todo", "blockers": []}'
   _status_init_blocker_cache "v0-epic"
 
-  run _status_lookup_issue "v0-epic"
+  # Field 1 is ID, field 2 is status
+  run _status_cache_lookup "v0-epic" 1
   assert_success
-  assert_output --partial '"id":"v0-epic"'
+  assert_output "v0-epic"
+
+  run _status_cache_lookup "v0-epic" 2
+  assert_success
+  assert_output "todo"
 }
 
-@test "_status_lookup_issue returns empty for uncached issue" {
+@test "_status_cache_lookup returns empty for uncached issue" {
   _STATUS_ISSUE_CACHE=""
 
-  run _status_lookup_issue "v0-unknown"
+  run _status_cache_lookup "v0-unknown" 1
   assert_success
   assert_output ""
 }
 
 @test "_status_get_blocker_display uses cache instead of wk call" {
-  # Set up cache directly (simulating _status_init_blocker_cache)
-  _STATUS_ISSUE_CACHE='{"id": "v0-epic", "blockers": ["v0-blocker"]}
-{"id": "v0-blocker", "status": "todo", "labels": ["plan:cached-op"]}'
+  # Set up cache directly in TSV format: id<TAB>status<TAB>blockers<TAB>plan_label
+  # Note: Using printf to ensure proper tab characters
+  _STATUS_ISSUE_CACHE=$(printf '%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s' \
+    "v0-epic" "" "v0-blocker" "" \
+    "v0-blocker" "todo" "" "plan:cached-op")
 
   # Should use cache - no wk mocks needed
   run _status_get_blocker_display "v0-epic"
