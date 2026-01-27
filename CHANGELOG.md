@@ -8,53 +8,43 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 
 ### Added
 
-- **`v0 push` and `v0 pull` commands**: Push user branch to agent branch, or pull agent changes into user branch.
-
-- **User-specific branch naming**: `v0 init` now generates unique branch names per user (`v0/agent/{username}-{shortid}`) to prevent conflicts when multiple developers use v0 on the same repository.
-
-- **Local agent remote**: Worker branches are pushed to a local bare repository (`~/.local/state/v0/${PROJECT}/remotes/agent.git`) instead of polluting the shared origin with temporary branches.
-
-- **`v0 archive` command**: Move completed plans to icebox for long-term storage.
-
-- **`v0 start` and `v0 stop` commands**: Control workers with `v0 start nudge` and `v0 stop nudge`.
-
-- **`--after` flag for `v0 fix` and `v0 chore`**: Specify dependencies between operations.
-
-- **Background pruning daemon**: Automatic cleanup of stale worktrees and branches.
-
-- **ANSI color support for help output**: Colorized Usage:, options, and defaults in help text.
-
-- **Release script**: Added `scripts/release` for versioning and tagging.
-
-- **Ripgrep wrapper**: Faster grep operations via `v0_grep` function.
-
-- **Dedicated merge workspace**: Isolated workspace for merge conflict resolution.
+- **`v0 push` and `v0 pull` commands**: Sync changes between user and agent branches on your terms.
 
 - **`v0 mayor` command**: Interactive orchestration assistant for high-level project guidance.
 
 - **`v0 watch --all` flag**: System-wide project monitoring across all v0-enabled repositories.
 
-- **`--force` flag for `v0 resume`**: Bypass blockers when resuming operations.
+- **`v0 log` command**: Combined history view for all operations with filtering options.
 
-- **`--drop-workspace` and `--drop-everything` flags for `v0 stop`**: Clean up workspaces and agent branches on shutdown.
+- **`v0 archive` command**: Move completed plans to icebox for long-term storage.
+
+- **`v0 start` and `v0 stop` commands**: Control workers directly; `--drop-workspace` and `--drop-everything` flags clean up on shutdown.
+
+- **Worker flags**: `--restart` to restart workers, `--after` to specify dependencies between fix/chore operations, `--force` to bypass blockers on resume.
+
+- **`--short` flag for `v0 status` and `v0 watch`**: Compact display; `v0 watch --all` uses short mode by default.
+
+- **`.v0.profile.rc` configuration file**: Project-specific settings separated from `.v0.rc`.
+
+- **Background pruning daemon**: Automatic cleanup of stale worktrees and branches.
+
+- **Dedicated merge workspace**: Isolated workspace for merge conflict resolution.
+
+- **Developer tooling**: Release script (`scripts/release`), ANSI color support in help output.
 
 ### Changed
 
-- **Renamed `v0 feature` to `v0 build`**: Not always used for features.
+- **`v0 build` simplified**: Renamed from `v0 feature`, removed decompose phase (now plan -> implement -> verify), removed `--eager`, `--foreground`, `--safe`, `--enqueue` flags.
 
-- **Removed decompose phase**: Build pipeline simplified to plan -> implement -> verify.
+- **New defaults for isolation**: Develop branch defaults to user-specific `v0/agent/{username}-{shortid}`, git remote defaults to local `agent` remote (`~/.local/state/v0/${PROJECT}/remotes/agent.git`) instead of `origin`, worker branches derive from develop branch.
 
-- **Simplified `v0 build` flags**: Removed `--eager`, `--foreground`, `--safe`, `--enqueue` options.
+- **Status display**: Renamed "Operations" to "Plans", "Bugfix" to "Bugs", "Check" to "Status"; `--after` accepts operation names in addition to wok IDs.
 
-- **Default develop branch**: Changed from `main` to user-specific `v0/agent/{username}-{shortid}`.
+- **`v0 init` output more concise**: Agent remote setup messages streamlined.
 
-- **Default git remote**: Changed `V0_GIT_REMOTE` from `"origin"` to `"agent"` (local bare repo).
+### Documentation
 
-- **Status display**: Renamed "Operations" to "Plans", "Bugfix" to "Bugs", "Check" to "Status".
-
-- **`--after` accepts operation names**: In addition to wok IDs.
-
-- **Worker branch derivation**: Worker branches now derive from the develop branch rather than being independently named.
+- Synced architecture and merge docs with implementation; fixed broken links in SYSTEM.md.
 
 ### Refactored
 
@@ -64,20 +54,19 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 
 - **State machine**: Migrated blocking to wok, removed blocked phase.
 
+### Performance
+
+- **Ripgrep wrapper**: Faster grep operations via `v0_grep` function.
+
 ### Fixed
 
+- Merge queue reliability: fetch remote refs before readiness check, recover stuck PROCESSING entries on startup, verify already-merged operations, push HEAD explicitly to develop branch.
+- Worktree handling: resolve branch from remote before reporting `worktree:missing`, push before cleanup to preserve worktree on failure.
+- Status display: exit early when wk commands fail, respect `V0_FORCE_COLOR` in branch-status.
 - Wok epic marked as done when operation merges.
 - `.claude` directory created before writing settings and hooks.
-- Merge verification for already-merged operations.
 - Stale tmux session cleanup when resuming features.
-- Merge operations explicitly push HEAD to develop branch.
-- Branch resolution from remote before reporting `worktree:missing` status.
-- Push before cleanup to preserve worktree on push failure.
-- `v0 stop --drop-everything` properly cleans up agent branches in worktree mode.
 - Inherited `BUILD_DIR` preserved when merge daemon runs in workspace.
-- Extra blank line after 'Plans: None' in status output.
-- Merging behavior for bugs and chores.
-- `v0 mayor` now starts a fresh session each invocation.
 - Batch log pruning to avoid per-line subprocess spawning.
 
 ## [0.2.2] - 2026-01-24
