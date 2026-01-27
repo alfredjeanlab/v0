@@ -62,67 +62,6 @@ EOF
   exit 1
 }
 
-# Show active roadmaps (only planning/orchestrating phases)
-# Returns: 0 if roadmaps were displayed, 1 if no active roadmaps
-show_active_roadmaps() {
-  local roadmap_dir="${BUILD_DIR}/roadmaps"
-  [[ ! -d "${roadmap_dir}" ]] && return 1
-
-  local active_roadmaps=()
-  local local_machine
-  local_machine=$(hostname -s)
-
-  for state_file in "${roadmap_dir}"/*/state.json; do
-    [[ ! -f "${state_file}" ]] && continue
-
-    # Batch read all fields in single jq call (7 fields -> 1 subprocess)
-    local phase name desc idea_id worker_pid machine session
-    local _fields
-    _fields=$(jq -r '[.phase, .name, .roadmap_description, .idea_id, .worker_pid, .machine, .planning_session] | map(. // "") | join("|")' "${state_file}")
-    IFS='|' read -r phase name desc idea_id worker_pid machine session <<< "${_fields}"
-
-    # Only show during active phases (init/planning)
-    if [[ "${phase}" = "planning" ]] || [[ "${phase}" = "init" ]]; then
-
-      # Truncate description for display
-      local desc_short="${desc:0:40}"
-      [[ ${#desc} -gt 40 ]] && desc_short="${desc_short}..."
-
-      # Check if session is running
-      local status_icon=""
-      if [[ -n "${session}" ]] && [[ "${session}" != "null" ]] && tmux has-session -t "${session}" 2>/dev/null; then
-        status_icon=" ${C_CYAN}(active)${C_RESET}"
-      elif [[ -n "${worker_pid}" ]] && [[ "${worker_pid}" != "null" ]]; then
-        if [[ "${machine}" = "${local_machine}" ]] && kill -0 "${worker_pid}" 2>/dev/null; then
-          status_icon=" ${C_CYAN}(bg-worker)${C_RESET}"
-        fi
-      fi
-
-      active_roadmaps+=("${name}|${phase}|${desc_short}|${idea_id}|${status_icon}")
-    fi
-  done
-
-  if [[ ${#active_roadmaps[@]} -eq 0 ]]; then
-    return 1
-  fi
-
-  echo ""
-  echo "Roadmaps:"
-  for roadmap_data in "${active_roadmaps[@]}"; do
-    IFS='|' read -r name phase desc idea_id status_icon <<< "${roadmap_data}"
-    local phase_color=""
-    case "${phase}" in
-      planning) phase_color="${C_YELLOW}" ;;
-      init) phase_color="${C_DIM}" ;;
-    esac
-    printf "  %-20s ${phase_color}%-15s${C_RESET}%b  %s\n" "${name}:" "${phase}" "${status_icon}" "${C_DIM}(${desc})${C_RESET}"
-    [[ -n "${idea_id}" ]] && [[ "${idea_id}" != "null" ]] && printf "  %-20s %s\n" "" "${C_DIM}[${idea_id}]${C_RESET}"
-  done
-
-  return 0
-}
-
-
 # Phase 3-4 optimization: Get queue entry status using bash string matching
 # Args: $1 = operation name, $2 = queue_cache_data variable
 # Output: status field or empty string
@@ -243,15 +182,32 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     done
   fi
 
-  # If no operations, show compact "None" format like other sections
-  if [[ "${has_operations}" = false ]]; then
+  # Also check for active roadmaps (init/planning phase) - they should appear in Plans
+  has_active_roadmaps=false
+  if [[ -d "${BUILD_DIR}/roadmaps" ]]; then
+    for f in "${BUILD_DIR}"/roadmaps/*/state.json; do
+      [[ -f "${f}" ]] || continue
+      rm_phase=$(jq -r '.phase // ""' "${f}" 2>/dev/null)  # roadmap state check
+      if [[ "${rm_phase}" = "init" ]] || [[ "${rm_phase}" = "planning" ]]; then
+        has_active_roadmaps=true
+        break
+      fi
+    done
+  fi
+
+  # Consider plans exist if we have operations OR active roadmaps
+  has_plans="${has_operations}"
+  [[ "${has_active_roadmaps}" = true ]] && has_plans=true
+
+  # If no plans (operations or active roadmaps), show compact "None" format
+  if [[ "${has_plans}" = false ]]; then
     if [[ -n "${BLOCKED}" ]]; then
       echo -e "Blocked Plans: ${C_DIM}None${C_RESET}"
     else
       echo -e "Plans: ${C_DIM}None${C_RESET}"
     fi
   else
-    # Operations exist - show full format with header and details
+    # Plans exist (operations and/or active roadmaps) - show full format with header and details
     if [[ -n "${BLOCKED}" ]]; then
       echo "Blocked Plans:"
     else
@@ -575,17 +531,83 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
     fi
   fi
 
+  # Show active roadmaps inline with operations (not in blocked view)
+  if [[ -z "${BLOCKED}" ]] && [[ "${has_active_roadmaps}" = true ]]; then
+    roadmap_dir="${BUILD_DIR}/roadmaps"
+    for state_file in "${roadmap_dir}"/*/state.json; do
+      [[ ! -f "${state_file}" ]] && continue
+
+      # Read all roadmap fields in single jq call
+      _rm_fields=$(jq -r '[.phase, .name, .roadmap_description, .idea_id, .worker_pid, .machine, .planning_session, .created_at] | map(. // "") | join("|")' "${state_file}")
+      IFS='|' read -r rm_phase rm_name rm_desc rm_idea_id rm_worker_pid rm_machine rm_session rm_created_at <<< "${_rm_fields}"
+
+      # Only show during active phases (init/planning)
+      if [[ "${rm_phase}" != "planning" ]] && [[ "${rm_phase}" != "init" ]]; then
+        continue
+      fi
+
+      found_any=1
+
+      # Truncate description for display
+      rm_desc_short="${rm_desc:0:40}"
+      [[ ${#rm_desc} -gt 40 ]] && rm_desc_short="${rm_desc_short}..."
+
+      # Check if session is running
+      rm_status_icon=""
+      if [[ -n "${rm_session}" ]] && [[ "${rm_session}" != "null" ]] && [[ "${all_sessions}" == *"${rm_session}"* ]]; then
+        rm_status_icon=" ${C_CYAN}(active)${C_RESET}"
+      elif [[ -n "${rm_worker_pid}" ]] && [[ "${rm_worker_pid}" != "null" ]]; then
+        if [[ "${rm_machine}" = "${local_machine}" ]] && kill -0 "${rm_worker_pid}" 2>/dev/null; then
+          rm_status_icon=" ${C_CYAN}(bg-worker)${C_RESET}"
+        fi
+      fi
+
+      # Update status icon for specific phases
+      if [[ -n "${rm_status_icon}" ]]; then
+        case "${rm_phase}" in
+          init|planning)
+            rm_status_icon=" ${C_YELLOW}(orchestrating...)${C_RESET}"
+            ;;
+        esac
+      fi
+
+      # Format phase display
+      case "${rm_phase}" in
+        init) rm_display_phase="new" ;;
+        planning) rm_display_phase="orchestrating" ;;
+        *) rm_display_phase="${rm_phase}" ;;
+      esac
+
+      # Get phase color
+      rm_phase_color="${C_YELLOW}"
+
+      # Calculate display time
+      rm_display_time=""
+      if [[ -n "${rm_created_at}" ]] && [[ "${rm_created_at}" != "null" ]]; then
+        rm_display_time=$(format_operation_time "${rm_created_at}" "${now_epoch}")
+      fi
+
+      # Display roadmap entry (using same format as operations)
+      rm_display_name="${rm_name}:"
+      if [[ ${#rm_display_name} -gt ${max_name_display} ]]; then
+        rm_display_name="${rm_name:0:$((max_name_display - 4))}...:"
+      fi
+      # Ensure minimum column width for roadmap names (max_name_len may be 8 if no operations)
+      rm_name_width=${max_name_len}
+      [[ ${rm_name_width} -lt 20 ]] && rm_name_width=20
+      printf "  %-${rm_name_width}s ${rm_phase_color}%-15s${C_RESET}%b ${C_DIM}(%s)${C_RESET}\n" "${rm_display_name}" "${rm_display_phase}" "${rm_status_icon}" "${rm_display_time}"
+      [[ -n "${rm_idea_id}" ]] && [[ "${rm_idea_id}" != "null" ]] && printf "  %-${rm_name_width}s ${C_DIM}[%s]${C_RESET}\n" "" "${rm_idea_id}"
+    done
+  fi
+
   # For --blocked filter: show message if operations exist but none are blocked
   if [[ -z "${found_any}" ]] && [[ -n "${BLOCKED}" ]]; then
     echo -e "  ${C_DIM}(no waiting operations)${C_RESET}"
   fi
-  fi  # end: has_operations = true
+  fi  # end: has_plans = true
 
-  # Show active roadmaps (only during planning/orchestrating phases)
-  showed_roadmaps=false
-  if [[ -z "${BLOCKED}" ]]; then
-    show_active_roadmaps && showed_roadmaps=true || true
-  fi
+  # Roadmaps are now shown inline with Plans above, so no separate section needed
+  showed_roadmaps="${has_active_roadmaps}"
 
   # Show fix, chore, and merge worker status in default list (not blocked view)
   if [[ -z "${BLOCKED}" ]]; then
