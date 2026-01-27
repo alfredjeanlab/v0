@@ -136,6 +136,29 @@ MOCK_EOF
 }
 
 teardown() {
+    # Kill any running workers before cleanup
+    if [[ -n "${TEST_TEMP_DIR:-}" ]]; then
+        # Find and kill any worker processes
+        local op_dir
+        for op_dir in "${TEST_TEMP_DIR}/project/.v0/build/operations/"*/; do
+            if [[ -d "${op_dir}" ]]; then
+                local state_file="${op_dir}/state.json"
+                if [[ -f "${state_file}" ]]; then
+                    local pid
+                    pid=$(jq -r '.worker_pid // empty' "${state_file}" 2>/dev/null || true)
+                    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+                        kill -9 "${pid}" 2>/dev/null || true
+                        # Wait for process to terminate
+                        for _ in 1 2 3 4 5; do
+                            kill -0 "${pid}" 2>/dev/null || break
+                            sleep 0.1
+                        done
+                    fi
+                fi
+            fi
+        done
+    fi
+
     export HOME="${REAL_HOME}"
     export PATH="${ORIGINAL_PATH}"
     if [[ -n "${TEST_TEMP_DIR}" ]] && [[ -d "${TEST_TEMP_DIR}" ]]; then

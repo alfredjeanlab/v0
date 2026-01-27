@@ -21,7 +21,11 @@ V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${V0_DIR}"
 
 source "${V0_DIR}/packages/cli/lib/v0-common.sh"
-v0_load_config
+
+# Skip config loading if BUILD_DIR already set (for testing)
+if [[ -z "${BUILD_DIR:-}" ]]; then
+  v0_load_config
+fi
 
 # Daemon configuration
 PRUNE_INTERVAL=3600  # 1 hour in seconds
