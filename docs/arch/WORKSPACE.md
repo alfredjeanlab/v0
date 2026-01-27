@@ -136,6 +136,7 @@ git remote set-url origin <same-url-as-main-repo>
 
 - **Duplicate storage**: Objects are not shared (though local clone is fast)
 - **Separate refs**: Must fetch to see main repo's new commits
+- **Includes `.v0.rc`**: Clone contains the tracked `.v0.rc` file, which could cause `v0_load_config()` to set `V0_ROOT` to the workspace path. The `v0_register_project()` function detects this and skips registration to prevent corrupting `.v0.root`.
 
 ### Control Flow for Operations
 

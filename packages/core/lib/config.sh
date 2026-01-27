@@ -241,6 +241,15 @@ v0_register_project() {
   [[ -z "${V0_ROOT:-}" ]] && return 0
   [[ -z "${V0_STATE_DIR:-}" ]] && return 0
 
+  # Skip registration if V0_ROOT is inside the workspace directory.
+  # This prevents merge operations running from the clone/worktree workspace
+  # from overwriting the .v0.root with the workspace path instead of the
+  # actual project root.
+  local workspace_prefix="${V0_STATE_DIR}/workspace/"
+  if [[ "${V0_ROOT}/" == "${workspace_prefix}"* ]]; then
+    return 0
+  fi
+
   local root_file="${V0_STATE_DIR}/.v0.root"
 
   # Create state dir if needed

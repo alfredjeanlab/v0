@@ -299,6 +299,7 @@ When running from a workspace (worktree or clone), certain paths must point to t
 | `MERGEQ_DIR` | Main repo | Single queue shared across worktrees |
 | `BUILD_DIR` | Main repo | State files live in main repo's `.v0/` |
 | `V0_WORKSPACE_DIR` | Workspace | Git operations run here |
+| `.v0.root` | Main repo | Discovery file for `v0 watch --all` |
 
 The function `v0_find_main_repo()` resolves the main repository from any worktree.
 
