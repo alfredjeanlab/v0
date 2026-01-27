@@ -15,6 +15,31 @@
 # BUILD_DIR - Path to build directory
 # MERGEQ_DIR - Directory for merge queue state
 
+# _mq_mark_issue_done <issue_id> <reason>
+# Mark a wok issue as done with the given reason
+# Used for branch merges where we have the issue_id but no operation state
+_mq_mark_issue_done() {
+    local issue_id="$1"
+    local reason="$2"
+
+    # Check if already done/closed
+    local status
+    status=$(wk show "${issue_id}" -o json 2>/dev/null | jq -r '.status // "unknown"')
+    case "${status}" in
+        done|closed) return 0 ;;  # Already closed
+    esac
+
+    # If in 'todo' status, start it first (wk done requires in_progress -> done)
+    if [[ "${status}" == "todo" ]]; then
+        wk start "${issue_id}" 2>/dev/null || true
+    fi
+
+    # Mark as done
+    if ! wk done "${issue_id}" --reason "${reason}" 2>/dev/null; then
+        echo "[$(date +%H:%M:%S)] Warning: Failed to mark issue ${issue_id} as done" >&2
+    fi
+}
+
 # mq_enqueue <operation> [priority] [issue_id]
 # Add an operation to the merge queue
 # Returns 0 on success, 1 on failure
@@ -180,6 +205,12 @@ mq_process_branch_merge() {
         mq_emit_event "merge:completed" "${branch}"
         echo "[$(date +%H:%M:%S)] Merge completed: ${branch}"
 
+        # Mark the associated issue as done BEFORE triggering dependents
+        if [[ -n "${issue_id}" ]]; then
+            v0_trace "mergeq:branch:wok" "Marking issue ${issue_id} as done"
+            _mq_mark_issue_done "${issue_id}" "Merged to ${V0_DEVELOP_BRANCH}"
+        fi
+
         # Trigger dependent operations now that this issue is merged
         if [[ -n "${issue_id}" ]]; then
             v0_trace "mergeq:dependents" "Triggering dependents for issue ${issue_id}"
@@ -203,6 +234,12 @@ mq_process_branch_merge() {
             mq_log_event "merge:completed: ${branch} (branch, after resolution)"
             mq_emit_event "merge:completed" "${branch}"
             echo "[$(date +%H:%M:%S)] Merge completed (after automatic resolution): ${branch}"
+
+            # Mark the associated issue as done BEFORE triggering dependents
+            if [[ -n "${issue_id}" ]]; then
+                v0_trace "mergeq:branch:wok" "Marking issue ${issue_id} as done (after resolution)"
+                _mq_mark_issue_done "${issue_id}" "Merged to ${V0_DEVELOP_BRANCH} (after resolution)"
+            fi
 
             # Trigger dependent operations now that this issue is merged
             if [[ -n "${issue_id}" ]]; then

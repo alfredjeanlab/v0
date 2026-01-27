@@ -129,6 +129,9 @@ sm_transition_to_executing() {
 
   _sm_do_transition "${op}" "executing" "agent:launched" "tmux session ${session}" \
     "tmux_session" "\"${session}\""
+
+  # Mark the wok epic as in_progress when execution starts
+  _sm_start_wok_epic "${op}"
 }
 
 # sm_transition_to_completed <op>
@@ -184,6 +187,31 @@ sm_transition_to_merged() {
 
   # Close any remaining plan issues for this operation
   _sm_close_plan_issues "${op}"
+}
+
+# _sm_start_wok_epic <op>
+# Internal helper to mark the operation's wok epic as started (in_progress)
+# Called when agent begins implementation work
+_sm_start_wok_epic() {
+  local op="$1"
+  local epic_id
+
+  epic_id=$(sm_read_state "${op}" "epic_id")
+  if [[ -z "${epic_id}" ]] || [[ "${epic_id}" == "null" ]]; then
+    return 0  # No epic to start
+  fi
+
+  # Check if already in_progress or done
+  local status
+  status=$(wk show "${epic_id}" -o json 2>/dev/null | jq -r '.status // "unknown"')
+  case "${status}" in
+    in_progress|done|closed) return 0 ;;  # Already started or completed
+  esac
+
+  # Mark as in_progress
+  if ! wk start "${epic_id}" 2>/dev/null; then
+    sm_emit_event "${op}" "wok:warn" "Failed to start epic ${epic_id}"
+  fi
 }
 
 # _sm_close_wok_epic <op>

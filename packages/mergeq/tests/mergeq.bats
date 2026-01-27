@@ -611,3 +611,113 @@ EOF
     run grep -E "export BUILD_DIR" "${PROJECT_ROOT}/packages/mergeq/lib/daemon.sh"
     assert_success
 }
+
+# ============================================================================
+# _mq_mark_issue_done() tests - Wok issue completion for branch merges
+# ============================================================================
+
+@test "_mq_mark_issue_done calls wk done on issue" {
+    source_mergeq
+    setup_wk_mocks
+    export MOCK_WK_CALLS_FILE="${TEST_TEMP_DIR}/wk-calls.log"
+    touch "${MOCK_WK_CALLS_FILE}"
+
+    # Mock wk show to return in_progress status
+    mock_wk_show "testp-bug123" '{"status": "in_progress"}'
+
+    # Source processing.sh to get _mq_mark_issue_done
+    source "${PROJECT_ROOT}/packages/mergeq/lib/processing.sh"
+
+    # Call the function
+    _mq_mark_issue_done "testp-bug123" "Merged to main"
+
+    # Verify wk done was called
+    run grep "wk done testp-bug123" "${MOCK_WK_CALLS_FILE}"
+    assert_success
+}
+
+@test "_mq_mark_issue_done calls wk start first when issue is in todo status" {
+    source_mergeq
+    setup_wk_mocks
+    export MOCK_WK_CALLS_FILE="${TEST_TEMP_DIR}/wk-calls.log"
+    touch "${MOCK_WK_CALLS_FILE}"
+
+    # Mock wk show to return todo status
+    mock_wk_show "testp-bug123" '{"status": "todo"}'
+
+    # Source processing.sh to get _mq_mark_issue_done
+    source "${PROJECT_ROOT}/packages/mergeq/lib/processing.sh"
+
+    # Call the function
+    _mq_mark_issue_done "testp-bug123" "Merged to main"
+
+    # Verify wk start was called before wk done
+    run cat "${MOCK_WK_CALLS_FILE}"
+    assert_output --partial "wk start testp-bug123"
+    assert_output --partial "wk done testp-bug123"
+
+    # Verify the order: start should come before done
+    local start_line done_line
+    start_line=$(grep -n "wk start" "${MOCK_WK_CALLS_FILE}" | head -1 | cut -d: -f1)
+    done_line=$(grep -n "wk done" "${MOCK_WK_CALLS_FILE}" | head -1 | cut -d: -f1)
+    [ "${start_line}" -lt "${done_line}" ]
+}
+
+@test "_mq_mark_issue_done skips when issue already done" {
+    source_mergeq
+    setup_wk_mocks
+    export MOCK_WK_CALLS_FILE="${TEST_TEMP_DIR}/wk-calls.log"
+    touch "${MOCK_WK_CALLS_FILE}"
+
+    # Mock wk show to return done status
+    mock_wk_show "testp-bug123" '{"status": "done"}'
+
+    # Source processing.sh to get _mq_mark_issue_done
+    source "${PROJECT_ROOT}/packages/mergeq/lib/processing.sh"
+
+    # Call the function
+    _mq_mark_issue_done "testp-bug123" "Merged to main"
+
+    # Verify neither wk start nor wk done was called (only show)
+    run grep "wk start" "${MOCK_WK_CALLS_FILE}"
+    assert_failure
+    run grep "wk done" "${MOCK_WK_CALLS_FILE}"
+    assert_failure
+}
+
+@test "_mq_mark_issue_done skips when issue already closed" {
+    source_mergeq
+    setup_wk_mocks
+    export MOCK_WK_CALLS_FILE="${TEST_TEMP_DIR}/wk-calls.log"
+    touch "${MOCK_WK_CALLS_FILE}"
+
+    # Mock wk show to return closed status
+    mock_wk_show "testp-bug123" '{"status": "closed"}'
+
+    # Source processing.sh to get _mq_mark_issue_done
+    source "${PROJECT_ROOT}/packages/mergeq/lib/processing.sh"
+
+    # Call the function
+    _mq_mark_issue_done "testp-bug123" "Merged to main"
+
+    # Verify neither wk start nor wk done was called
+    run grep "wk done" "${MOCK_WK_CALLS_FILE}"
+    assert_failure
+}
+
+@test "_mq_mark_issue_done handles wk done failure gracefully" {
+    source_mergeq
+    setup_wk_mocks
+    export MOCK_WK_DONE_FAIL=1
+
+    # Mock wk show to return in_progress status
+    mock_wk_show "testp-bug123" '{"status": "in_progress"}'
+
+    # Source processing.sh to get _mq_mark_issue_done
+    source "${PROJECT_ROOT}/packages/mergeq/lib/processing.sh"
+
+    # Call should not fail (wk failure is non-fatal)
+    run _mq_mark_issue_done "testp-bug123" "Merged to main"
+    # Function returns 0 even on wk failure, but outputs a warning
+    assert_output --partial "Warning"
+}
