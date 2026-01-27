@@ -480,6 +480,11 @@ mq_process_watch() {
             continue
         fi
 
+        # Fetch remote refs before checking readiness to ensure branch existence
+        # checks in _sm_resolve_merge_branch are accurate. Without this, operations
+        # may appear unready because their remote tracking refs are stale.
+        git -C "${V0_WORKSPACE_DIR}" fetch "${V0_GIT_REMOTE}" --prune 2>/dev/null || true
+
         local not_ready_reasons=""
         for op in ${pending_ops}; do
             # Check if entry is stale
