@@ -166,8 +166,13 @@ setup() {
 
     # Manually kill to simulate what wait does (don't actually call wait as it takes 30s)
     kill -TERM "${pid}" 2>/dev/null || true
-    sleep 0.2
-    kill -0 "${pid}" 2>/dev/null || rm -f "${PRUNE_DAEMON_PID_FILE}"
+    # Wait for process to actually exit (up to 2 seconds)
+    local count=0
+    while kill -0 "${pid}" 2>/dev/null && [[ $count -lt 20 ]]; do
+        sleep 0.1
+        count=$((count + 1))
+    done
+    rm -f "${PRUNE_DAEMON_PID_FILE}"
 
     # Cleanup should have happened
     assert_file_not_exists "${PRUNE_DAEMON_PID_FILE}"
