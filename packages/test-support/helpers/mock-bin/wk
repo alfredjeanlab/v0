@@ -4,6 +4,14 @@
 #   MOCK_WK_LIST_OUTPUT - output for wk list
 #   MOCK_WK_NEW_ID - issue ID to return for wk new (default: mock-abc1)
 #   MOCK_WK_NEW_FAIL - set to 1 to make wk new fail
+#   MOCK_WK_START_FAIL - set to 1 to make wk start fail
+#   MOCK_WK_DONE_FAIL - set to 1 to make wk done fail
+#   MOCK_WK_CALLS_FILE - file to log wk calls for verification
+
+# Log the call if MOCK_WK_CALLS_FILE is set
+if [[ -n "${MOCK_WK_CALLS_FILE:-}" ]]; then
+    echo "wk $*" >> "${MOCK_WK_CALLS_FILE}"
+fi
 
 case "$1" in
     "list")
@@ -41,6 +49,20 @@ case "$1" in
         ;;
     "edit")
         # Silent success for edit commands
+        exit 0
+        ;;
+    "start")
+        if [[ -n "${MOCK_WK_START_FAIL:-}" ]]; then
+            echo "Error: mock wk start failure" >&2
+            exit 1
+        fi
+        exit 0
+        ;;
+    "done")
+        if [[ -n "${MOCK_WK_DONE_FAIL:-}" ]]; then
+            echo "Error: mock wk done failure" >&2
+            exit 1
+        fi
         exit 0
         ;;
     "label")

@@ -896,3 +896,83 @@ create_test_state() {
     run cat "${BUILD_DIR}/operations/test-op/logs/events.log"
     assert_output --partial "operation:cancelled"
 }
+
+# ============================================================================
+# Wok Epic Integration Tests
+# ============================================================================
+
+@test "sm_transition_to_executing calls wk start on epic" {
+    setup_wk_mocks
+    export MOCK_WK_CALLS_FILE="${TEST_TEMP_DIR}/wk-calls.log"
+    touch "${MOCK_WK_CALLS_FILE}"
+
+    # Mock wk show to return todo status
+    mock_wk_show "testp-abc123" '{"status": "todo"}'
+
+    # Create operation with epic_id in queued phase
+    create_test_state "test-op" "queued" '"epic_id": "testp-abc123"'
+
+    # Transition to executing
+    sm_transition_to_executing "test-op" "v0-test-session"
+
+    # Verify wk start was called
+    run grep "wk start testp-abc123" "${MOCK_WK_CALLS_FILE}"
+    assert_success
+}
+
+@test "sm_transition_to_executing skips wk start when already in_progress" {
+    setup_wk_mocks
+    export MOCK_WK_CALLS_FILE="${TEST_TEMP_DIR}/wk-calls.log"
+    touch "${MOCK_WK_CALLS_FILE}"
+
+    # Mock wk show to return in_progress status
+    mock_wk_show "testp-abc123" '{"status": "in_progress"}'
+
+    # Create operation with epic_id in queued phase
+    create_test_state "test-op" "queued" '"epic_id": "testp-abc123"'
+
+    # Transition to executing
+    sm_transition_to_executing "test-op" "v0-test-session"
+
+    # Verify wk start was NOT called (should only have the show call)
+    run grep "wk start" "${MOCK_WK_CALLS_FILE}"
+    assert_failure
+}
+
+@test "sm_transition_to_executing skips wk start when no epic_id" {
+    setup_wk_mocks
+    export MOCK_WK_CALLS_FILE="${TEST_TEMP_DIR}/wk-calls.log"
+    touch "${MOCK_WK_CALLS_FILE}"
+
+    # Create operation without epic_id
+    create_test_state "test-op" "queued"
+
+    # Transition to executing
+    sm_transition_to_executing "test-op" "v0-test-session"
+
+    # Verify wk start was NOT called
+    run grep "wk start" "${MOCK_WK_CALLS_FILE}"
+    assert_failure
+}
+
+@test "sm_transition_to_executing emits warning when wk start fails" {
+    setup_wk_mocks
+    export MOCK_WK_START_FAIL=1
+
+    # Mock wk show to return todo status
+    mock_wk_show "testp-abc123" '{"status": "todo"}'
+
+    # Create operation with epic_id in queued phase
+    create_test_state "test-op" "queued" '"epic_id": "testp-abc123"'
+
+    # Transition should still succeed (wk failure shouldn't block transition)
+    sm_transition_to_executing "test-op" "v0-test-session"
+
+    # Verify phase changed
+    run sm_read_state "test-op" "phase"
+    assert_output "executing"
+
+    # Verify warning was emitted
+    run cat "${BUILD_DIR}/operations/test-op/logs/events.log"
+    assert_output --partial "wok:warn"
+}
