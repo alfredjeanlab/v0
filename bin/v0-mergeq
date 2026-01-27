@@ -127,6 +127,11 @@ while [[ $# -gt 0 ]]; do
             ACTION="restart"
             shift
             ;;
+        status)
+            # Hidden subcommand: 'v0 mergeq status' -> 'v0 mergeq --status'
+            ACTION="status"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             usage
