@@ -363,15 +363,10 @@ mq_resume_waiting_operation() {
         return 0
     fi
 
-    # Get the phase to resume from
-    local blocked_phase
-    blocked_phase=$(sm_read_state "${op}" "blocked_phase")
-    [[ -z "${blocked_phase}" ]] || [[ "${blocked_phase}" = "null" ]] && blocked_phase="init"
+    # Note: Blocking is tracked in wok, not state.json
+    # When the blocker's epic is marked done, wok automatically unblocks dependents
 
-    # Use state machine to unblock
-    sm_unblock_operation "${op}" 2>/dev/null || true
-
-    echo "[$(date +%H:%M:%S)] Resuming operation: ${op} (from phase: ${blocked_phase})"
+    echo "[$(date +%H:%M:%S)] Resuming operation: ${op}"
     mq_log_event "unblock:resumed: ${op}"
     mq_emit_event "unblock:triggered" "${op}"
 

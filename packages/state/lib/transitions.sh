@@ -202,6 +202,14 @@ _sm_close_wok_epic() {
     done|closed) return 0 ;;  # Already closed
   esac
 
+  # If epic is in 'todo' status, we need to start it first before marking done
+  # (wk done only works for in_progress → done transition)
+  if [[ "${status}" == "todo" ]]; then
+    if ! wk start "${epic_id}" 2>/dev/null; then
+      sm_emit_event "${op}" "wok:warn" "Failed to start epic ${epic_id} before marking done"
+    fi
+  fi
+
   # Mark as done - use --reason for agent compatibility
   if ! wk done "${epic_id}" --reason "Merged to ${V0_DEVELOP_BRANCH:-main}" 2>/dev/null; then
     # Log but don't fail - the git merge already succeeded
