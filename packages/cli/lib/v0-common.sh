@@ -12,21 +12,23 @@ V0_INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 source "${V0_INSTALL_DIR}/packages/state/lib/state-machine.sh"
 
 # Color support (only when stdout is a TTY, or when V0_FORCE_COLOR is set)
+# Using $'...' syntax to create actual escape sequences at definition time
+# This ensures consistent behavior across all printf/echo contexts
 if [[ -t 1 ]] || [[ -n "${V0_FORCE_COLOR:-}" ]]; then
-    C_RESET='\033[0m'
-    C_BOLD='\033[1m'
-    C_DIM='\033[2m'
-    C_GREEN='\033[32m'
-    C_YELLOW='\033[33m'
-    C_BLUE='\033[34m'
-    C_CYAN='\033[36m'
-    C_RED='\033[31m'
-    C_MAGENTA='\033[35m'
-    C_LAVENDER='\033[38;5;183m'
+    C_RESET=$'\033[0m'
+    C_BOLD=$'\033[1m'
+    C_DIM=$'\033[2m'
+    C_GREEN=$'\033[32m'
+    C_YELLOW=$'\033[33m'
+    C_BLUE=$'\033[34m'
+    C_CYAN=$'\033[36m'
+    C_RED=$'\033[31m'
+    C_MAGENTA=$'\033[35m'
+    C_LAVENDER=$'\033[38;5;183m'
     # Help output colors (muted/pastel palette)
-    C_HELP_SECTION='\033[38;5;74m'   # Pastel cyan/steel blue
-    C_HELP_COMMAND='\033[38;5;250m'  # Light grey
-    C_HELP_DEFAULT='\033[38;5;243m'  # Muted/darker grey
+    C_HELP_SECTION=$'\033[38;5;74m'   # Pastel cyan/steel blue
+    C_HELP_COMMAND=$'\033[38;5;250m'  # Light grey
+    C_HELP_DEFAULT=$'\033[38;5;243m'  # Muted/darker grey
 else
     C_RESET=''
     C_BOLD=''
