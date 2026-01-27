@@ -372,3 +372,68 @@ setup() {
     run ws_init_wok_link "$TEST_TEMP_DIR/project"
     assert_success
 }
+
+@test "ws_init_wok_link handles incomplete .wok directory from git checkout" {
+    # This tests the bug where git checkout creates .wok/.gitignore but no config.toml,
+    # which causes wk init to fail with "already initialized"
+    local worktree="$TEST_TEMP_DIR/worktree"
+    mkdir -p "$worktree/.wok"
+    echo "config.toml" > "$worktree/.wok/.gitignore"
+    # No config.toml - simulates incomplete initialization from git checkout
+
+    # Create a valid .wok in "main repo"
+    mkdir -p "$TEST_TEMP_DIR/project/.wok"
+    echo 'prefix = "test"' > "$TEST_TEMP_DIR/project/.wok/config.toml"
+
+    # Mock wk init to create config.toml (must recreate .wok since it gets removed)
+    wk() {
+        if [[ "$1" == "init" ]]; then
+            local path_arg="" prev=""
+            for arg in "$@"; do
+                if [[ "$prev" == "--path" ]]; then
+                    path_arg="$arg"
+                fi
+                prev="$arg"
+            done
+            if [[ -n "$path_arg" ]]; then
+                mkdir -p "$path_arg/.wok"
+                echo 'workspace = "/mock"' > "$path_arg/.wok/config.toml"
+            fi
+            return 0
+        fi
+        return 0
+    }
+    export -f wk
+
+    # Should remove incomplete .wok and reinitialize
+    run ws_init_wok_link "$worktree"
+    assert_success
+
+    # config.toml should now exist
+    assert_file_exists "$worktree/.wok/config.toml"
+}
+
+@test "ws_init_wok_link skips when already properly initialized" {
+    local worktree="$TEST_TEMP_DIR/worktree"
+    mkdir -p "$worktree/.wok"
+    echo 'workspace = "/some/path"' > "$worktree/.wok/config.toml"
+
+    # Create a valid .wok in "main repo"
+    mkdir -p "$TEST_TEMP_DIR/project/.wok"
+    echo 'prefix = "test"' > "$TEST_TEMP_DIR/project/.wok/config.toml"
+
+    # Track if wk was called
+    WK_CALLED=false
+    wk() {
+        WK_CALLED=true
+        return 0
+    }
+    export -f wk
+    export WK_CALLED
+
+    run ws_init_wok_link "$worktree"
+    assert_success
+
+    # wk should not have been called since config.toml already exists
+    [[ "$WK_CALLED" == "false" ]]
+}

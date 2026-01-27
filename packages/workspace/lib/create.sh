@@ -63,7 +63,7 @@ ws_create_worktree() {
 
 # ws_init_wok_link <worktree_path>
 # Initialize wok in a worktree, linking to main repo's .wok database
-# Idempotent: succeeds if already initialized
+# Idempotent: succeeds if already initialized with valid config
 ws_init_wok_link() {
   local worktree_path="$1"
 
@@ -89,8 +89,20 @@ ws_init_wok_link() {
     return 0  # No wok in main repo, skip
   fi
 
+  local worktree_wok="${worktree_path}/.wok"
+
+  # Check if already properly initialized (config.toml exists)
+  if [[ -f "${worktree_wok}/config.toml" ]]; then
+    return 0  # Already initialized
+  fi
+
+  # Handle incomplete .wok directory (e.g., only .gitignore from checkout)
+  # wk init fails with "already initialized" if .wok/ exists, even without config
+  if [[ -d "${worktree_wok}" ]] && [[ ! -f "${worktree_wok}/config.toml" ]]; then
+    rm -rf "${worktree_wok}"
+  fi
+
   # Initialize wok workspace link with prefix if configured
-  # (idempotent - wk init succeeds if already initialized)
   if [[ -n "${ISSUE_PREFIX:-}" ]]; then
     wk init --workspace "${wok_dir}" --prefix "${ISSUE_PREFIX}" --path "${worktree_path}" >/dev/null 2>&1 || true
   else
