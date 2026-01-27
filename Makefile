@@ -8,7 +8,7 @@ V0_DATA_DIR := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/v0
 BATS := $(V0_DATA_DIR)/bats/bats-core/bin/bats
 BATS_LIB_PATH := $(V0_DATA_DIR)/bats
 
-.PHONY: help check test test-file test-package lint lint-quality license install
+.PHONY: help check test test-init test-file test-package lint lint-scripts lint-tests lint-quality license install
 
 # Default target
 help:
@@ -34,6 +34,14 @@ check: lint-quality lint test
 lint:
 	./scripts/lint
 
+# Lint bin/ scripts and package libs (for CI)
+lint-scripts:
+	./scripts/lint bin $(shell find packages -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+
+# Lint test files (for CI)
+lint-tests:
+	./scripts/lint tests $(shell find packages -mindepth 1 -maxdepth 1 -type d -exec sh -c 'echo {}/tests' \;)
+
 # Enforce LOC limits, suppress rules, etc
 lint-quality:
 	quench check
@@ -41,6 +49,10 @@ lint-quality:
 # Run all tests (incremental with caching)
 test:
 	./scripts/test
+
+# Initialize test framework (install BATS, for CI)
+test-init:
+	./scripts/test --init
 
 # Run tests for a specific package
 test-package:

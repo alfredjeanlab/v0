@@ -13,6 +13,21 @@ init_git_repo_with_remote() {
     git push -u origin "$(git rev-parse --abbrev-ref HEAD)" 2>/dev/null
 }
 
+# Helper: Set up project with v0.rc, cd, source lib, and load config
+setup_v0_project() {
+    create_v0rc "${1:-project}" "${2:-prj}"
+    cd "${TEST_TEMP_DIR}/project" || return 1
+    source_lib "v0-common.sh"
+    v0_load_config
+}
+
+# Helper: Set up git repo, cd, and source lib
+setup_git_repo() {
+    init_mock_git_repo "${1:-${TEST_TEMP_DIR}/project}"
+    cd "${1:-${TEST_TEMP_DIR}/project}" || return 1
+    source_lib "v0-common.sh"
+}
+
 # ============================================================================
 # v0_find_project_root() tests
 # ============================================================================
@@ -72,10 +87,7 @@ init_git_repo_with_remote() {
 # ============================================================================
 
 @test "v0_find_main_repo returns same directory for main repo" {
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-
+    setup_git_repo
     run v0_find_main_repo "${TEST_TEMP_DIR}/project"
     assert_success
     assert_output "${TEST_TEMP_DIR}/project"
@@ -115,11 +127,8 @@ init_git_repo_with_remote() {
 }
 
 @test "v0_find_main_repo uses V0_ROOT when no argument given" {
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
+    setup_git_repo
     export V0_ROOT="${TEST_TEMP_DIR}/project"
-
     run v0_find_main_repo
     assert_success
     assert_output "${TEST_TEMP_DIR}/project"
@@ -381,24 +390,14 @@ EOF
 # ============================================================================
 
 @test "v0_log creates log directory if needed" {
-    create_v0rc
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project
     v0_log "test_event" "test message"
-
     assert_dir_exists "${BUILD_DIR}/logs"
 }
 
 @test "v0_log writes to log file" {
-    create_v0rc
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project
     v0_log "test_event" "test message"
-
     assert_file_exists "${BUILD_DIR}/logs/v0.log"
     run cat "${BUILD_DIR}/logs/v0.log"
     assert_output --partial "test_event"
@@ -406,27 +405,17 @@ EOF
 }
 
 @test "v0_log includes timestamp" {
-    create_v0rc
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project
     v0_log "event" "msg"
-
     run cat "${BUILD_DIR}/logs/v0.log"
     # Timestamp format: [YYYY-MM-DDTHH:MM:SSZ]
     assert_output --regexp '\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\]'
 }
 
 @test "v0_log appends to existing log" {
-    create_v0rc
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project
     v0_log "event1" "message1"
     v0_log "event2" "message2"
-
     run cat "${BUILD_DIR}/logs/v0.log"
     assert_output --partial "event1"
     assert_output --partial "event2"
@@ -471,13 +460,8 @@ EOF
 # ============================================================================
 
 @test "v0_ensure_state_dir creates state directory" {
-    create_v0rc "testproj" "tp"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project "testproj" "tp"
     v0_ensure_state_dir
-
     assert_dir_exists "${V0_STATE_DIR}"
 }
 
@@ -486,13 +470,8 @@ EOF
 # ============================================================================
 
 @test "v0_ensure_build_dir creates build directory" {
-    create_v0rc
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project
     v0_ensure_build_dir
-
     assert_dir_exists "${BUILD_DIR}"
 }
 
@@ -513,11 +492,7 @@ EOF
 # ============================================================================
 
 @test "v0_session_name generates namespaced names" {
-    create_v0rc "myapp" "ma"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project "myapp" "ma"
     local result
     result=$(v0_session_name "worker" "fix")
     assert_equal "${result}" "v0-myapp-worker-fix"
@@ -533,35 +508,23 @@ EOF
 }
 
 @test "v0_session_name with different suffixes and types" {
-    create_v0rc "testproj" "tp"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
-    # Test various session types
+    setup_v0_project "testproj" "tp"
     run v0_session_name "worker" "chore"
     assert_success
     assert_output "v0-testproj-worker-chore"
-
     run v0_session_name "polling" "fix"
     assert_success
     assert_output "v0-testproj-polling-fix"
-
     run v0_session_name "auth" "plan"
     assert_success
     assert_output "v0-testproj-auth-plan"
-
     run v0_session_name "api" "feature"
     assert_success
     assert_output "v0-testproj-api-feature"
 }
 
 @test "v0_session_name handles hyphenated suffixes" {
-    create_v0rc "proj" "p"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project "proj" "p"
     run v0_session_name "feature-auth" "merge-resolve"
     assert_success
     assert_output "v0-proj-feature-auth-merge-resolve"
@@ -626,23 +589,15 @@ EOF
 # ============================================================================
 
 @test "v0_detect_develop_branch returns develop when it exists locally" {
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
+    setup_git_repo
     git branch develop
-
-    source_lib "v0-common.sh"
-
     run v0_detect_develop_branch
     assert_success
     assert_output "develop"
 }
 
 @test "v0_detect_develop_branch returns v0/develop when develop does not exist" {
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    source_lib "v0-common.sh"
-
+    setup_git_repo
     run v0_detect_develop_branch
     assert_success
     assert_output "v0/develop"
@@ -854,41 +809,29 @@ EOF
 # ============================================================================
 
 @test "v0_git_worktree_clean returns 0 for clean repo" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-
-    cd "${TEST_TEMP_DIR}/project" || return 1
+    setup_git_repo
     run v0_git_worktree_clean .
     assert_success
 }
 
 @test "v0_git_worktree_clean returns 1 for repo with staged changes" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-
-    cd "${TEST_TEMP_DIR}/project" || return 1
+    setup_git_repo
     echo "new content" > newfile.txt
     git add newfile.txt
-
     run v0_git_worktree_clean .
     assert_failure
 }
 
 @test "v0_git_worktree_clean returns 1 for repo with unstaged changes" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-
-    cd "${TEST_TEMP_DIR}/project" || return 1
+    setup_git_repo
     echo "modified" >> README.md
-
     run v0_git_worktree_clean .
     assert_failure
 }
 
 @test "v0_git_worktree_clean accepts directory argument" {
-    source_lib "v0-common.sh"
     init_mock_git_repo "${TEST_TEMP_DIR}/project"
-
+    source_lib "v0-common.sh"
     run v0_git_worktree_clean "${TEST_TEMP_DIR}/project"
     assert_success
 }
@@ -907,70 +850,43 @@ EOF
 # ============================================================================
 
 @test "v0_verify_push returns 0 for commit on main" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    local commit
-    commit=$(git rev-parse HEAD)
-
-    run v0_verify_push "${commit}"
+    setup_git_repo
+    run v0_verify_push "$(git rev-parse HEAD)"
     assert_success
 }
 
 @test "v0_verify_push returns 1 for commit not on main" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    # Create commit on separate branch
+    setup_git_repo
     git checkout -b feature
     echo "feature" > feature.txt
     git add feature.txt
     git commit -m "Feature commit"
     local feature_commit
     feature_commit=$(git rev-parse HEAD)
-
     git checkout main
-
     run v0_verify_push "${feature_commit}"
     assert_failure
     assert_output --partial "is not on main branch"
 }
 
 @test "v0_verify_push returns 1 for nonexistent commit" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    local fake_commit="1234567890abcdef1234567890abcdef12345678"
-
-    run v0_verify_push "${fake_commit}"
+    setup_git_repo
+    run v0_verify_push "1234567890abcdef1234567890abcdef12345678"
     assert_failure
     assert_output --partial "does not exist locally"
 }
 
 @test "v0_verify_push respects V0_DEVELOP_BRANCH" {
-    source_lib "v0-common.sh"
-    init_mock_git_repo "${TEST_TEMP_DIR}/project"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-
-    # Create develop branch and add commit
+    setup_git_repo
     git checkout -b develop
     echo "develop" > develop.txt
     git add develop.txt
     git commit -m "Develop commit"
     local develop_commit
     develop_commit=$(git rev-parse HEAD)
-
-    # Set V0_DEVELOP_BRANCH to develop
     export V0_DEVELOP_BRANCH="develop"
-
-    # Commit on develop branch should pass
     run v0_verify_push "${develop_commit}"
     assert_success
-
-    # Switch to main and verify develop commit is not on main
     git checkout main
     export V0_DEVELOP_BRANCH="main"
     run v0_verify_push "${develop_commit}"
@@ -1056,77 +972,46 @@ Another line"
 # ============================================================================
 
 @test "v0_resolve_to_wok_id returns wok ticket ID as-is" {
-    create_v0rc "testproj" "v0"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project "testproj" "v0"
     run v0_resolve_to_wok_id "v0-abc123"
     assert_success
     assert_output "v0-abc123"
 }
 
 @test "v0_resolve_to_wok_id resolves operation name to epic_id" {
-    create_v0rc "testproj" "v0"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
-    # Create operation with epic_id
+    setup_v0_project "testproj" "v0"
     mkdir -p "${BUILD_DIR}/operations/test-op"
     echo '{"epic_id": "v0-xyz789"}' > "${BUILD_DIR}/operations/test-op/state.json"
-
     run v0_resolve_to_wok_id "test-op"
     assert_success
     assert_output "v0-xyz789"
 }
 
 @test "v0_resolve_to_wok_id fails for unknown operation" {
-    create_v0rc "testproj" "v0"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project "testproj" "v0"
     run v0_resolve_to_wok_id "nonexistent-op"
     assert_failure
 }
 
 @test "v0_resolve_to_wok_id fails for operation without epic_id" {
-    create_v0rc "testproj" "v0"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
-    # Create operation without epic_id
+    setup_v0_project "testproj" "v0"
     mkdir -p "${BUILD_DIR}/operations/early-op"
     echo '{"phase": "init"}' > "${BUILD_DIR}/operations/early-op/state.json"
-
     run v0_resolve_to_wok_id "early-op"
     assert_failure
 }
 
 @test "v0_resolve_to_wok_id handles different issue prefixes" {
-    create_v0rc "testproj" "proj"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
+    setup_v0_project "testproj" "proj"
     run v0_resolve_to_wok_id "proj-abc123"
     assert_success
     assert_output "proj-abc123"
 }
 
 @test "v0_resolve_to_wok_id distinguishes between ID patterns and operation names" {
-    create_v0rc "testproj" "v0"
-    cd "${TEST_TEMP_DIR}/project" || return 1
-    source_lib "v0-common.sh"
-    v0_load_config
-
-    # Create an operation that looks like it could be confused with an ID
+    setup_v0_project "testproj" "v0"
     mkdir -p "${BUILD_DIR}/operations/auth"
     echo '{"epic_id": "v0-authepic"}' > "${BUILD_DIR}/operations/auth/state.json"
-
-    # 'auth' should be treated as operation name (doesn't match PREFIX-hex pattern)
     run v0_resolve_to_wok_id "auth"
     assert_success
     assert_output "v0-authepic"
