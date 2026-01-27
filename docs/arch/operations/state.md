@@ -131,12 +131,35 @@ When an operation has unresolved blockers:
 When a blocker operation merges:
 1. `sm_transition_to_merged` marks the operation's wok epic as `done`
 2. This unblocks dependent operations that were waiting on this blocker
-3. `sm_trigger_dependents` logs the unblock event for visibility
-4. Dependent workers resume on their next poll/resume
+3. `mg_trigger_dependents` resumes dependent operations immediately
+4. Dependent workers start from their current phase
 
 Safety net: If the wok epic wasn't marked done (e.g., due to a bug), `v0 resume`
 repairs stale blockers by checking if the blocker operation is merged but its
 wok issue is still open, and marks it done before checking blocking status.
+
+### Trigger Call Chain
+
+When a merge completes, the following chain triggers dependent operations:
+
+```
+v0-merge (or mergeq daemon)
+  └── mg_finalize_merge()
+        ├── mg_push_and_verify()      # Push merge to remote
+        ├── mg_update_operation_state() # Set phase=merged
+        └── mg_trigger_dependents()    # Resume dependents
+              │
+              │  For each dependent operation:
+              │
+              └── v0-build <dep> --resume &   # Background launch
+                    └── v0-build-worker <dep>  # Spawned via nohup
+                          └── run_plan_phase() or run_build_phase()
+```
+
+**Key implementation details:**
+- `mg_trigger_dependents` runs from the merge workspace context
+- Child processes (`v0-build`, `v0-build-worker`) must inherit `BUILD_DIR`
+- See [SYSTEM.md - Environment Variable Inheritance](../SYSTEM.md#environment-variable-inheritance)
 
 ## Hold Mechanism
 

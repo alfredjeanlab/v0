@@ -35,6 +35,32 @@ Each worker follows a common pattern:
 
 See: [v0-start](commands/v0-start.md), [v0-stop](commands/v0-stop.md)
 
+### PID File Validation
+
+PID file validation happens in two stages:
+
+**Stage 1: Process Existence**
+```bash
+kill -0 "${pid}" 2>/dev/null
+```
+Checks if a process with that PID exists. Returns success even if the process is unrelated to v0.
+
+**Stage 2: Process Identity** (merge queue only)
+```bash
+ps -o command= -p "${pid}" | grep -q "v0-mergeq"
+```
+Verifies the process is actually a v0-mergeq daemon, not an unrelated process that reused the PID.
+
+**Why two stages?**
+- PIDs can be reused by the OS after a process exits
+- A stale PID file might reference a PID now used by an unrelated process
+- Without identity verification, v0 might think a daemon is running when it's not
+
+**Cleanup of orphan processes:**
+- On daemon start/stop, any v0-mergeq processes not tracked by the PID file are killed
+- Only processes in the current project's state directory are affected
+- Other projects' daemons are left alone
+
 ## Directory Structure
 
 ### Project-Local Directories
@@ -253,6 +279,46 @@ When running from a workspace (worktree or clone), certain paths must point to t
 The function `v0_find_main_repo()` resolves the main repository from any worktree.
 
 See: [WORKSPACE.md](WORKSPACE.md) for detailed workspace architecture.
+
+## Environment Variable Inheritance
+
+Scripts that may run from workspace or worktree contexts must preserve critical
+environment variables across `v0_load_config` calls. Without this, child processes
+would compute paths based on the workspace instead of the main repository.
+
+### The Inheritance Pattern
+
+```bash
+# Save before v0_load_config (which may overwrite based on cwd)
+_INHERITED_BUILD_DIR="${BUILD_DIR:-}"
+
+v0_load_config
+
+# Restore inherited value if it was set, then always export
+[[ -n "${_INHERITED_BUILD_DIR}" ]] && BUILD_DIR="${_INHERITED_BUILD_DIR}"
+export BUILD_DIR
+```
+
+**Key points:**
+- Save the inherited value *before* `v0_load_config` runs
+- Restore the inherited value *after* config loading (if it was set)
+- **Always export** so child processes inherit the correct path
+
+### Why Always Export?
+
+The `export` must be unconditional. If a script only exports when the value was
+inherited, child processes won't receive the variable when the parent computed
+it via `v0_load_config`. This causes failures like "No operation found" when
+child processes look in the wrong `BUILD_DIR`.
+
+### Scripts Using This Pattern
+
+| Script | Variables Preserved |
+|--------|---------------------|
+| `bin/v0-build` | `BUILD_DIR`, `V0_DEVELOP_BRANCH` |
+| `bin/v0-build-worker` | `BUILD_DIR` |
+| `bin/v0-merge` | `BUILD_DIR` |
+| `bin/v0-mergeq` | `BUILD_DIR`, `MERGEQ_DIR`, `V0_DEVELOP_BRANCH` |
 
 ## State Cleanup
 

@@ -179,6 +179,26 @@ Main repo (.v0/build/)  ←──── State files here
               └── main checked out
 ```
 
+### Child Process Working Directory
+
+When the merge daemon or `v0-merge` launches child processes (e.g., to resume
+dependent operations after a merge), those processes inherit the **workspace**
+as their working directory:
+
+```
+v0-merge runs with cwd = V0_WORKSPACE_DIR
+  └── mg_trigger_dependents()
+        └── v0-build <dep> --resume &    ← inherits workspace as cwd
+              └── v0-build-worker        ← also inherits workspace as cwd
+```
+
+This matters because `v0_load_config` computes paths based on the working
+directory. If `BUILD_DIR` isn't properly inherited, child processes will
+look for state files in the workspace instead of the main repository.
+
+See [SYSTEM.md - Environment Variable Inheritance](SYSTEM.md#environment-variable-inheritance)
+for how scripts handle this.
+
 ## v0 Push/Pull Commands
 
 The `v0 push` and `v0 pull` commands synchronize changes between user branches and the agent branch (`V0_DEVELOP_BRANCH`). These commands operate in `V0_ROOT`, not the workspace.
