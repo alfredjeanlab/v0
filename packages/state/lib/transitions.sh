@@ -201,15 +201,19 @@ _sm_start_wok_epic() {
     return 0  # No epic to start
   fi
 
+  # Run wk from V0_ROOT since wok may not be initialized in the current directory
+  # (e.g., when running from a workspace worktree during merge)
+  local wk_dir="${V0_ROOT:-$(pwd)}"
+
   # Check if already in_progress or done
   local status
-  status=$(wk show "${epic_id}" -o json 2>/dev/null | jq -r '.status // "unknown"')
+  status=$(cd "${wk_dir}" && wk show "${epic_id}" -o json 2>/dev/null | jq -r '.status // "unknown"')
   case "${status}" in
     in_progress|done|closed) return 0 ;;  # Already started or completed
   esac
 
   # Mark as in_progress
-  if ! wk start "${epic_id}" 2>/dev/null; then
+  if ! (cd "${wk_dir}" && wk start "${epic_id}" 2>/dev/null); then
     sm_emit_event "${op}" "wok:warn" "Failed to start epic ${epic_id}"
   fi
 }
@@ -226,9 +230,13 @@ _sm_close_wok_epic() {
     return 0  # No epic to close
   fi
 
+  # Run wk from V0_ROOT since wok may not be initialized in the current directory
+  # (e.g., when running from a workspace worktree during merge)
+  local wk_dir="${V0_ROOT:-$(pwd)}"
+
   # Check if already done/closed
   local status
-  status=$(wk show "${epic_id}" -o json 2>/dev/null | jq -r '.status // "unknown"')
+  status=$(cd "${wk_dir}" && wk show "${epic_id}" -o json 2>/dev/null | jq -r '.status // "unknown"')
   case "${status}" in
     done|closed) return 0 ;;  # Already closed
   esac
@@ -236,13 +244,13 @@ _sm_close_wok_epic() {
   # If epic is in 'todo' status, we need to start it first before marking done
   # (wk done only works for in_progress → done transition)
   if [[ "${status}" == "todo" ]]; then
-    if ! wk start "${epic_id}" 2>/dev/null; then
+    if ! (cd "${wk_dir}" && wk start "${epic_id}" 2>/dev/null); then
       sm_emit_event "${op}" "wok:warn" "Failed to start epic ${epic_id} before marking done"
     fi
   fi
 
   # Mark as done - use --reason for agent compatibility
-  if ! wk done "${epic_id}" --reason "Merged to ${V0_DEVELOP_BRANCH:-main}" 2>/dev/null; then
+  if ! (cd "${wk_dir}" && wk done "${epic_id}" --reason "Merged to ${V0_DEVELOP_BRANCH:-main}" 2>/dev/null); then
     # Log but don't fail - the git merge already succeeded
     sm_emit_event "${op}" "wok:warn" "Failed to mark epic ${epic_id} as done"
   fi
@@ -259,16 +267,20 @@ _sm_close_plan_issues() {
     return 0
   fi
 
+  # Run wk from V0_ROOT since wok may not be initialized in the current directory
+  # (e.g., when running from a workspace worktree during merge)
+  local wk_dir="${V0_ROOT:-$(pwd)}"
+
   local issue_ids
   # Get all plan issues for this operation (ignore errors for test isolation)
-  issue_ids=$(wk list --label "plan:${op}" -o ids 2>/dev/null) || true
+  issue_ids=$(cd "${wk_dir}" && wk list --label "plan:${op}" -o ids 2>/dev/null) || true
   if [[ -z "${issue_ids}" ]]; then
     return 0  # No plan issues to close
   fi
 
   # Mark all plan issues as done
   # shellcheck disable=SC2086
-  wk done ${issue_ids} 2>/dev/null || true
+  (cd "${wk_dir}" && wk done ${issue_ids} 2>/dev/null) || true
 }
 
 # sm_transition_to_failed <op> <error>

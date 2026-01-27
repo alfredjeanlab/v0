@@ -61,8 +61,10 @@ sm_get_blocker_status() {
   fi
 
   # Try as wok issue ID
+  # Run wk from V0_ROOT since wok may not be initialized in the current directory
+  local wk_dir="${V0_ROOT:-$(pwd)}"
   local status
-  status=$(wk show "${blocker}" -o json 2>/dev/null | jq -r '.status // "unknown"')
+  status=$(cd "${wk_dir}" && wk show "${blocker}" -o json 2>/dev/null | jq -r '.status // "unknown"')
   echo "${status}"
 }
 
@@ -89,15 +91,19 @@ sm_find_dependents() {
 
   [[ -z "${merged_epic_id}" ]] || [[ "${merged_epic_id}" == "null" ]] && return
 
+  # Run wk from V0_ROOT since wok may not be initialized in the current directory
+  # (e.g., when running from a workspace worktree during merge)
+  local wk_dir="${V0_ROOT:-$(pwd)}"
+
   # Get issues that this one blocks
   local blocking_ids
-  blocking_ids=$(wk show "${merged_epic_id}" -o json 2>/dev/null | jq -r '.blocking // [] | .[]')
+  blocking_ids=$(cd "${wk_dir}" && wk show "${merged_epic_id}" -o json 2>/dev/null | jq -r '.blocking // [] | .[]')
 
   # Resolve each to operation name if possible
   local blocked_id
   for blocked_id in ${blocking_ids}; do
     local op_name
-    op_name=$(v0_blocker_to_op_name "${blocked_id}")
+    op_name=$(cd "${wk_dir}" && v0_blocker_to_op_name "${blocked_id}")
     # Only return if it's a known operation
     if [[ -f "${BUILD_DIR}/operations/${op_name}/state.json" ]]; then
       echo "${op_name}"
