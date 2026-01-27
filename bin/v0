@@ -274,6 +274,12 @@ case "${CMD}" in
   shutdown)
     exec "${V0_DIR}/bin/v0-stop" "$@"
     ;;
+  list)
+    if ! v0_find_project_root >/dev/null 2>&1; then
+        v0_check_standalone_mode status
+    fi
+    exec "${V0_DIR}/bin/v0-status" "$@"
+    ;;
   *)
     # Sanitize command for display
     safe_cmd=$(sanitize_for_display "${CMD}")
