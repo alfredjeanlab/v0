@@ -62,10 +62,9 @@ When starting a new roadmap:
 
 The Claude agent:
 1. Explores the codebase to understand structure
-2. Creates a roadmap outline with epics and milestones
+2. Breaks down the roadmap into sequential features
 3. Queues features using `v0 feature --after --label roadmap:${name}`
-4. Commits any roadmap documentation to the branch
-5. Calls `./done` script to signal completion
+4. Calls `./done` script to signal completion
 
 When the agent exits and features are detected (via `wk list --label roadmap:${name}`):
 - Phase transitions to `completed`

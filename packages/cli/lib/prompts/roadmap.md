@@ -1,105 +1,51 @@
 # Roadmap Orchestration
 
-Decompose this roadmap into epics, milestones, and actionable features that can be queued for autonomous execution.
+Break down the roadmap into features and queue them for autonomous execution using `v0 feature`.
 
 ## Step 1: Explore the Codebase
 
-Before creating any work items, thoroughly explore:
+Before creating features, explore the project:
 - Project structure and architecture
 - Existing patterns and conventions
-- Related code that will be affected
-- Test infrastructure and coverage
+- Test infrastructure
 
-Use `ls`, `find`, `grep`, and file reads to understand the codebase. This exploration informs your planning.
+Use file reads, `ls`, and `grep` to understand the codebase.
 
-## Step 2: Create Roadmap Outline
+## Step 2: Break Down the Roadmap
 
-Create a roadmap outline with:
+Identify the features needed to achieve the roadmap goal. Each feature should be:
+- **Self-contained**: Can be implemented and tested independently
+- **Appropriately sized**: Not too large (split if needed), not too small (combine trivial changes)
+- **Ordered logically**: Dependencies should be implemented before dependents
 
-### Epics (1 line each)
-High-level areas of work. Format:
-- `epic: <name> - <one-line description>`
+Write a brief outline of features before queueing.
 
-### Milestones (with nested criteria)
-Key checkpoints with verification criteria. Format:
-```
-milestone: <name>
-  - [ ] criterion 1
-  - [ ] criterion 2
-```
+## Step 3: Queue Features
 
-## Step 3: Add Pre-checks and Post-checks
-
-For each milestone, consider adding appropriate checks:
-
-### Pre-check Formulas
-
-**Refactor Formula** - Normal feature describing preparation work:
-```bash
-v0 feature <milestone>-precheck-<name> "<description of refactoring>"
-```
-
-**Bug Fix Loop** - Clear bugs before proceeding:
-```bash
-v0 feature <milestone>-pre-bugfix "Bug fix loop: create a plan to loop launching 'v0 fix' and using 'v0 status' to wait for results, until all bugs have been fixed. When decomposing, only create one feature issue (not BUG, not CHORE) with no dependents."
-```
-
-**Chore Loop** - Clean up technical debt:
-```bash
-v0 feature <milestone>-pre-chores "Chore loop: create a plan to loop launching 'v0 chore' and using 'v0 status' to wait for results, until all chores are complete. When decomposing, only create one feature issue with no dependents."
-```
-
-### Post-check Formulas
-
-Common post-checks to consider:
-- Ensure all tests are passing
-- Ensure previously planned work is complete
-- Finish deprecating old code and complete migration to new patterns
-- Verify no regressions in existing functionality
-
-### Examples of Pre/Post-checks
+Queue features sequentially using `v0 feature` with `--after` chaining:
 
 ```bash
-# Pre-check: Ensure clean slate
-v0 feature auth-precheck-tests "Ensure all tests are passing before starting auth work" --after <previous>
+# First feature starts immediately after queueing
+v0 feature <name-1> "<description>" --label roadmap:<roadmap-name>
 
-# Pre-check: Bug fix loop
-v0 feature auth-pre-bugfix "Bug fix loop: fix all existing bugs before proceeding" --after auth-precheck-tests
-
-# Main milestone work
-v0 feature auth-milestone "Implement JWT authentication" --after auth-pre-bugfix
-
-# Post-check: Migration cleanup
-v0 feature auth-postcheck-migrate "Complete migration from session auth to JWT" --after auth-milestone
-
-# Post-check: Verify no regressions
-v0 feature auth-postcheck-verify "Run full test suite and fix any regressions" --after auth-postcheck-migrate
-```
-
-## Step 4: Queue Features
-
-Queue all features sequentially using `--after`:
-
-```bash
-# First feature starts immediately
-v0 feature <first-epic> "<description>"
-
-# All subsequent features depend on the previous (--after blocks until dependency merges)
-v0 feature <epic-2> "<description>" --after <first-epic>
-v0 feature <milestone-1-precheck> "<description>" --after <epic-2>
-v0 feature <milestone-1> "<description>" --after <milestone-1-precheck>
-v0 feature <milestone-1-postcheck> "<description>" --after <milestone-1>
+# Each subsequent feature waits for the previous one to merge before starting
+v0 feature <name-2> "<description>" --after <name-1> --label roadmap:<roadmap-name>
+v0 feature <name-3> "<description>" --after <name-2> --label roadmap:<roadmap-name>
 # ... continue the chain
 ```
 
-**Important:**
-- Add `--label roadmap:<roadmap-name>` to all features (use the roadmap name from CLAUDE.md)
-- Chain all features with `--after` to ensure sequential execution (each waits for its dependency to merge)
+**Required flags:**
+- `--label roadmap:<roadmap-name>` - Tracks which features belong to this roadmap (use the name from CLAUDE.md)
+- `--after <previous>` - Chains features so each waits for its dependency to merge
+
+**Feature naming:**
+- Use short, descriptive names (e.g., `auth-setup`, `db-schema`, `api-endpoints`)
+- Names should reflect what the feature implements
 
 ## Completion
 
 When all features are queued:
-1. Log the complete plan using `wk note <idea-id> "Plan complete: N features queued"`
+1. Verify with `wk list --label roadmap:<roadmap-name>`
 2. Run `./done` to exit
 
 ## Context Recovery

@@ -517,7 +517,7 @@ if [[ "\${COMPLETED_JSON}" != "[]" ]]; then
 fi
 
 tmp=\$(mktemp)
-jq '.phase = "completed" | .completed_at = "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"' "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
+jq '.phase = "completed" | .completed_at = "'\$(date -u +%Y-%m-%dT%H:%M:%SZ)'"' "\${STATE_FILE}" > "\${tmp}" && mv "\${tmp}" "\${STATE_FILE}"
 
 if [[ "\$(jq -r '.merge_queued // false' "\${STATE_FILE}")" = "true" ]]; then
   echo "=== Merge queued, preparing for merge ==="
