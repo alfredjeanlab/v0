@@ -189,6 +189,32 @@ The daemon (`v0 mergeq --watch`) runs `mq_process_watch` continuously:
 └─────────────────────────────────────────────────┘
 ```
 
+### Daemon Lifecycle
+
+```
+┌─────────────────────────────────────────────────┐
+│                  Daemon Start                   │
+├─────────────────────────────────────────────────┤
+│ 1. Check if daemon already running (PID file)   │
+│ 2. Clean up orphan daemon processes             │
+│ 3. Ensure workspace exists (ws_ensure_workspace)│
+│ 4. Export BUILD_DIR, MERGEQ_DIR, V0_DEVELOP_... │
+│ 5. cd to workspace directory                    │
+│ 6. nohup v0-mergeq --watch >> daemon.log        │
+│ 7. Write PID to .daemon.pid                     │
+│ 8. Verify daemon started (wait 0.5s, check PID) │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│                  Daemon Stop                    │
+├─────────────────────────────────────────────────┤
+│ 1. Read PID from .daemon.pid                    │
+│ 2. Send SIGTERM to process                      │
+│ 3. Remove PID file                              │
+│ 4. Clean up any orphan daemon processes         │
+└─────────────────────────────────────────────────┘
+```
+
 ## Concurrency and Locking
 
 The queue uses file-based locking (`${BUILD_DIR}/mergeq/.queue.lock`):
@@ -198,6 +224,45 @@ The queue uses file-based locking (`${BUILD_DIR}/mergeq/.queue.lock`):
 - Retry with exponential backoff on contention
 
 Only one merge processes at a time to prevent race conditions on the main branch.
+
+## Logging
+
+The merge queue maintains two log files in `${BUILD_DIR}/mergeq/logs/`:
+
+| File | Content | Use |
+|------|---------|-----|
+| `daemon.log` | Daemon stdout/stderr | Real-time status, debug output |
+| `merges.log` | Structured event log | Audit trail, debugging failures |
+
+### daemon.log
+
+Contains timestamped status messages from the daemon process:
+```
+[13:45:24] Starting merge queue daemon (poll interval: 30s)
+[13:45:24] Cleaning stale entry: fix/v0-abc123 (branch no longer exists on remote)
+[13:45:25] Waiting... (1 pending, none ready)
+[13:46:00] Processing: auth
+[13:46:05] Successfully merged: auth
+```
+
+### merges.log
+
+Contains structured events for each queue operation:
+```
+[2026-01-27T18:45:24Z] enqueue: fix/v0-abc123 (priority: 0, type: branch)
+[2026-01-27T18:45:25Z] stale:cleaned: fix/v0-abc123 (branch no longer exists on remote)
+[2026-01-27T18:46:00Z] merge:started: auth
+[2026-01-27T18:46:05Z] merge:completed: auth
+```
+
+**Event types:**
+- `enqueue` / `re-enqueue` - Entry added to queue
+- `enqueue:failed` - Failed to add entry (logged on error)
+- `merge:started` / `merge:completed` / `merge:failed` - Merge lifecycle
+- `merge:conflict` / `merge:resolving` - Conflict handling
+- `stale:cleaned` - Entry removed as stale
+- `auto-resume` - Operation kicked back to worker
+- `daemon:started` - Daemon process started
 
 ## Interaction with Operations
 

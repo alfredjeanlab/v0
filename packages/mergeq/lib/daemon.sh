@@ -14,6 +14,16 @@
 # DAEMON_LOG_FILE - Path to daemon log file (typically ${MERGEQ_DIR}/logs/daemon.log)
 # C_GREEN, C_DIM, C_BOLD, C_RESET - Color codes from v0-common.sh
 
+# _mq_is_mergeq_process <pid>
+# Check if a PID is a v0-mergeq process
+# Returns 0 if it is, 1 if not
+_mq_is_mergeq_process() {
+    local pid="$1"
+    local cmd
+    cmd=$(ps -o command= -p "${pid}" 2>/dev/null || true)
+    [[ "${cmd}" == *"v0-mergeq"* ]]
+}
+
 # mq_daemon_running
 # Check if daemon is running (background process)
 # Returns 0 if running, 1 if not
@@ -22,7 +32,12 @@ mq_daemon_running() {
         local pid
         pid=$(cat "${DAEMON_PID_FILE}")
         if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-            return 0
+            # Verify it's actually a mergeq process (not PID reuse)
+            if _mq_is_mergeq_process "${pid}"; then
+                return 0
+            fi
+            # PID exists but isn't mergeq - stale
+            v0_trace "mergeq:daemon" "PID ${pid} exists but is not mergeq, cleaning up"
         fi
         # Stale PID file
         rm -f "${DAEMON_PID_FILE}"
@@ -39,6 +54,55 @@ mq_get_daemon_pid() {
     fi
 }
 
+# _mq_cleanup_orphan_daemons
+# Kill any orphan v0-mergeq processes not tracked by our PID file
+# This prevents zombie daemons from accumulating
+# Only kills processes running in our project's workspace (not other projects)
+_mq_cleanup_orphan_daemons() {
+    local tracked_pid=""
+    if [[ -f "${DAEMON_PID_FILE}" ]]; then
+        tracked_pid=$(cat "${DAEMON_PID_FILE}")
+    fi
+
+    # Get our project's state directory to identify our daemons
+    # Daemons run from V0_WORKSPACE_DIR which is under V0_STATE_DIR
+    local our_state_dir="${V0_STATE_DIR:-}"
+    if [[ -z "${our_state_dir}" ]]; then
+        # Can't identify our project, skip cleanup to be safe
+        return 0
+    fi
+
+    # Find v0-mergeq --watch processes and check their working directories
+    # We use ps to get both PID and working directory info
+    local orphan_count=0
+
+    # Get list of v0-mergeq PIDs
+    local pids
+    pids=$(pgrep -f "v0-mergeq.*--watch" 2>/dev/null || true)
+
+    for pid in ${pids}; do
+        if [[ "${pid}" == "${tracked_pid}" ]]; then
+            continue
+        fi
+
+        # Check if this process is for our project by checking its cwd
+        # Use lsof which works on both macOS and Linux
+        local pid_cwd
+        pid_cwd=$(lsof -p "${pid}" -Fn 2>/dev/null | grep "^ncwd" | sed 's/^n//' || true)
+
+        # Only kill if cwd is within our state directory
+        if [[ -n "${pid_cwd}" ]] && [[ "${pid_cwd}" == "${our_state_dir}"* ]]; then
+            v0_trace "mergeq:daemon" "Killing orphan daemon process: ${pid} (cwd: ${pid_cwd})"
+            kill "${pid}" 2>/dev/null || true
+            orphan_count=$((orphan_count + 1))
+        fi
+    done
+
+    if [[ ${orphan_count} -gt 0 ]]; then
+        echo "Cleaned up ${orphan_count} orphan daemon process(es)" >&2
+    fi
+}
+
 # mq_start_daemon
 # Start the daemon as background process
 # Returns 0 on success, 1 on failure
@@ -47,6 +111,9 @@ mq_start_daemon() {
         echo "Worker already running (pid: $(cat "${DAEMON_PID_FILE}"))"
         return 0
     fi
+
+    # Clean up any orphan daemon processes before starting
+    _mq_cleanup_orphan_daemons
 
     v0_trace "mergeq:daemon" "Starting merge queue daemon"
     mq_ensure_queue_exists
@@ -99,21 +166,30 @@ mq_start_daemon() {
 }
 
 # mq_stop_daemon
-# Stop the running daemon
+# Stop the running daemon and clean up any orphans
 mq_stop_daemon() {
-    if ! mq_daemon_running; then
-        echo "Worker not running"
-        return 0
+    local stopped_any=false
+
+    # Stop tracked daemon if running
+    if mq_daemon_running; then
+        local pid
+        pid=$(cat "${DAEMON_PID_FILE}")
+        v0_trace "mergeq:daemon" "Stopping daemon (pid: ${pid})"
+        echo "Stopping merge queue worker (pid: ${pid})..."
+        kill "${pid}" 2>/dev/null || true
+        rm -f "${DAEMON_PID_FILE}"
+        stopped_any=true
     fi
 
-    local pid
-    pid=$(cat "${DAEMON_PID_FILE}")
-    v0_trace "mergeq:daemon" "Stopping daemon (pid: ${pid})"
-    echo "Stopping merge queue worker (pid: ${pid})..."
-    kill "${pid}" 2>/dev/null || true
-    rm -f "${DAEMON_PID_FILE}"
-    v0_trace "mergeq:daemon" "Daemon stopped"
-    echo "Worker stopped"
+    # Also clean up any orphan daemon processes
+    _mq_cleanup_orphan_daemons
+
+    if [[ "${stopped_any}" = true ]]; then
+        v0_trace "mergeq:daemon" "Daemon stopped"
+        echo "Worker stopped"
+    else
+        echo "Worker not running"
+    fi
 }
 
 # mq_ensure_daemon_running

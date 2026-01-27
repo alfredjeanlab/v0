@@ -514,15 +514,33 @@ EOF
     assert_failure
 }
 
-@test "daemon_running returns true when PID process exists" {
+@test "daemon_running returns true when PID process exists and is mergeq" {
     source_mergeq
 
     export DAEMON_PID_FILE="${MERGEQ_DIR}/.daemon.pid"
     # Use current shell's PID (definitely exists)
     echo "$$" > "${DAEMON_PID_FILE}"
 
+    # Mock the process check to return true for our test PID
+    _mq_is_mergeq_process() { return 0; }
+
     run daemon_running
     assert_success
+}
+
+@test "daemon_running returns false when PID exists but is not mergeq process" {
+    source_mergeq
+
+    export DAEMON_PID_FILE="${MERGEQ_DIR}/.daemon.pid"
+    # Use current shell's PID (definitely exists, but not v0-mergeq)
+    echo "$$" > "${DAEMON_PID_FILE}"
+
+    # Don't mock - let it check the real process (which isn't v0-mergeq)
+    run daemon_running
+    assert_failure
+
+    # PID file should be cleaned up
+    assert [ ! -f "${DAEMON_PID_FILE}" ]
 }
 
 # Regression test for BUILD_DIR pointing to workspace instead of main repo

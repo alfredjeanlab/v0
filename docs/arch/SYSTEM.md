@@ -286,6 +286,20 @@ Scripts that may run from workspace or worktree contexts must preserve critical
 environment variables across `v0_load_config` calls. Without this, child processes
 would compute paths based on the workspace instead of the main repository.
 
+### Why This Matters
+
+Workers (merge daemon, fix-worker, chore-worker) run from `V0_WORKSPACE_DIR` and
+launch child processes via `nohup`. The workspace directory lacks `.v0.profile.rc`
+(gitignored), so `v0_load_config` would compute different values than the main repo.
+
+**Variables that must be exported before `nohup`:**
+
+| Variable | Why Required |
+|----------|--------------|
+| `BUILD_DIR` | Points to main repo's `.v0/build/`, not workspace |
+| `MERGEQ_DIR` | Points to main repo's queue directory |
+| `V0_DEVELOP_BRANCH` | Workspace defaults to `main` without `.v0.profile.rc` |
+
 ### The Inheritance Pattern
 
 ```bash

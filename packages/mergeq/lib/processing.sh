@@ -67,13 +67,19 @@ mq_enqueue() {
     if mq_is_active_status "${existing_status}"; then
         echo "Operation '${operation}' already in queue" >&2
         mq_release_lock
-        mq_ensure_daemon_running
+        # Ensure daemon is running (but don't fail if it's not - entry already exists)
+        mq_ensure_daemon_running || echo "Warning: Daemon not running, run 'v0 mergeq --restart'" >&2
         return 0
     fi
 
     # If there's an existing entry with inactive status, re-enqueue it
     if [[ -n "${existing_status}" ]]; then
-        mq_reenqueue_entry "${operation}" "${priority}"
+        if ! mq_reenqueue_entry "${operation}" "${priority}"; then
+            mq_release_lock
+            mq_log_event "re-enqueue:failed: ${operation} (queue update failed)"
+            echo "Error: Failed to re-enqueue ${operation}" >&2
+            return 1
+        fi
         mq_release_lock
 
         mq_log_event "re-enqueue: ${operation} (was ${existing_status}, priority: ${priority})"
@@ -81,7 +87,10 @@ mq_enqueue() {
         echo "Re-enqueued: ${operation} (was ${existing_status})"
 
         ensure_nudge_running 2>/dev/null || true
-        mq_ensure_daemon_running
+        if ! mq_ensure_daemon_running; then
+            mq_log_event "re-enqueue:warning: ${operation} - daemon failed to start"
+            echo "Warning: Entry re-enqueued but daemon failed to start" >&2
+        fi
         return 0
     fi
 
@@ -98,7 +107,12 @@ mq_enqueue() {
     fi
 
     # Add to queue
-    mq_add_entry "${operation}" "${worktree}" "${priority}" "${merge_type}" "${issue_id}"
+    if ! mq_add_entry "${operation}" "${worktree}" "${priority}" "${merge_type}" "${issue_id}"; then
+        mq_release_lock
+        mq_log_event "enqueue:failed: ${operation} (queue update failed)"
+        echo "Error: Failed to add ${operation} to merge queue" >&2
+        return 1
+    fi
     mq_release_lock
 
     # Log the event
@@ -110,7 +124,13 @@ mq_enqueue() {
     ensure_nudge_running 2>/dev/null || true
 
     # Auto-start daemon if not running
-    mq_ensure_daemon_running
+    if ! mq_ensure_daemon_running; then
+        mq_log_event "enqueue:warning: ${operation} - daemon failed to start"
+        echo "Warning: Entry added to queue but daemon failed to start" >&2
+        echo "  Run 'v0 mergeq --status' to check daemon status" >&2
+        echo "  Run 'v0 mergeq --restart' to manually restart the daemon" >&2
+        # Don't return error - entry was still added, user can recover
+    fi
 }
 
 # mq_process_branch_merge <branch>

@@ -16,6 +16,38 @@
 4. Run `./fixed <id>` to push, queue merge, close issue
 5. Exit session and repeat
 
+## The `./fixed` Script
+
+When Claude completes a chore, it runs `./fixed <id>` which performs:
+
+```
+┌─────────────────────────────────────────────────┐
+│               ./fixed <issue-id>                │
+├─────────────────────────────────────────────────┤
+│ 1. Push commits as chore/<id> branch to agent   │
+│ 2. Create state file in .v0/build/chore/<id>/   │
+│ 3. Call v0-mergeq --enqueue chore/<id>          │
+│    └─ Adds entry to queue.json                  │
+│    └─ Calls mq_ensure_daemon_running            │
+│       └─ If daemon not running, starts it       │
+│       └─ If workspace missing, creates it       │
+│ 4. Transfer issue ownership to worker:mergeq    │
+│ 5. Mark issue as done (wk done)                 │
+│ 6. Reset worktree to V0_DEVELOP_BRANCH          │
+│ 7. Exit Claude session (touch .done-exit, kill) │
+└─────────────────────────────────────────────────┘
+```
+
+**If enqueue fails:**
+- Error logged to `merges.log` as `enqueue:failed`
+- Warning printed to stderr
+- Script continues (issue may need manual merge)
+
+**If daemon fails to start:**
+- Warning logged to `merges.log` as `enqueue:warning`
+- Entry exists in queue but won't be processed
+- Run `v0 mergeq --restart` to recover
+
 ## Usage
 
 ```bash
