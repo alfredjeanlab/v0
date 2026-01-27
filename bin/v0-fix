@@ -9,6 +9,7 @@ ROOT_DIR="$(pwd)"  # Current directory where command was invoked
 
 # Source shared utilities
 source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/history-format.sh"
 source "${V0_DIR}/packages/worker/lib/worker-common.sh"
 source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
@@ -554,56 +555,6 @@ report_bug() {
 
   # Ensure worker is running
   ensure_worker_running
-}
-
-# Format timestamp - relative for today, date for older
-format_timestamp() {
-  local iso_timestamp="$1"
-  local today now_epoch ts_epoch diff_secs
-
-  # Get today's date
-  today=$(date +%Y-%m-%d)
-
-  # Extract date portion from timestamp
-  local ts_date
-  ts_date=$(echo "${iso_timestamp}" | cut -dT -f1)
-
-  if [[ "${ts_date}" = "${today}" ]]; then
-    # Today - show relative time
-    now_epoch=$(date +%s)
-    # Parse ISO timestamp to epoch (handle both with and without Z suffix)
-    local clean_ts
-    clean_ts="${iso_timestamp%Z}"
-    ts_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${clean_ts}" +%s 2>/dev/null || date -d "${iso_timestamp}" +%s 2>/dev/null)
-
-    if [[ -z "${ts_epoch}" ]]; then
-      echo "${ts_date}"
-      return
-    fi
-
-    diff_secs=$((now_epoch - ts_epoch))
-
-    if [[ "${diff_secs}" -lt 60 ]]; then
-      echo "just now"
-    elif [[ "${diff_secs}" -lt 3600 ]]; then
-      local mins=$((diff_secs / 60))
-      if [[ "${mins}" -eq 1 ]]; then
-        echo "1 min ago"
-      else
-        echo "${mins} mins ago"
-      fi
-    else
-      local hrs=$((diff_secs / 3600))
-      if [[ "${hrs}" -eq 1 ]]; then
-        echo "1 hr ago"
-      else
-        echo "${hrs} hrs ago"
-      fi
-    fi
-  else
-    # Not today - show date
-    echo "${ts_date}"
-  fi
 }
 
 # Show bug history

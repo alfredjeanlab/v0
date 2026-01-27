@@ -1,0 +1,83 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-log - Show combined history of completed operations
+# Usage: v0 log [--limit=N]
+#
+# NOTE: This is an undocumented command. Not included in help or completion.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+V0_DIR="${SCRIPT_DIR%/bin}"
+
+# Source required libraries
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/history-format.sh"
+source "${V0_DIR}/packages/mergeq/lib/queue.sh"
+
+# Determine if we're in standalone or project mode
+if v0_find_project_root >/dev/null 2>&1; then
+    v0_load_config
+else
+    v0_load_standalone_config
+fi
+
+# Set up mergeq paths (same as v0-mergeq does)
+if [[ -z "${MERGEQ_DIR:-}" ]]; then
+    if v0_is_standalone 2>/dev/null; then
+        export MERGEQ_DIR="${V0_STANDALONE_DIR}/mergeq"
+    else
+        MAIN_REPO=$(v0_find_main_repo)
+        export MERGEQ_DIR="${MAIN_REPO}/${V0_BUILD_DIR}/mergeq"
+    fi
+fi
+export QUEUE_FILE="${MERGEQ_DIR}/queue.json"
+
+LIMIT=20
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --limit=*) LIMIT="${1#--limit=}"; shift ;;
+    --limit)   LIMIT="${2:-20}"; shift 2 ;;
+    -h|--help) echo "Usage: v0 log [--limit=N]"; exit 0 ;;
+    *) shift ;;
+  esac
+done
+
+# Collect all history entries with timestamps for sorting
+collect_entries() {
+    # Get chore history
+    while IFS=$'\t' read -r id ts msg; do
+        [[ -z "${id}" ]] && continue
+        printf "%s|chore|%s|%s\n" "${ts}" "${id}" "${msg}"
+    done < <(get_chore_history_raw "${LIMIT}")
+
+    # Get fix history
+    while IFS=$'\t' read -r id ts msg; do
+        [[ -z "${id}" ]] && continue
+        printf "%s|fix|%s|%s\n" "${ts}" "${id}" "${msg}"
+    done < <(get_fix_history_raw "${LIMIT}")
+
+    # Get mergeq history
+    while IFS=$'\t' read -r op status ts issue_id; do
+        [[ -z "${op}" ]] && continue
+        printf "%s|merge|%s|%s\n" "${ts}" "${op}" "${status}"
+    done < <(mq_list_history "${LIMIT}")
+}
+
+# Collect, sort, and display entries
+entries=$(collect_entries)
+
+if [[ -z "${entries}" ]]; then
+    echo "No completed operations"
+    exit 0
+fi
+
+# Sort by timestamp descending and display
+echo "${entries}" | sort -t'|' -k1 -r | head -n "${LIMIT}" | \
+while IFS='|' read -r ts type id desc; do
+    date_str=$(format_timestamp "${ts}")
+    printf "%-8s %-15s (%s) %s\n" "[${type}]" "${id}" "${date_str}" "${desc}"
+done

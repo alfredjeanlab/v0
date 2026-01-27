@@ -9,6 +9,7 @@ set -eo pipefail
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/cli/lib/history-format.sh"
 source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 
 # Save inherited BUILD_DIR before v0_load_config potentially overwrites it.
@@ -77,6 +78,7 @@ ACTION=""
 OPERATION=""
 STATUS=""
 ISSUE_ID=""
+HISTORY_LIMIT=10
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -87,6 +89,21 @@ while [[ $# -gt 0 ]]; do
         --list) ACTION="list"; shift ;;
         --stop) ACTION="stop"; shift ;;
         --restart) ACTION="restart"; shift ;;
+        --history)
+            ACTION="history"
+            HISTORY_LIMIT=10
+            shift
+            ;;
+        --history=*)
+            ACTION="history"
+            arg="${1#--history=}"
+            if [[ "${arg}" = "all" ]]; then
+                HISTORY_LIMIT=999999
+            else
+                HISTORY_LIMIT="${arg}"
+            fi
+            shift
+            ;;
         --add|--enqueue)
             ACTION="enqueue"
             OPERATION="$2"
@@ -119,6 +136,7 @@ case "${ACTION}" in
     start) mq_start_daemon ;;
     status) mq_show_status ;;
     list) mq_list_entries ;;
+    history) mq_show_history "${HISTORY_LIMIT}" ;;
     enqueue) mq_enqueue "${OPERATION}" 0 "${ISSUE_ID}" ;;
     dequeue) mq_dequeue_merge ;;
     update)
