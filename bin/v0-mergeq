@@ -43,6 +43,12 @@ else
     export MERGEQ_DIR="${MAIN_REPO}/${V0_BUILD_DIR}/mergeq"
     # BUILD_DIR must also point to main repo, not workspace, so state files are found
     export BUILD_DIR="${MAIN_REPO}/${V0_BUILD_DIR}"
+    # Load V0_DEVELOP_BRANCH from main repo's .v0.profile.rc if not already set correctly.
+    # When called from a worktree that lacks .v0.profile.rc, V0_DEVELOP_BRANCH defaults
+    # to "main" which causes workspace mismatch and daemon startup failures.
+    if [[ -f "${MAIN_REPO}/.v0.profile.rc" ]]; then
+        source "${MAIN_REPO}/.v0.profile.rc"
+    fi
 fi
 export QUEUE_FILE="${MERGEQ_DIR}/queue.json"
 export QUEUE_LOCK="${MERGEQ_DIR}/.queue.lock"
