@@ -19,6 +19,7 @@ set -e
 
 V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+source "${V0_DIR}/packages/worker/lib/worker-common.sh"
 v0_load_config
 
 usage() {
@@ -185,6 +186,10 @@ run_orchestration_phase() {
     return 1
   fi
   { read -r TREE_DIR; read -r WORKTREE; } <<< "${tree_output}"
+
+  # Link worktree to main repo's shared workspace for issue management
+  rm -rf "${TREE_DIR}/.wok"
+  link_to_workspace "${TREE_DIR}" "${V0_ROOT}"
 
   update_state "worktree" "\"${WORKTREE}\""
 
