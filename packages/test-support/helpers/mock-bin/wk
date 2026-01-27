@@ -74,15 +74,27 @@ case "$1" in
         ;;
     "show")
         # Support MOCK_DATA_DIR for per-issue mock data
-        issue_id="$2"
-        if [[ -n "${MOCK_DATA_DIR:-}" ]]; then
-            mock_file="${MOCK_DATA_DIR}/wk/${issue_id}.json"
-            if [[ -f "${mock_file}" ]]; then
-                cat "${mock_file}"
-                exit 0
+        # Handle multiple IDs (skip -o json flags)
+        shift  # Remove "show"
+        found_any=false
+        for arg in "$@"; do
+            # Skip -o and json flags
+            [[ "$arg" == "-o" ]] || [[ "$arg" == "json" ]] && continue
+            issue_id="$arg"
+            if [[ -n "${MOCK_DATA_DIR:-}" ]]; then
+                mock_file="${MOCK_DATA_DIR}/wk/${issue_id}.json"
+                if [[ -f "${mock_file}" ]]; then
+                    cat "${mock_file}"
+                    found_any=true
+                    continue
+                fi
             fi
-        fi
-        # Default: return basic JSON
+            # Default: return basic JSON with ID
+            echo "{\"id\": \"${issue_id}\", \"status\": \"open\"}"
+            found_any=true
+        done
+        $found_any && exit 0
+        # No IDs provided - old behavior
         echo '{"status": "open"}'
         exit 0
         ;;

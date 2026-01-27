@@ -258,6 +258,17 @@ if [[ -n "${LIST}" ]] || [[ -n "${BLOCKED}" ]]; then
   now_epoch=$(date +%s)
   # Determine effective limit: --max-ops overrides, otherwise show all (use very high number)
   effective_limit="${MAX_OPS:-99999}"
+
+  # Phase 5 optimization: Pre-fetch all blocker data in 2 wk calls (instead of N+1)
+  # Extract all epic_ids first, then batch fetch from wok
+  if [[ ${#state_files[@]} -gt 0 ]]; then
+    all_epic_ids=$(jq -rs '[.[].epic_id // empty | select(. != "null" and . != "")] | unique | .[]' "${state_files[@]}" 2>/dev/null)
+    if [[ -n "${all_epic_ids}" ]]; then
+      # shellcheck disable=SC2086
+      _status_init_blocker_cache ${all_epic_ids}
+    fi
+  fi
+
   if [[ ${#state_files[@]} -gt 0 ]]; then
     while IFS=$'\t' read -r name op_type phase created machine completed merge_queued merge_status merged_at completed_at epic_id session worker_pid held held_at merge_resumed worktree_missing merge_commit created_epoch completed_epoch merged_epoch held_epoch updated_epoch; do
       # Handle META line for max name length and pruning stats
