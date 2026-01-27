@@ -20,6 +20,10 @@ else
     v0_load_standalone_config
 fi
 
+# Source branch status and warn if develop has unpulled commits (skipped in standalone)
+source "${V0_DIR}/packages/status/lib/branch-status.sh"
+warn_branch_behind
+
 # Worker branch derived from develop branch (must be after config load)
 # In standalone mode, V0_DEVELOP_BRANCH is empty so this becomes "/chores"
 WORKER_BRANCH=$(v0_worker_branch "chore")

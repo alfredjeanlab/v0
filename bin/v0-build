@@ -36,6 +36,12 @@ source "${V0_DIR}/packages/cli/lib/build/build.sh"
 # Source issue filing functions
 source "${V0_DIR}/packages/cli/lib/build/issue.sh"
 
+# Source branch status for behind warning
+source "${V0_DIR}/packages/status/lib/branch-status.sh"
+
+# Warn if develop branch has commits not pulled yet
+warn_branch_behind
+
 usage() {
   v0_help <<'EOF'
 Usage: v0 build <name> <prompt> [options]

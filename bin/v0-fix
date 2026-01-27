@@ -16,6 +16,10 @@ source "${V0_DIR}/packages/worker/lib/nudge-common.sh"
 # Load project config (exits if not found)
 v0_load_config
 
+# Source branch status and warn if develop has unpulled commits
+source "${V0_DIR}/packages/status/lib/branch-status.sh"
+warn_branch_behind
+
 # Worker branch derived from develop branch (must be after v0_load_config)
 WORKER_BRANCH=$(v0_worker_branch "fix")
 

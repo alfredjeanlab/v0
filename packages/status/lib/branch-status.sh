@@ -110,3 +110,67 @@ show_branch_status() {
     fi
     return 0
 }
+
+# warn_branch_behind
+# Show a warning when the develop branch has commits that the user hasn't pulled.
+# Only shows when:
+#   - Running from the main repo (not a worktree where agents run)
+#   - V0_DEVELOP_BRANCH is set (not standalone mode)
+#   - The develop branch is ahead of the current branch
+#
+# Returns: 0 if warning was displayed, 1 otherwise
+warn_branch_behind() {
+    # Skip in standalone mode (no V0_ROOT or V0_DEVELOP_BRANCH)
+    [[ -z "${V0_ROOT:-}" ]] && return 1
+    [[ -z "${V0_DEVELOP_BRANCH:-}" ]] && return 1
+
+    # Skip if running from a worktree (agents run from worktrees)
+    # Worktrees have .git as a file, main repos have .git as a directory
+    [[ -f "${V0_ROOT}/.git" ]] && return 1
+
+    local develop_branch="${V0_DEVELOP_BRANCH}"
+    local remote="${V0_GIT_REMOTE:-origin}"
+
+    # Fetch to ensure we have latest remote info (quiet, don't fail on error)
+    git -C "${V0_ROOT}" fetch "${remote}" "${develop_branch}" --quiet 2>/dev/null || true
+
+    # Get current branch
+    local current_branch
+    current_branch=$(git -C "${V0_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null) || return 1
+
+    # Get ahead/behind counts between current branch and remote develop branch
+    # Format: left<tab>right (left = commits in remote, right = commits in HEAD)
+    local counts
+    counts=$(git -C "${V0_ROOT}" rev-list --left-right --count "${remote}/${develop_branch}...HEAD" 2>/dev/null) || return 1
+
+    # agent_ahead = commits agent/develop has that current doesn't (left side)
+    local agent_ahead
+    agent_ahead=$(echo "${counts}" | cut -f1)
+
+    # No warning if develop is not ahead
+    [[ "${agent_ahead}" = "0" ]] && return 1
+
+    # Check if TTY for colors
+    local is_tty=""
+    { [[ -t 1 ]] || [[ -n "${V0_FORCE_COLOR:-}" ]]; } && is_tty=1
+
+    # Build the branch display name
+    local branch_display="${develop_branch}"
+    case "${develop_branch}" in
+        main|develop|master)
+            branch_display="${remote}/${develop_branch}"
+            ;;
+    esac
+
+    # Show warning
+    if [[ -n "${is_tty}" ]]; then
+        echo -e "${C_YELLOW}Warning:${C_RESET} ${C_GREEN}${branch_display}${C_RESET} has ${C_GREEN}${agent_ahead}${C_RESET} commit(s) not in ${C_CYAN}${current_branch}${C_RESET}"
+        echo -e "  ${C_DIM}Run${C_RESET} ${C_CYAN}v0 pull${C_RESET} ${C_DIM}to merge agent changes before starting new work${C_RESET}"
+        echo ""
+    else
+        echo "Warning: ${branch_display} has ${agent_ahead} commit(s) not in ${current_branch}"
+        echo "  Run v0 pull to merge agent changes before starting new work"
+        echo ""
+    fi
+    return 0
+}
