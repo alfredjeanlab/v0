@@ -477,3 +477,53 @@ MOCK_WK
     # Verify config.toml was created in workspace (by our mock)
     assert_file_exists "$V0_WORKSPACE_DIR/.wok/config.toml"
 }
+
+@test "ws_ensure_workspace repairs incomplete wok link on existing workspace" {
+    # Create initial workspace (without wok)
+    run ws_create_clone
+    assert_success
+
+    # Simulate incomplete .wok directory (e.g., from git checkout of older workspace)
+    # This happens when .wok/.gitignore exists but config.toml doesn't
+    rm -rf "$V0_WORKSPACE_DIR/.wok"
+    mkdir -p "$V0_WORKSPACE_DIR/.wok"
+    echo "# gitignore" > "$V0_WORKSPACE_DIR/.wok/.gitignore"
+
+    # Set up main repo with .wok
+    mkdir -p "$V0_ROOT/.wok"
+    echo 'prefix = "test"' > "$V0_ROOT/.wok/config.toml"
+
+    # Mock wk to track calls and create config.toml
+    local mock_wk_log="$TEST_TEMP_DIR/wk-repair.log"
+    mkdir -p "$TEST_TEMP_DIR/mock-bin"
+    cat > "$TEST_TEMP_DIR/mock-bin/wk" <<'MOCK_WK'
+#!/bin/bash
+echo "$@" >> "$WK_MOCK_LOG"
+# Extract --path argument and create config.toml there
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "--path" ]]; then
+        mkdir -p "$arg/.wok"
+        echo 'prefix = "test"' > "$arg/.wok/config.toml"
+        break
+    fi
+    prev="$arg"
+done
+exit 0
+MOCK_WK
+    chmod +x "$TEST_TEMP_DIR/mock-bin/wk"
+    export PATH="$TEST_TEMP_DIR/mock-bin:$PATH"
+    export WK_MOCK_LOG="$mock_wk_log"
+
+    # Call ws_ensure_workspace on existing workspace - should repair wok link
+    run ws_ensure_workspace
+    assert_success
+
+    # wk init should have been called to repair the incomplete .wok
+    assert_file_exists "$mock_wk_log"
+    run cat "$mock_wk_log"
+    assert_output --partial "init"
+    assert_output --partial "--workspace"
+    # Verify config.toml was created (repaired)
+    assert_file_exists "$V0_WORKSPACE_DIR/.wok/config.toml"
+}

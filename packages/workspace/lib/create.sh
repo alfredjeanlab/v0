@@ -164,6 +164,8 @@ ws_ensure_workspace() {
   # Check if workspace already exists, is valid, AND matches current config
   if ws_is_valid_workspace; then
     if ws_matches_config; then
+      # Ensure wok link is initialized (repairs incomplete .wok from older workspaces)
+      ws_init_wok_link "${V0_WORKSPACE_DIR}"
       return 0
     fi
     # Config mismatch - need to recreate

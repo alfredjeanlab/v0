@@ -92,6 +92,41 @@ emit_event() {
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ${event}: ${details}" >> "${STATE_DIR}/logs/events.log"
 }
 
+# file_or_update_plan_issue
+# Updates or creates a feature issue with plan content.
+# Tries local PLANS_DIR first, falls back to V0_DEVELOP_BRANCH.
+# Sets epic_id in state if a new issue is created.
+# Returns: FEATURE_ID via stdout
+file_or_update_plan_issue() {
+  local plan_file="${PLANS_DIR}/${NAME}.md"
+  local feature_id
+  feature_id=$(get_state epic_id)
+
+  # Try local first, fallback to V0_DEVELOP_BRANCH
+  if [[ ! -f "${plan_file}" ]]; then
+    ws_get_plan_from_develop "${NAME}" "${plan_file}" || true
+  fi
+
+  if [[ -f "${plan_file}" ]]; then
+    if [[ -n "${feature_id}" ]] && [[ "${feature_id}" != "null" ]]; then
+      # Update existing issue with plan content
+      file_plan_issue "${NAME}" "${plan_file}" "${feature_id}"
+      emit_event "issue:updated" "Updated feature ${feature_id} with plan"
+    else
+      # Fallback: create new issue
+      feature_id=$(file_plan_issue "${NAME}" "${plan_file}")
+      if [[ -n "${feature_id}" ]]; then
+        update_state "epic_id" "\"${feature_id}\""
+        emit_event "issue:created" "Created feature ${feature_id}"
+      else
+        emit_event "issue:warning" "Failed to create feature issue"
+      fi
+    fi
+  fi
+
+  echo "${feature_id}"
+}
+
 # Note: Blocking is now tracked in wok, not state.json
 # Use v0_is_blocked, v0_get_first_open_blocker from v0-common.sh
 
@@ -346,7 +381,6 @@ EOF
     PLAN_EXIT=1
   fi
 
-  mkdir -p "${PLANS_DIR}"
   PLAN_FOUND=""
   if [[ -f "${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md" ]]; then
     PLAN_FOUND="${TREE_DIR}/${V0_PLANS_DIR}/${NAME}.md"
@@ -371,12 +405,6 @@ EOF
     return 1
   fi
 
-  # Copy plan to V0_ROOT for user visibility (NOT committed to user's branch)
-  if [[ "${PLAN_FOUND}" != "${PLANS_DIR}/${NAME}.md" ]]; then
-    /bin/cp "${PLAN_FOUND}" "${PLANS_DIR}/${NAME}.md"
-    emit_event "plan:copied" "Copied to main repo (not committed)"
-  fi
-
   # Commit plan to V0_DEVELOP_BRANCH via workspace
   if ws_commit_plan_to_develop "${NAME}" "${PLAN_FOUND}"; then
     emit_event "plan:commit" "Committed to ${V0_DEVELOP_BRANCH}"
@@ -390,7 +418,7 @@ EOF
   sm_transition_to_planned "${NAME}" "${V0_PLANS_DIR}/${NAME}.md"
 
   # Update feature issue with plan content (issue already created at init)
-  local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
+  local PLAN_FILE="${PLAN_FOUND}"
   local FEATURE_ID
   FEATURE_ID=$(get_state epic_id)
 
@@ -497,10 +525,9 @@ run_build_phase() {
 }
 SETTINGS_EOF
 
-  # Prefer local plan, fallback to V0_DEVELOP_BRANCH
-  PLAN_FILE="${PLANS_DIR}/${NAME}.md"
-  if [[ -f "${PLAN_FILE}" ]]; then
-    /bin/cp "${PLAN_FILE}" "${TREE_DIR}/PLAN.md"
+  # Try local plan first, fallback to V0_DEVELOP_BRANCH
+  if [[ -f "${PLANS_DIR}/${NAME}.md" ]]; then
+    /bin/cp "${PLANS_DIR}/${NAME}.md" "${TREE_DIR}/PLAN.md"
     emit_event "plan:source" "Copied from local ${V0_PLANS_DIR}"
   elif ws_get_plan_from_develop "${NAME}" "${TREE_DIR}/PLAN.md"; then
     emit_event "plan:source" "Retrieved from ${V0_DEVELOP_BRANCH}"
@@ -590,24 +617,8 @@ main() {
     planned)
       # Plan exists - update or create issue
       log "Updating/filing issue for existing plan"
-      local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
       local FEATURE_ID
-      FEATURE_ID=$(get_state epic_id)
-
-      if [[ -n "${FEATURE_ID}" ]] && [[ "${FEATURE_ID}" != "null" ]]; then
-        # Update existing issue with plan content
-        file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}"
-        emit_event "issue:updated" "Updated feature ${FEATURE_ID} with plan"
-      else
-        # Fallback: create new issue
-        FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-        if [[ -n "${FEATURE_ID}" ]]; then
-          update_state "epic_id" "\"${FEATURE_ID}\""
-          emit_event "issue:created" "Created feature ${FEATURE_ID}"
-        else
-          emit_event "issue:warning" "Failed to create feature issue"
-        fi
-      fi
+      FEATURE_ID=$(file_or_update_plan_issue)
       sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
       check_hold_before_phase || exit 0
       check_wok_blockers || exit 0
@@ -633,22 +644,8 @@ main() {
           ;;
         planned)
           # Update/file issue then build
-          local PLAN_FILE="${PLANS_DIR}/${NAME}.md"
           local FEATURE_ID
-          FEATURE_ID=$(get_state epic_id)
-
-          if [[ -n "${FEATURE_ID}" ]] && [[ "${FEATURE_ID}" != "null" ]]; then
-            # Update existing issue with plan content
-            file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}"
-            emit_event "issue:updated" "Updated feature ${FEATURE_ID} with plan"
-          else
-            # Fallback: create new issue
-            FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
-            if [[ -n "${FEATURE_ID}" ]]; then
-              update_state "epic_id" "\"${FEATURE_ID}\""
-              emit_event "issue:created" "Created feature ${FEATURE_ID}"
-            fi
-          fi
+          FEATURE_ID=$(file_or_update_plan_issue)
           sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
           check_wok_blockers || exit 0
           run_build_phase || exit 1
