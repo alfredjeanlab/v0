@@ -108,6 +108,24 @@ EOF
 teardown() {
     export HOME="${REAL_HOME}"
     export PATH="${ORIGINAL_PATH}"
+
+    # Kill any background workers that might have been started
+    if [[ -n "${TEST_TEMP_DIR}" ]] && [[ -d "${TEST_TEMP_DIR}/project/.v0/build/roadmaps" ]]; then
+        for state_file in "${TEST_TEMP_DIR}/project/.v0/build/roadmaps"/*/state.json; do
+            [[ -f "${state_file}" ]] || continue
+            local pid
+            pid=$(jq -r '.worker_pid // empty' "${state_file}" 2>/dev/null || true)
+            if [[ -n "${pid}" ]] && [[ "${pid}" != "null" ]]; then
+                kill "${pid}" 2>/dev/null || true
+                # Wait briefly for process to terminate
+                for _ in {1..10}; do
+                    kill -0 "${pid}" 2>/dev/null || break
+                    sleep 0.1
+                done
+            fi
+        done
+    fi
+
     if [[ -n "${TEST_TEMP_DIR}" ]] && [[ -d "${TEST_TEMP_DIR}" ]]; then
         rm -rf "${TEST_TEMP_DIR}"
     fi
@@ -242,8 +260,8 @@ teardown() {
     run "${V0_ROADMAP}" myroadmap "Test" --dry-run
     assert_success
 
-    # Now resume should work (in dry-run context we just check it finds the roadmap)
-    run "${V0_ROADMAP}" myroadmap --resume 2>&1
+    # Now resume should work - use --dry-run to avoid launching real worker
+    run "${V0_ROADMAP}" myroadmap --resume --dry-run 2>&1
     # It should find the roadmap and try to resume
     assert_output --partial "Resuming roadmap"
 }
