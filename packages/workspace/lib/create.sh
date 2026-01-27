@@ -148,6 +148,9 @@ ws_create_clone() {
     fi
   fi
 
+  # Initialize wok workspace link if wok exists in main repo
+  ws_init_wok_link "${V0_WORKSPACE_DIR}"
+
   echo "Workspace clone created at ${V0_WORKSPACE_DIR}"
   return 0
 }

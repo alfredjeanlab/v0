@@ -437,3 +437,35 @@ setup() {
     # wk should not have been called since config.toml already exists
     [[ "$WK_CALLED" == "false" ]]
 }
+
+@test "ws_create_clone initializes wok link when main repo has .wok" {
+    # Create a .wok in main repo
+    mkdir -p "$TEST_TEMP_DIR/project/.wok"
+    echo 'prefix = "test"' > "$TEST_TEMP_DIR/project/.wok/config.toml"
+
+    # Track wk init calls
+    WK_INIT_PATH=""
+    wk() {
+        if [[ "$1" == "init" ]]; then
+            local prev=""
+            for arg in "$@"; do
+                if [[ "$prev" == "--path" ]]; then
+                    WK_INIT_PATH="$arg"
+                fi
+                prev="$arg"
+            done
+            # Create config.toml to indicate success
+            mkdir -p "$WK_INIT_PATH/.wok"
+            echo 'workspace = "/mock"' > "$WK_INIT_PATH/.wok/config.toml"
+        fi
+        return 0
+    }
+    export -f wk
+    export WK_INIT_PATH
+
+    run ws_create_clone
+    assert_success
+
+    # wk init should have been called with the workspace path
+    assert_equal "$WK_INIT_PATH" "$V0_WORKSPACE_DIR"
+}
