@@ -28,6 +28,7 @@ mq_enqueue() {
         return 1
     fi
 
+    v0_trace "mergeq:enqueue" "Enqueueing ${operation} (priority: ${priority}, issue: ${issue_id:-none})"
     mq_ensure_queue_exists
 
     # Retry lock acquisition with backoff to handle contention
@@ -96,6 +97,7 @@ mq_process_branch_merge() {
     local issue_id
     issue_id=$(mq_get_issue_id "${branch}")
 
+    v0_trace "mergeq:branch" "Processing branch merge: ${branch} (issue: ${issue_id:-none})"
     echo "[$(date +%H:%M:%S)] Processing branch merge: ${branch}"
     if [[ -n "${issue_id}" ]]; then
         echo "[$(date +%H:%M:%S)] Associated issue: ${issue_id}"
@@ -157,8 +159,10 @@ mq_process_branch_merge() {
 
     if [[ ${merge_exit} -eq 0 ]]; then
         # Success - push to remote
+        v0_trace "mergeq:branch:push" "Pushing merged changes for ${branch}"
         echo "Pushing merged changes..."
         if ! git -C "${ws}" push "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log"; then
+            v0_trace "mergeq:branch:failed" "Push failed for ${branch}"
             echo "[$(date +%H:%M:%S)] Push failed for ${branch}" >&2
             mq_update_entry_status "${branch}" "${MQ_STATUS_FAILED}"
             mq_log_event "merge:failed: ${branch} (push failed)"
@@ -170,6 +174,7 @@ mq_process_branch_merge() {
         echo "Deleting merged branch ${V0_GIT_REMOTE}/${branch}..."
         git -C "${ws}" push "${V0_GIT_REMOTE}" --delete "${branch}" 2>&1 | tee -a "${MERGEQ_DIR}/logs/merges.log" || true
 
+        v0_trace "mergeq:branch:success" "Branch merge completed: ${branch}"
         mq_update_entry_status "${branch}" "${MQ_STATUS_COMPLETED}"
         mq_log_event "merge:completed: ${branch} (branch)"
         mq_emit_event "merge:completed" "${branch}"
@@ -177,12 +182,14 @@ mq_process_branch_merge() {
 
         # Trigger dependent operations now that this issue is merged
         if [[ -n "${issue_id}" ]]; then
+            v0_trace "mergeq:dependents" "Triggering dependents for issue ${issue_id}"
             mq_trigger_dependents_by_issue "${issue_id}"
         fi
 
         return 0
     else
         # Conflict detected - attempt automatic resolution with AI
+        v0_trace "mergeq:branch:conflict" "Conflicts detected for ${branch}, attempting resolution"
         echo "[$(date +%H:%M:%S)] Merge has conflicts, attempting automatic resolution..."
         mq_log_event "merge:resolving: ${branch} (branch)"
         mq_emit_event "merge:resolving" "${branch}"
@@ -191,6 +198,7 @@ mq_process_branch_merge() {
         resolve_session=$(mq_launch_branch_conflict_resolution "${branch}")
 
         if mq_wait_for_resolution "${branch}" "${resolve_session}" 300; then
+            v0_trace "mergeq:branch:resolved" "Conflict resolution succeeded for ${branch}"
             mq_update_entry_status "${branch}" "${MQ_STATUS_COMPLETED}"
             mq_log_event "merge:completed: ${branch} (branch, after resolution)"
             mq_emit_event "merge:completed" "${branch}"
@@ -198,6 +206,7 @@ mq_process_branch_merge() {
 
             # Trigger dependent operations now that this issue is merged
             if [[ -n "${issue_id}" ]]; then
+                v0_trace "mergeq:dependents" "Triggering dependents for issue ${issue_id}"
                 mq_trigger_dependents_by_issue "${issue_id}"
             fi
 
@@ -205,6 +214,7 @@ mq_process_branch_merge() {
         fi
 
         # Resolution failed or timed out
+        v0_trace "mergeq:branch:conflict:failed" "Resolution failed for ${branch}"
         mq_update_entry_status "${branch}" "${MQ_STATUS_CONFLICT}"
         mq_log_event "merge:conflict: ${branch} (branch, resolution failed)"
         mq_emit_event "merge:conflict" "${branch}"
@@ -225,18 +235,23 @@ mq_process_merge() {
     local op="$1"
     local state_file="${BUILD_DIR}/operations/${op}/state.json"
 
+    v0_trace "mergeq:process" "Processing merge for operation: ${op}"
+
     # Check if it's a bare branch merge (no state file)
     if [[ ! -f "${state_file}" ]]; then
         if mq_is_branch_merge "${op}"; then
+            v0_trace "mergeq:process" "Delegating to branch merge for ${op}"
             mq_process_branch_merge "${op}"
             return $?
         else
+            v0_trace "mergeq:process:failed" "No state file and not a branch: ${op}"
             echo "Error: No state file for '${op}' and not a branch name" >&2
             mq_update_entry_status "${op}" "${MQ_STATUS_FAILED}"
             return 1
         fi
     fi
 
+    v0_trace "mergeq:operation" "Processing operation merge: ${op}"
     echo "[$(date +%H:%M:%S)] Processing merge: ${op}"
     mq_log_event "merge:started: ${op}"
     mq_emit_event "merge:started" "${op}"
@@ -284,6 +299,7 @@ mq_process_merge() {
 
     if [[ ${merge_exit} -eq 0 ]]; then
         # Verify the merge actually happened
+        v0_trace "mergeq:operation:verify" "Verifying merge for ${op}"
         sleep 1
 
         if ! v0_verify_merge_by_op "${op}" "true"; then
@@ -291,9 +307,11 @@ mq_process_merge() {
             merge_commit=$(sm_read_state "${op}" "merge_commit")
 
             if [[ -z "${merge_commit}" ]] || [[ "${merge_commit}" = "null" ]]; then
+                v0_trace "mergeq:operation:verify:failed" "No merge_commit recorded for ${op}"
                 echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but no merge_commit recorded"
                 sm_update_state "${op}" "merge_error" '"No merge_commit in state - possible v0-merge bug"'
             else
+                v0_trace "mergeq:operation:verify:failed" "Commit ${merge_commit:0:8} not on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
                 echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but commit ${merge_commit:0:8} not on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
                 sm_update_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}\""
             fi
@@ -306,6 +324,7 @@ mq_process_merge() {
         fi
 
         # Verified - mark as merged (this also marks wok epic as done to unblock dependents)
+        v0_trace "mergeq:operation:success" "Merge verified and completed: ${op}"
         sm_transition_to_merged "${op}"
         mq_update_entry_status "${op}" "${MQ_STATUS_COMPLETED}"
         mq_log_event "merge:completed: ${op}"
@@ -335,6 +354,7 @@ mq_process_merge() {
         return 0
     else
         # Merge with --resolve failed - mark as conflict
+        v0_trace "mergeq:operation:conflict" "Merge failed for ${op}, automatic resolution failed"
         mq_update_entry_status "${op}" "${MQ_STATUS_CONFLICT}"
         sm_update_state "${op}" "merge_status" '"conflict"'
         sm_update_state "${op}" "merge_error" '"Automatic resolution failed"'
@@ -450,6 +470,7 @@ mq_process_watch() {
 
     local poll_interval=30
 
+    v0_trace "mergeq:watch" "Starting merge queue watch loop (poll: ${poll_interval}s)"
     echo "[$(date +%H:%M:%S)] Starting merge queue daemon (poll interval: ${poll_interval}s)"
     mq_log_event "daemon:started"
 

@@ -103,6 +103,8 @@ start_worker() {
     return
   fi
 
+  v0_trace "chore:worker" "Starting chore worker"
+
   # Create worktree with proper branch name
   local name="v0-chore-worker"
   local tree_output
@@ -352,8 +354,10 @@ FIXED_SCRIPT
 
   # Verify the session started
   if tmux has-session -t "${WORKER_SESSION}" 2>/dev/null; then
+    v0_trace "chore:worker" "Chore worker started (session: ${WORKER_SESSION})"
     echo -e "${C_GREEN}Worker started.${C_RESET} Use '${C_BOLD}v0 chore --status${C_RESET}' to check progress."
   else
+    v0_trace "chore:worker:failed" "Failed to start chore worker tmux session"
     echo "Error: Failed to start worker tmux session" >&2
     return 1
   fi
@@ -559,8 +563,10 @@ stop_worker() {
     stop_worker_standalone
     return
   fi
+  v0_trace "chore:worker" "Stopping chore worker"
   reopen_worker_issues "worker:chore"
   generic_stop_worker "${WORKER_SESSION}" "${WORKER_BRANCH}"
+  v0_trace "chore:worker" "Chore worker stopped"
 }
 
 # Stop the standalone worker
@@ -667,6 +673,8 @@ report_chore() {
     usage
   fi
 
+  v0_trace "chore:report" "Reporting new chore"
+
   # Split at first double newline (paragraph break)
   local title description
   if [[ "${input}" == *$'\n\n'* ]]; then
@@ -722,6 +730,7 @@ report_chore() {
     fi
   fi
 
+  v0_trace "chore:report" "Created chore ${id}"
   echo -e "${C_GREEN}Created chore:${C_RESET} ${C_CYAN}${id}${C_RESET}"
   echo "  Title:"
   echo "${title}" | fmt -w 76 | sed 's/^/    /'

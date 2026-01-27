@@ -117,7 +117,10 @@ mg_finalize_merge() {
     local project="$4"
     local suffix="${5:-}"
 
+    v0_trace "merge:finalize" "Finalizing merge of ${branch} (commit: ${merge_commit:0:8})"
+
     if ! mg_push_and_verify "${merge_commit}"; then
+        v0_trace "merge:finalize:failed" "Push/verify failed for ${branch}"
         return 1
     fi
 
@@ -125,19 +128,24 @@ mg_finalize_merge() {
     local op_to_update
     op_to_update=$(mg_resolve_op_name "${op_name}" "${branch}")
     if [[ -n "${op_to_update}" ]]; then
+        v0_trace "merge:state" "Recording merge commit for operation ${op_to_update}"
         mg_record_merge_commit "${op_to_update}" "${merge_commit}"
     fi
 
     # Update operation and queue state
+    v0_trace "merge:state" "Updating operation state for ${branch}"
     mg_update_operation_state "${branch}"
     if [[ -z "${V0_MERGEQ_CALLER:-}" ]]; then
+        v0_trace "merge:queue" "Updating queue entry for ${branch}"
         mg_update_queue_entry "${op_name}" "${branch}"
     fi
 
     # Notify and cleanup
+    v0_trace "merge:dependents" "Triggering dependents of ${branch}"
     mg_trigger_dependents "${branch}"
     mg_notify_merge "${project}" "${branch}" "${suffix}"
     mg_delete_remote_branch "${branch}"
 
+    v0_trace "merge:finalize:done" "Merge finalization complete for ${branch}"
     return 0
 }

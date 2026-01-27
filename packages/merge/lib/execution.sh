@@ -51,6 +51,7 @@ mg_acquire_lock() {
     if [[ -f "${MG_LOCKFILE}" ]]; then
         local holder
         holder=$(cat "${MG_LOCKFILE}")
+        v0_trace "merge:lock" "Lock held by ${holder}, cannot acquire for ${branch}"
         echo "Error: Merge lock held by: ${holder}"
         echo "If stale, remove: rm ${MG_LOCKFILE}"
         return 1
@@ -58,12 +59,14 @@ mg_acquire_lock() {
 
     mkdir -p "${BUILD_DIR}"
     echo "${branch} (pid $$)" > "${MG_LOCKFILE}"
+    v0_trace "merge:lock" "Acquired lock for ${branch} (pid $$)"
     trap 'mg_release_lock' EXIT
 }
 
 # mg_release_lock
 # Release merge lock
 mg_release_lock() {
+    v0_trace "merge:lock" "Released lock"
     rm -f "${MG_LOCKFILE:-}"
 }
 
@@ -100,17 +103,22 @@ mg_do_merge() {
     local worktree="$1"
     local branch="$2"
 
+    v0_trace "merge:start" "Attempting merge of ${branch} with worktree ${worktree}"
+
     # Try fast-forward first
     if git merge --ff-only "${branch}" 2>/dev/null; then
+        v0_trace "merge:success" "${branch} fast-forward merge successful"
         echo "Fast-forward merge successful"
         return 0
     fi
 
     # Rebase branch onto develop branch to enable fast-forward
+    v0_trace "merge:rebase" "Rebasing ${branch} onto ${V0_DEVELOP_BRANCH}"
     echo "Rebasing ${branch} onto ${V0_DEVELOP_BRANCH}..."
     git -C "${worktree}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
     if git -C "${worktree}" rebase "${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}" 2>/dev/null; then
         if git merge --ff-only "${branch}"; then
+            v0_trace "merge:success" "${branch} fast-forward merge successful (after rebase)"
             echo "Fast-forward merge successful (after rebase)"
             return 0
         fi
@@ -118,12 +126,15 @@ mg_do_merge() {
     git -C "${worktree}" rebase --abort 2>/dev/null || true
 
     # Fallback to regular merge
+    v0_trace "merge:fallback" "Trying regular merge for ${branch}"
     if git merge --no-edit "${branch}"; then
+        v0_trace "merge:success" "${branch} merge commit created"
         echo "Merge successful"
         return 0
     fi
 
     git merge --abort 2>/dev/null || true
+    v0_trace "merge:conflict" "${branch} has conflicts, merge aborted"
     echo
     echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge would have conflicts. To resolve:"
     echo -e "  ${C_BOLD}v0 merge ${worktree} --resolve${C_RESET}"
@@ -137,9 +148,11 @@ mg_cleanup_worktree() {
     local tree_dir="$2"
     local branch="$3"
 
+    v0_trace "merge:cleanup" "Removing worktree and branch: ${branch}"
     git worktree remove "${worktree}" --force
     git branch -d "${branch}" 2>/dev/null || git branch -D "${branch}"
     rm -rf "${tree_dir}"
+    v0_trace "merge:cleanup:done" "Cleanup complete for ${branch}"
     echo "Removed worktree, branch, and tree dir: ${branch}"
 }
 
@@ -149,19 +162,25 @@ mg_cleanup_worktree() {
 mg_push_and_verify() {
     local merge_commit="$1"
 
+    v0_trace "merge:push" "Pushing ${merge_commit:0:8} to ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+
     # Explicitly push HEAD to the develop branch to handle cases where
     # the local branch name doesn't match the remote tracking branch
     # (e.g., workspace branch v0/agent/user-id tracking agent/main)
     if ! git push "${V0_GIT_REMOTE}" "HEAD:${V0_DEVELOP_BRANCH}"; then
+        v0_trace "merge:push:failed" "Push to ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH} failed"
         echo "Error: Push failed" >&2
         return 1
     fi
 
+    v0_trace "merge:verify" "Verifying ${merge_commit:0:8} is on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
     if ! v0_verify_push "${merge_commit}"; then
+        v0_trace "merge:verify:failed" "Commit ${merge_commit:0:8} not found on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
         echo "Error: Merge commit not found on main after push" >&2
         return 1
     fi
 
+    v0_trace "merge:push:success" "Successfully pushed and verified ${merge_commit:0:8}"
     return 0
 }
 
@@ -178,13 +197,17 @@ mg_delete_remote_branch() {
 mg_do_merge_without_worktree() {
     local branch="$1"
 
+    v0_trace "merge:start" "Attempting branch-only merge of ${branch} (no worktree)"
+
     # Try fast-forward first (no worktree needed)
     if git merge --ff-only "${branch}" 2>/dev/null; then
+        v0_trace "merge:success" "${branch} fast-forward merge successful (branch-only)"
         echo "Fast-forward merge successful"
         return 0
     fi
 
     # Can't do non-FF merge without worktree for rebase
+    v0_trace "merge:failed" "${branch} cannot fast-forward, worktree required"
     echo "Cannot fast-forward merge. Conflicts require worktree for resolution." >&2
     return 1
 }

@@ -86,6 +86,8 @@ start_worker() {
     return 0
   fi
 
+  v0_trace "fix:worker" "Starting fix worker"
+
   # Create worktree with proper branch name
   local name="v0-fix-worker"
   local tree_output
@@ -407,8 +409,10 @@ FIXED_SCRIPT
 
   # Verify the session started
   if tmux has-session -t "${WORKER_SESSION}" 2>/dev/null; then
+    v0_trace "fix:worker" "Fix worker started (session: ${WORKER_SESSION})"
     echo -e "${C_GREEN}Worker started.${C_RESET} Use '${C_BOLD}v0 fix --status${C_RESET}' to check progress."
   else
+    v0_trace "fix:worker:failed" "Failed to start fix worker tmux session"
     echo "Error: Failed to start worker tmux session" >&2
     return 1
   fi
@@ -416,8 +420,10 @@ FIXED_SCRIPT
 
 # Stop the worker
 stop_worker() {
+  v0_trace "fix:worker" "Stopping fix worker"
   reopen_worker_issues "worker:fix"
   generic_stop_worker "${WORKER_SESSION}" "${WORKER_BRANCH}"
+  v0_trace "fix:worker" "Fix worker stopped"
 }
 
 # Show status
@@ -494,6 +500,8 @@ report_bug() {
     usage
   fi
 
+  v0_trace "fix:report" "Reporting new bug"
+
   # Split at first double newline (paragraph break)
   local title description
   if [[ "${input}" == *$'\n\n'* ]]; then
@@ -549,6 +557,7 @@ report_bug() {
     fi
   fi
 
+  v0_trace "fix:report" "Created bug ${id}"
   echo -e "${C_GREEN}Created bug:${C_RESET} ${C_CYAN}${id}${C_RESET}"
   echo "  Title:"
   echo "${title}" | fmt -w 76 | sed 's/^/    /'

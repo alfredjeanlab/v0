@@ -71,6 +71,8 @@ done
 
 [[ -z "$INPUT" ]] && usage
 
+v0_trace "merge:cmd" "v0 merge invoked with input: ${INPUT} (resolve: ${RESOLVE})"
+
 # Resolve input to worktree and tree_dir
 if mg_is_input_path "${INPUT}"; then
     mg_resolve_path_to_worktree "${INPUT}"
@@ -135,7 +137,9 @@ if ! mg_ensure_develop_branch; then
 fi
 
 if mg_has_conflicts "${BRANCH}"; then
+    v0_trace "merge:cmd:conflict" "Conflicts detected for ${BRANCH}"
     if [[ "${RESOLVE}" = true ]]; then
+        v0_trace "merge:cmd:resolve" "Launching conflict resolution for ${BRANCH}"
         echo "Conflicts detected. Starting claude to resolve..."
 
         # If no worktree, create a temporary one for resolution

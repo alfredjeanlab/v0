@@ -245,6 +245,7 @@ check_wok_blockers() {
 
 run_plan_phase() {
   log "Starting plan phase"
+  v0_trace "build:plan" "Starting plan phase for ${NAME}"
   ensure_nudge_running
 
   local PROMPT
@@ -414,11 +415,13 @@ EOF
 
   # Transition to queued
   sm_transition_to_queued "${NAME}" "${FEATURE_ID}"
+  v0_trace "build:plan:done" "Plan phase complete for ${NAME}"
   log "Plan phase complete, issue filed"
 }
 
 run_build_phase() {
   log "Starting build phase"
+  v0_trace "build:execute" "Starting build phase for ${NAME}"
 
   emit_event "execute:starting" "Launching agent in tmux"
 
@@ -545,16 +548,19 @@ WRAPPER
   # Use state machine transition to executing phase
   sm_transition_to_executing "${NAME}" "${SESSION}"
 
+  v0_trace "build:execute:started" "Build phase started: ${NAME} (session: ${SESSION})"
   log "Build phase started: tmux session ${SESSION}"
   log "Watch live: v0 attach ${NAME}"
 }
 
 main() {
   log "Starting background worker for ${NAME}"
+  v0_trace "build:worker" "Starting build worker for operation: ${NAME}"
 
   sm_update_state "${NAME}" "worker_started_at" "\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
 
   PHASE=$(sm_get_phase "${NAME}")
+  v0_trace "build:worker" "Current phase: ${PHASE}"
   log "Current phase: ${PHASE}"
 
   case "${PHASE}" in
@@ -646,6 +652,7 @@ main() {
   esac
 
   ERROR_MSG=""
+  v0_trace "build:worker:done" "Build worker completed successfully for ${NAME}"
   log "Background worker completed successfully"
 }
 

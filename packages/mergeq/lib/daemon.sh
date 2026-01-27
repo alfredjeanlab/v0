@@ -48,11 +48,13 @@ mq_start_daemon() {
         return 0
     fi
 
+    v0_trace "mergeq:daemon" "Starting merge queue daemon"
     mq_ensure_queue_exists
     echo "Starting merge queue worker..."
 
     # Ensure workspace exists for merge operations
     if ! ws_ensure_workspace; then
+        v0_trace "mergeq:daemon:failed" "Failed to create workspace for merge operations"
         echo "Error: Failed to create workspace for merge operations" >&2
         return 1
     fi
@@ -89,6 +91,7 @@ mq_start_daemon() {
         return 1
     fi
 
+    v0_trace "mergeq:daemon" "Daemon started (pid: ${daemon_pid})"
     echo -e "${C_GREEN}Worker started${C_RESET} ${C_DIM}(pid: ${daemon_pid})${C_RESET}"
     echo ""
     echo -e "Status:    ${C_BOLD}v0 mergeq --status${C_RESET}"
@@ -105,9 +108,11 @@ mq_stop_daemon() {
 
     local pid
     pid=$(cat "${DAEMON_PID_FILE}")
+    v0_trace "mergeq:daemon" "Stopping daemon (pid: ${pid})"
     echo "Stopping merge queue worker (pid: ${pid})..."
     kill "${pid}" 2>/dev/null || true
     rm -f "${DAEMON_PID_FILE}"
+    v0_trace "mergeq:daemon" "Daemon stopped"
     echo "Worker stopped"
 }
 
