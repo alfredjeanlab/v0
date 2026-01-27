@@ -132,6 +132,18 @@ v0 build api "Build REST API"          # Plans, executes, merges
 
 Completed plans are archived to `plans/archive/`.
 
+### Roadmaps
+
+For big-picture work, use roadmaps:
+
+```bash
+v0 roadmap rust "Rewrite this in Rust"
+v0 roadmap api "Build a comprehensive REST API"
+v0 roadmap tests "Add comprehensive test coverage"
+```
+
+Roadmaps decompose large goals into sequenced features. The agent explores your codebase, creates an implementation outline, then queues features with proper dependencies. Each feature goes through the normal build pipeline.
+
 ### Mayor (Interactive Orchestration)
 
 For conversational orchestration, use the mayor:
