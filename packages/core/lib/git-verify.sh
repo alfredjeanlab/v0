@@ -4,6 +4,11 @@
 # Git verification functions for v0
 # Source this file to get merge verification functions
 
+# Define no-op v0_trace if not available (for unit tests that don't source full CLI)
+if ! type -t v0_trace &>/dev/null; then
+  v0_trace() { :; }
+fi
+
 # v0_verify_commit_on_branch <commit> <branch> [require_remote]
 # Verify that a specific commit exists on a branch
 # Returns 0 if commit is on branch, 1 if not
@@ -20,24 +25,33 @@ v0_verify_commit_on_branch() {
   local branch="$2"
   local require_remote="${3:-false}"
 
+  v0_trace "mergeq:verify" "Verifying ${commit:0:8} on ${branch} (require_remote=${require_remote})"
+
   # Validate commit exists
   if ! git cat-file -e "${commit}^{commit}" 2>/dev/null; then
+    v0_trace "mergeq:verify" "Commit ${commit:0:8} does not exist"
     return 1  # Commit doesn't exist
   fi
 
   # Check if commit is ancestor of local branch
   if ! git merge-base --is-ancestor "${commit}" "${branch}" 2>/dev/null; then
+    v0_trace "mergeq:verify" "Commit ${commit:0:8} is not ancestor of ${branch}"
     return 1
   fi
 
   # Optionally check remote
   if [[ "${require_remote}" = "true" ]]; then
-    git fetch "${V0_GIT_REMOTE}" "${branch}" --quiet 2>/dev/null || true
+    v0_trace "mergeq:verify" "Fetching ${branch} from ${V0_GIT_REMOTE} for remote verification"
+    if ! git fetch "${V0_GIT_REMOTE}" "${branch}" --quiet 2>&1; then
+      v0_trace "mergeq:verify" "Warning: fetch failed for ${branch}"
+    fi
     if ! git merge-base --is-ancestor "${commit}" "${V0_GIT_REMOTE}/${branch}" 2>/dev/null; then
+      v0_trace "mergeq:verify" "Commit ${commit:0:8} is not ancestor of ${V0_GIT_REMOTE}/${branch}"
       return 1
     fi
   fi
 
+  v0_trace "mergeq:verify" "Commit ${commit:0:8} verified on ${branch}"
   return 0
 }
 
@@ -137,7 +151,10 @@ v0_verify_merge_by_op() {
   local merge_commit
   merge_commit=$(sm_read_state "${op}" "merge_commit")
 
+  v0_trace "mergeq:verify" "Verifying merge for operation ${op} (merge_commit=${merge_commit:-<none>})"
+
   if [[ -z "${merge_commit}" ]] || [[ "${merge_commit}" = "null" ]]; then
+    v0_trace "mergeq:verify" "No merge_commit recorded for ${op}"
     return 1  # No recorded merge commit
   fi
 

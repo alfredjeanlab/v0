@@ -13,6 +13,11 @@
 # Requires: sm_read_state from io.sh
 # Requires: sm_get_phase from schema.sh
 
+# Define no-op v0_trace if not available (for unit tests that don't source full CLI)
+if ! type -t v0_trace &>/dev/null; then
+  v0_trace() { :; }
+fi
+
 # ============================================================================
 # Merge Readiness Checks
 # ============================================================================
@@ -26,11 +31,15 @@ _sm_resolve_merge_branch() {
   local op="$1"
   local worktree="$2"
   local branch="$3"
+  local git_dir="${V0_WORKSPACE_DIR:-${V0_ROOT}}"  # Explicit git context
 
   _SM_RESOLVED_BRANCH=""
 
+  v0_trace "mergeq:readiness" "Resolving branch for ${op}: worktree=${worktree:-<none>}, branch=${branch:-<none>}, git_dir=${git_dir}"
+
   # If we have a valid worktree, no need to resolve branch
   if [[ -n "${worktree}" ]] && [[ "${worktree}" != "null" ]] && [[ -d "${worktree}" ]]; then
+    v0_trace "mergeq:readiness" "Using existing worktree: ${worktree}"
     _SM_RESOLVED_BRANCH="${branch}"
     return 0
   fi
@@ -40,28 +49,36 @@ _sm_resolve_merge_branch() {
     # Branch not in state - try conventional branch names on remote
     # This matches the fallback logic in mg_resolve_operation_to_worktree
     local remote="${V0_GIT_REMOTE:-origin}"
+    v0_trace "mergeq:readiness" "No branch in state, trying conventional prefixes on ${remote}"
     for prefix in "feature" "fix" "chore" "bugfix" "hotfix"; do
       local candidate="${prefix}/${op}"
-      if git show-ref --verify --quiet "refs/remotes/${remote}/${candidate}" 2>/dev/null; then
+      # Use explicit -C flag for workspace context
+      if git -C "${git_dir}" show-ref --verify --quiet "refs/remotes/${remote}/${candidate}" 2>/dev/null; then
+        v0_trace "mergeq:readiness" "Found branch via prefix: ${candidate}"
         _SM_RESOLVED_BRANCH="${candidate}"
         return 0
       fi
     done
     # No conventional branch found
+    v0_trace "mergeq:readiness" "No conventional branch found for ${op}"
     return 1
   fi
 
   # Have branch from state - verify it exists locally or on remote
-  if git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
+  v0_trace "mergeq:readiness" "Verifying branch ${branch} exists in ${git_dir}"
+  if git -C "${git_dir}" show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
+    v0_trace "mergeq:readiness" "Branch ${branch} exists as local ref"
     _SM_RESOLVED_BRANCH="${branch}"
     return 0
   fi
-  if git show-ref --verify --quiet "refs/remotes/${V0_GIT_REMOTE:-origin}/${branch}" 2>/dev/null; then
+  if git -C "${git_dir}" show-ref --verify --quiet "refs/remotes/${V0_GIT_REMOTE:-origin}/${branch}" 2>/dev/null; then
+    v0_trace "mergeq:readiness" "Branch ${branch} exists as remote ref"
     _SM_RESOLVED_BRANCH="${branch}"
     return 0
   fi
 
   # Branch in state but doesn't exist
+  v0_trace "mergeq:readiness" "Branch ${branch} not found in local or remote refs"
   return 1
 }
 
@@ -98,7 +115,7 @@ sm_is_merge_ready() {
   # if ! sm_all_issues_closed "${op}"; then
   #   return 1
   # fi
-  wk done $(wk list --label "plan:${op}" -o ids 2>/dev/null) 2>/dev/null || true
+  # NOTE: wk done moved to sm_transition_to_merged() to avoid side effects during polling
 
   return 0
 }
@@ -163,7 +180,7 @@ sm_merge_ready_reason() {
   #   echo "open_issues:${total}"
   #   return
   # fi
-  wk done $(wk list --label "plan:${op}" -o ids 2>/dev/null) 2>/dev/null || true
+  # NOTE: wk done moved to sm_transition_to_merged() to avoid side effects during polling
 
   echo "ready"
 }

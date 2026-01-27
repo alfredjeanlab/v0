@@ -194,3 +194,27 @@ ws_clean_workspace() {
   git -C "${V0_WORKSPACE_DIR}" clean -fd 2>/dev/null || true
   return 0
 }
+
+# ws_check_health
+# Comprehensive health check for workspace
+# Validates workspace, checks config match, and cleans uncommitted changes
+# Returns: 0 if healthy, 1 if not
+ws_check_health() {
+  # Basic validation
+  if ! ws_validate; then
+    return 1
+  fi
+
+  # Check config matches
+  if ! ws_matches_config; then
+    return 1
+  fi
+
+  # Clean uncommitted changes if present
+  if ws_has_uncommitted_changes; then
+    echo "Warning: workspace has uncommitted changes, cleaning" >&2
+    ws_clean_workspace
+  fi
+
+  return 0
+}

@@ -164,7 +164,7 @@ sm_transition_to_pending_merge() {
 
 # sm_transition_to_merged <op>
 # Transition operation to merged phase
-# Also marks the wok epic as done to unblock dependents
+# Also marks the wok epic as done to unblock dependents and closes plan issues
 sm_transition_to_merged() {
   local op="$1"
 
@@ -181,6 +181,9 @@ sm_transition_to_merged() {
 
   # Mark the wok epic as done to unblock dependent operations
   _sm_close_wok_epic "${op}"
+
+  # Close any remaining plan issues for this operation
+  _sm_close_plan_issues "${op}"
 }
 
 # _sm_close_wok_epic <op>
@@ -215,6 +218,29 @@ _sm_close_wok_epic() {
     # Log but don't fail - the git merge already succeeded
     sm_emit_event "${op}" "wok:warn" "Failed to mark epic ${epic_id} as done"
   fi
+}
+
+# _sm_close_plan_issues <op>
+# Internal helper to close all plan issues for an operation
+# Called during merge transition, NOT during readiness polling
+_sm_close_plan_issues() {
+  local op="$1"
+
+  # Skip if wk command not available (e.g., in unit tests)
+  if ! command -v wk &>/dev/null; then
+    return 0
+  fi
+
+  local issue_ids
+  # Get all plan issues for this operation (ignore errors for test isolation)
+  issue_ids=$(wk list --label "plan:${op}" -o ids 2>/dev/null) || true
+  if [[ -z "${issue_ids}" ]]; then
+    return 0  # No plan issues to close
+  fi
+
+  # Mark all plan issues as done
+  # shellcheck disable=SC2086
+  wk done ${issue_ids} 2>/dev/null || true
 }
 
 # sm_transition_to_failed <op> <error>

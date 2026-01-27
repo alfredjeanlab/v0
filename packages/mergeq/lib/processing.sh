@@ -298,11 +298,24 @@ mq_process_merge() {
     echo "${merge_output}" | tee -a "${MERGEQ_DIR}/logs/merges.log"
 
     if [[ ${merge_exit} -eq 0 ]]; then
-        # Verify the merge actually happened
+        # Verify the merge actually happened with retry logic
         v0_trace "mergeq:operation:verify" "Verifying merge for ${op}"
-        sleep 1
 
-        if ! v0_verify_merge_by_op "${op}" "true"; then
+        local verify_attempts=0
+        local verified=false
+        while [[ ${verify_attempts} -lt 3 ]] && [[ "${verified}" = false ]]; do
+            sleep $((1 + verify_attempts))  # Increasing delay: 1s, 2s, 3s
+
+            if v0_verify_merge_by_op "${op}" "true"; then
+                verified=true
+            else
+                verify_attempts=$((verify_attempts + 1))
+                v0_trace "mergeq:operation:verify" "Verification attempt ${verify_attempts} failed, fetching and retrying..."
+                git -C "${V0_WORKSPACE_DIR}" fetch "${V0_GIT_REMOTE}" "${V0_DEVELOP_BRANCH}" 2>/dev/null || true
+            fi
+        done
+
+        if [[ "${verified}" = false ]]; then
             local merge_commit
             merge_commit=$(sm_read_state "${op}" "merge_commit")
 
@@ -311,7 +324,7 @@ mq_process_merge() {
                 echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but no merge_commit recorded"
                 sm_update_state "${op}" "merge_error" '"No merge_commit in state - possible v0-merge bug"'
             else
-                v0_trace "mergeq:operation:verify:failed" "Commit ${merge_commit:0:8} not on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
+                v0_trace "mergeq:operation:verify:failed" "Commit ${merge_commit:0:8} not on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH} after ${verify_attempts} attempts"
                 echo "[$(date +%H:%M:%S)] Warning: v0-merge exited 0 but commit ${merge_commit:0:8} not on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}"
                 sm_update_state "${op}" "merge_error" "\"Commit ${merge_commit} not found on ${V0_GIT_REMOTE}/${V0_DEVELOP_BRANCH}\""
             fi
@@ -480,6 +493,19 @@ mq_process_watch() {
     trap _mq_cleanup_daemon INT TERM
 
     while true; do
+        # Validate workspace health at start of each poll cycle
+        if ! ws_validate 2>/dev/null; then
+            v0_trace "mergeq:daemon" "Workspace invalid, attempting recovery"
+            echo "[$(date +%H:%M:%S)] Warning: workspace invalid, attempting recovery"
+            if ! ws_ensure_workspace 2>/dev/null; then
+                echo "[$(date +%H:%M:%S)] Error: workspace recovery failed, sleeping"
+                v0_trace "mergeq:daemon" "Workspace recovery failed, sleeping 60s"
+                sleep 60
+                continue
+            fi
+            v0_trace "mergeq:daemon" "Workspace recovered successfully"
+        fi
+
         # Check for conflict entries that can be retried
         local conflict_ops
         conflict_ops=$(mq_get_all_conflicts)
@@ -518,7 +544,18 @@ mq_process_watch() {
         # Fetch remote refs before checking readiness to ensure branch existence
         # checks in _sm_resolve_merge_branch are accurate. Without this, operations
         # may appear unready because their remote tracking refs are stale.
-        git -C "${V0_WORKSPACE_DIR}" fetch "${V0_GIT_REMOTE}" --prune 2>/dev/null || true
+        v0_trace "mergeq:fetch" "Fetching from ${V0_GIT_REMOTE} in ${V0_WORKSPACE_DIR}"
+        local fetch_attempts=0
+        while ! git -C "${V0_WORKSPACE_DIR}" fetch "${V0_GIT_REMOTE}" --prune 2>&1; do
+            fetch_attempts=$((fetch_attempts + 1))
+            if [[ ${fetch_attempts} -ge 3 ]]; then
+                echo "[$(date +%H:%M:%S)] Warning: fetch failed after 3 attempts, refs may be stale"
+                v0_trace "mergeq:fetch" "Fetch failed after 3 attempts"
+                break
+            fi
+            v0_trace "mergeq:fetch" "Fetch attempt ${fetch_attempts} failed, retrying..."
+            sleep 2
+        done
 
         local not_ready_reasons=""
         for op in ${pending_ops}; do
