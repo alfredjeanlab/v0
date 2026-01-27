@@ -136,111 +136,134 @@ if ! mg_ensure_develop_branch; then
     exit 1
 fi
 
-if mg_has_conflicts "${BRANCH}"; then
-    v0_trace "merge:cmd:conflict" "Conflicts detected for ${BRANCH}"
-    if [[ "${RESOLVE}" = true ]]; then
-        v0_trace "merge:cmd:resolve" "Launching conflict resolution for ${BRANCH}"
-        echo "Conflicts detected. Starting claude to resolve..."
+# Try the merge first - mg_do_merge handles rebase+FF which often succeeds
+# even when git merge-tree would report conflicts. Only fall back to Claude
+# resolution if the actual merge fails.
+#
+# This fixes false positive conflict detection: mg_has_conflicts uses git merge-tree
+# which reports conflicts for any non-FF merge, but rebase+FF can succeed in those cases.
 
-        # If no worktree, create a temporary one for resolution
-        if [[ "${HAS_WORKTREE}" = false ]]; then
-            echo "Creating temporary worktree for conflict resolution..."
-            mg_create_temp_worktree_for_resolution "${BRANCH}"
-            WORKTREE="${MG_TEMP_WORKTREE}"
-            TREE_DIR="${MG_TEMP_TREE_DIR}"
-            USING_TEMP_WORKTREE=true
-        else
-            USING_TEMP_WORKTREE=false
-        fi
-
-        mg_launch_resolve_session "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
-        mg_wait_for_resolve_session "${MG_RESOLVE_SESSION}"
-        mg_cleanup_resolve_session "${TREE_DIR}"
-
-        cd "${V0_WORKSPACE_DIR}"
-
-        # Check success by outcome
-        if mg_worktree_has_conflicts "${WORKTREE}"; then
-            mg_fail_resolution "Conflicts still exist after resolution attempt"
-        fi
-
-        # Check if rebase is still in progress
-        worktree_git_dir=$(mg_get_worktree_git_dir "${WORKTREE}")
-        if [[ -d "${worktree_git_dir}/rebase-merge" ]] || [[ -d "${worktree_git_dir}/rebase-apply" ]]; then
-            mg_fail_resolution "Rebase not completed. Claude should have run 'git rebase --continue'"
-        fi
-
-        # After successful resolution, merge using mg_do_merge
-        if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
-            merge_commit=$(mg_get_merge_commit)
-            rm -f "${MG_RESOLVE_LOG:-}"
-            # Push first, only cleanup on success (so worktree remains for retry on push failure)
-            if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after resolution)"; then
-                mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" "${USING_TEMP_WORKTREE}"
-            else
-                exit 1
-            fi
-        fi
-    else
-        echo
-        echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge would have conflicts. To resolve:"
-        if [[ "${HAS_WORKTREE}" = true ]]; then
-            echo -e "  ${C_BOLD}v0 merge ${TREE_DIR} --resolve${C_RESET}"
-        else
-            echo -e "  ${C_BOLD}v0 merge ${INPUT} --resolve${C_RESET}"
-        fi
-        exit 1
-    fi
-else
-    # No conflicts - direct merge
+_mg_attempt_merge() {
     if [[ "${HAS_WORKTREE}" = true ]]; then
-        # With worktree - use standard merge flow
+        # With worktree - use standard merge flow (rebase+FF)
         if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
             # Push first, only cleanup on success (so worktree remains for retry on push failure)
             if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"; then
                 mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
+                return 0
             else
-                exit 1
+                return 1
             fi
         fi
+        return 2  # Merge failed, may need resolution
     else
-        # Without worktree - use fast-forward merge
+        # Without worktree - try fast-forward first
         if mg_do_merge_without_worktree "${BRANCH}"; then
             merge_commit=$(mg_get_merge_commit)
-            # Push first, only cleanup on success
             if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}"; then
                 mg_cleanup_merge "" "" "${BRANCH}"
+                return 0
             else
-                exit 1
+                return 1
             fi
-        else
-            # Fast-forward failed - need worktree for rebase
-            if [[ "${RESOLVE}" = true ]]; then
-                echo "Creating temporary worktree for rebase..."
+        fi
+
+        # Fast-forward failed - need worktree for rebase
+        if [[ "${RESOLVE}" = true ]]; then
+            echo "Creating temporary worktree for rebase..."
+            mg_create_temp_worktree_for_resolution "${BRANCH}"
+            WORKTREE="${MG_TEMP_WORKTREE}"
+            TREE_DIR="${MG_TEMP_TREE_DIR}"
+            HAS_WORKTREE=true
+
+            if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
+                merge_commit=$(mg_get_merge_commit)
+                if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after rebase)"; then
+                    mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" true
+                    return 0
+                else
+                    return 1
+                fi
+            fi
+            return 2  # Merge failed after creating worktree, may need resolution
+        fi
+        return 2  # No worktree and not allowed to create one
+    fi
+}
+
+# Attempt the merge
+v0_trace "merge:cmd:attempt" "Attempting merge of ${BRANCH}"
+set +e
+_mg_attempt_merge
+merge_result=$?
+set -e
+
+case ${merge_result} in
+    0)
+        # Success - already handled in _mg_attempt_merge
+        exit 0
+        ;;
+    1)
+        # Push/finalize failed - already printed error
+        exit 1
+        ;;
+    2)
+        # Merge failed - may need resolution
+        if [[ "${RESOLVE}" = true ]]; then
+            v0_trace "merge:cmd:resolve" "Merge failed, launching conflict resolution for ${BRANCH}"
+            echo "Merge failed. Starting claude to resolve..."
+
+            # If no worktree, create a temporary one for resolution
+            if [[ "${HAS_WORKTREE}" = false ]]; then
+                echo "Creating temporary worktree for conflict resolution..."
                 mg_create_temp_worktree_for_resolution "${BRANCH}"
                 WORKTREE="${MG_TEMP_WORKTREE}"
                 TREE_DIR="${MG_TEMP_TREE_DIR}"
+                USING_TEMP_WORKTREE=true
+            else
+                USING_TEMP_WORKTREE=false
+            fi
 
-                # Do the merge with the temp worktree
-                if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
-                    merge_commit=$(mg_get_merge_commit)
-                    # Push first, only cleanup on success (so worktree remains for retry on push failure)
-                    if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after rebase)"; then
-                        mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" true
-                    else
-                        exit 1
-                    fi
+            mg_launch_resolve_session "${WORKTREE}" "${TREE_DIR}" "${BRANCH}"
+            mg_wait_for_resolve_session "${MG_RESOLVE_SESSION}"
+            mg_cleanup_resolve_session "${TREE_DIR}"
+
+            cd "${V0_WORKSPACE_DIR}"
+
+            # Check success by outcome
+            if mg_worktree_has_conflicts "${WORKTREE}"; then
+                mg_fail_resolution "Conflicts still exist after resolution attempt"
+            fi
+
+            # Check if rebase is still in progress
+            worktree_git_dir=$(mg_get_worktree_git_dir "${WORKTREE}")
+            if [[ -d "${worktree_git_dir}/rebase-merge" ]] || [[ -d "${worktree_git_dir}/rebase-apply" ]]; then
+                mg_fail_resolution "Rebase not completed. Claude should have run 'git rebase --continue'"
+            fi
+
+            # After successful resolution, merge using mg_do_merge
+            if mg_do_merge "${WORKTREE}" "${BRANCH}"; then
+                merge_commit=$(mg_get_merge_commit)
+                rm -f "${MG_RESOLVE_LOG:-}"
+                # Push first, only cleanup on success (so worktree remains for retry on push failure)
+                if mg_finalize_merge "${merge_commit}" "${OP_NAME}" "${BRANCH}" "${PROJECT}" "(after resolution)"; then
+                    mg_cleanup_merge "${WORKTREE}" "${TREE_DIR}" "${BRANCH}" "${USING_TEMP_WORKTREE}"
                 else
-                    mg_cleanup_temp_worktree
                     exit 1
                 fi
             else
-                echo
-                echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Cannot fast-forward merge. To resolve:"
-                echo -e "  ${C_BOLD}v0 merge ${INPUT} --resolve${C_RESET}"
-                exit 1
+                mg_fail_resolution "Merge still failed after resolution attempt"
             fi
+        else
+            echo
+            echo -e "${C_RED}${C_BOLD}Error:${C_RESET} Merge failed. To resolve:"
+            if [[ "${HAS_WORKTREE}" = true ]]; then
+                echo -e "  ${C_BOLD}v0 merge ${TREE_DIR} --resolve${C_RESET}"
+            else
+                echo -e "  ${C_BOLD}v0 merge ${INPUT} --resolve${C_RESET}"
+            fi
+            exit 1
         fi
-    fi
-fi
+        ;;
+esac
