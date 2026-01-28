@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-01-28
+
+### Added
+
+- **`v0 wait` command**: Block until an operation completes, with support for any work type (build, fix, chore). Returns exit code 4 when the operation is held.
+
+### Fixed
+
+- Operation names starting with digits now allowed in `v0 build`.
+- Status display warns when agent is behind (not ahead) of the user branch.
+
 ## [0.3.0] - 2026-01-27
 
 Collaboration-friendly release: agents now work in isolation with user-specific branches and local remotes, with `v0 push` and `v0 pull` commands to sync changes on your terms. Internals restructured for maintainability.
