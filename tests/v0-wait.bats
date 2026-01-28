@@ -350,7 +350,7 @@ setup() {
         "'"${V0_WAIT}"'" myproject
     '
     assert_success
-    assert_output --partial "Found roadmap"
+    assert_output --partial "Waiting for 'roadmap:myproject'"
     assert_output --partial "completed successfully"
 }
 

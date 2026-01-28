@@ -229,6 +229,8 @@ wait_for_work_completion() {
   local display_name="${work_id}"
   [[ "${work_type}" != "operation" ]] && display_name="${work_type}:${work_id}"
 
+  [[ -z "${quiet}" ]] && echo "Waiting for '${display_name}'..."
+
   while true; do
     local result
     check_work_completion "${work_type}" "${work_id}" && result=0 || result=$?
@@ -252,9 +254,6 @@ wait_for_work_completion() {
         return 2
       fi
     fi
-
-    # Show progress (unless quiet)
-    [[ -z "${quiet}" ]] && printf "\rWaiting for '%s'..." "${display_name}"
 
     # Sleep before next check
     sleep 2
@@ -295,6 +294,8 @@ wait_for_issue() {
     fi
     # wok_result == 1 means in progress, continue to polling
   fi
+
+  [[ -z "${quiet}" ]] && echo "Waiting for issue '${issue_id}'..."
 
   while true; do
     # Try to find local state first
@@ -341,9 +342,6 @@ wait_for_issue() {
         return 2
       fi
     fi
-
-    # Show progress (unless quiet)
-    [[ -z "${quiet}" ]] && printf "\rWaiting for issue '%s'..." "${issue_id}"
 
     sleep 2
   done
@@ -393,14 +391,12 @@ fi
 # Resolve target and wait
 if [[ -n "${ISSUE_ID}" ]]; then
   # Explicit --issue flag takes precedence
-  [[ -z "${QUIET}" ]] && echo "Waiting for issue '${ISSUE_ID}'..."
   wait_for_issue "${ISSUE_ID}" "${TIMEOUT_SECS}" "${QUIET}"
 elif [[ -n "${POSITIONAL_ARG}" ]]; then
   # First, try to resolve as operation or roadmap name
   if work_info=$(resolve_by_name "${POSITIONAL_ARG}"); then
     work_type="${work_info%%:*}"
     work_id="${work_info#*:}"
-    [[ -z "${QUIET}" ]] && [[ "${work_type}" != "operation" ]] && echo "Found ${work_type} '${work_id}'"
     wait_for_work_completion "${work_type}" "${work_id}" "${TIMEOUT_SECS}" "${QUIET}"
   elif is_issue_id "${POSITIONAL_ARG}"; then
     # Looks like an issue ID - use issue-based lookup with wok fallback
