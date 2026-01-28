@@ -1008,26 +1008,31 @@ EOF
 @test "status list priority_class classifies phases correctly" {
     # Test that priority_class in jq correctly classifies operations
     # Open (priority 0): init, planned, queued, executing, failed, conflict, interrupted
-    # Blocked (priority 1): blocked phase, or has 'after' field and not executing
-    # Completed (priority 2): completed, pending_merge, merged, cancelled
+    # Completed (priority 2): completed (with merge_status:merged), pending_merge, merged, cancelled
+    # Note: "blocked" phase was removed in v2, blocking is now tracked via wok
 
     local ops_dir="$BUILD_DIR/operations"
 
-    # Create one of each phase type
+    # Create one of each phase type (excluding deprecated "blocked" phase)
     local ts_base="2026-01-01T10:00:"
     local counter=0
 
-    for phase in init planned queued executing failed conflict interrupted completed pending_merge merged cancelled blocked; do
+    for phase in init planned queued executing failed conflict interrupted completed pending_merge merged cancelled; do
         counter=$((counter + 1))
         local ts_sec
         ts_sec=$(printf "%02d" "$counter")
         mkdir -p "$ops_dir/test-${phase}"
+        # For completed phase, add merge_status:merged to make it truly completed (priority 2)
+        local extra=""
+        if [[ "$phase" == "completed" ]]; then
+            extra=', "merge_status": "merged"'
+        fi
         cat > "$ops_dir/test-${phase}/state.json" <<EOF
-{"name": "test-${phase}", "type": "feature", "phase": "$phase", "created_at": "${ts_base}${ts_sec}Z"}
+{"name": "test-${phase}", "type": "feature", "phase": "$phase", "created_at": "${ts_base}${ts_sec}Z"$extra}
 EOF
     done
 
-    # Set limit to show 8 operations (should show all open: 7, plus 1 blocked)
+    # Set limit to show 8 operations (should show all 7 open + 1 completed)
     run "$PROJECT_ROOT/bin/v0-status" --list --no-hints --max-ops 8
 
     assert_success
@@ -1037,11 +1042,11 @@ EOF
     [[ "$output" == *"test-executing:"* ]]
     [[ "$output" == *"test-failed:"* ]]
 
-    # Should show blocked phase
-    [[ "$output" == *"test-blocked:"* ]]
+    # Should show completed phase (since we have room after open ops)
+    [[ "$output" == *"test-completed:"* ]]
 
-    # Should prune completed operations
-    [[ "$output" == *"... and 4 more"* ]]
+    # Should prune remaining completed operations (pending_merge, merged, cancelled = 3 more)
+    [[ "$output" == *"... and 3 more"* ]]
 }
 
 # ============================================================================
