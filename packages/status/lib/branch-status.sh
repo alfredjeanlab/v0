@@ -172,7 +172,7 @@ warn_branch_status() {
 
     # Info: Agent is ahead (has new work) - gentle notification
     if [[ "${agent_ahead}" != "0" ]]; then
-        echo -e "${C_CYAN}Info:${C_RESET} Agents have added ${C_GREEN}${agent_ahead}${C_RESET} commit(s) on ${C_GREEN}${branch_display}${C_RESET} not in ${C_CYAN}${current_branch}${C_RESET}"
+        echo -e "${C_CYAN}Note:${C_RESET} Agents have added ${C_GREEN}${agent_ahead}${C_RESET} commit(s) on ${C_GREEN}${branch_display}${C_RESET} not in ${C_CYAN}${current_branch}${C_RESET}"
         echo -e "  ${C_DIM}You can accept them with${C_RESET} ${C_CYAN}v0 pull${C_RESET}"
         echo ""
     fi
