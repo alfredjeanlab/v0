@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.3.0]
+## [0.3.0] - 2026-01-27
 
 Collaboration-friendly release: agents now work in isolation with user-specific branches and local remotes, with `v0 push` and `v0 pull` commands to sync changes on your terms. Internals restructured for maintainability.
 
@@ -56,10 +56,13 @@ Collaboration-friendly release: agents now work in isolation with user-specific 
 
 ### Performance
 
+- **Optimized `v0 status` display**: Batched wok queries, eliminated subprocess spawns in cache lookups, and pre-computed date strings in jq.
+
 - **Ripgrep wrapper**: Faster grep operations via `v0_grep` function.
 
 ### Fixed
 
+- Workspace no longer overwrites `.v0.root` in `v0 watch`.
 - Merge queue reliability: fetch remote refs before readiness check, recover stuck PROCESSING entries on startup, verify already-merged operations, push HEAD explicitly to develop branch.
 - Worktree handling: resolve branch from remote before reporting `worktree:missing`, push before cleanup to preserve worktree on failure.
 - Status display: exit early when wk commands fail, respect `V0_FORCE_COLOR` in branch-status.

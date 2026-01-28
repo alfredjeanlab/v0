@@ -29,15 +29,20 @@ setup() {
 }
 
 @test "_v0_init_grep falls back to grep when rg unavailable" {
-    # Temporarily hide rg by modifying PATH
+    # Create a temporary directory with only grep (no rg)
+    local fake_bin
+    fake_bin=$(mktemp -d)
+    ln -s "$(command -v grep)" "${fake_bin}/grep"
+
+    # Use only our fake bin directory
     local saved_path="$PATH"
-    # Create a path that excludes common rg locations
-    PATH="/usr/bin:/bin"
+    PATH="${fake_bin}"
 
     _v0_init_grep
     [[ "$_V0_GREP_CMD" == "grep" ]]
 
     PATH="$saved_path"
+    rm -rf "${fake_bin}"
 }
 
 # ============================================================================

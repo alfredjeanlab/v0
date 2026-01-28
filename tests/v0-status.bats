@@ -827,7 +827,7 @@ create_numbered_operations() {
         # Use sequential timestamps to ensure ordering
         local ts
         ts=$(TZ=UTC date -j -v+${i}S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-             TZ=UTC date -d "2026-01-01 10:00:00 +${i} seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+             TZ=UTC date -d "2026-01-01T10:00:00 UTC + ${i} seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
 
         local after_field=""
         [[ -n "$after" ]] && after_field=", \"after\": \"$after\""
@@ -883,7 +883,7 @@ EOF
         mkdir -p "$ops_dir/blocked${i}"
         local ts
         ts=$(TZ=UTC date -j -v+$((i+10))S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-             TZ=UTC date -d "2026-01-01 10:00:00 +$((i+10)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+             TZ=UTC date -d "2026-01-01T10:00:00 UTC + $((i+10)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
         cat > "$ops_dir/blocked${i}/state.json" <<EOF
 {"name": "blocked${i}", "type": "feature", "phase": "init", "created_at": "$ts", "after": "some-parent"}
 EOF
@@ -894,7 +894,7 @@ EOF
         mkdir -p "$ops_dir/open${i}"
         local ts
         ts=$(TZ=UTC date -j -v+$((i+20))S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-             TZ=UTC date -d "2026-01-01 10:00:00 +$((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+             TZ=UTC date -d "2026-01-01T10:00:00 UTC + $((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
         cat > "$ops_dir/open${i}/state.json" <<EOF
 {"name": "open${i}", "type": "feature", "phase": "executing", "created_at": "$ts"}
 EOF
@@ -917,7 +917,7 @@ EOF
         mkdir -p "$ops_dir/completed${i}"
         local ts
         ts=$(TZ=UTC date -j -v+${i}S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-             TZ=UTC date -d "2026-01-01 10:00:00 +${i} seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+             TZ=UTC date -d "2026-01-01T10:00:00 UTC + ${i} seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
         cat > "$ops_dir/completed${i}/state.json" <<EOF
 {"name": "completed${i}", "type": "feature", "phase": "completed", "created_at": "$ts", "merge_status": "merged"}
 EOF
@@ -928,7 +928,7 @@ EOF
         mkdir -p "$ops_dir/blocked${i}"
         local ts
         ts=$(TZ=UTC date -j -v+$((i+20))S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-             TZ=UTC date -d "2026-01-01 10:00:00 +$((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+             TZ=UTC date -d "2026-01-01T10:00:00 UTC + $((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
         cat > "$ops_dir/blocked${i}/state.json" <<EOF
 {"name": "blocked${i}", "type": "feature", "phase": "queued", "created_at": "$ts", "after": "parent-op"}
 EOF
@@ -1008,26 +1008,34 @@ EOF
 @test "status list priority_class classifies phases correctly" {
     # Test that priority_class in jq correctly classifies operations
     # Open (priority 0): init, planned, queued, executing, failed, conflict, interrupted
-    # Blocked (priority 1): blocked phase, or has 'after' field and not executing
-    # Completed (priority 2): completed, pending_merge, merged, cancelled
+    # Completed (priority 2): completed (with merge_status:merged), pending_merge, merged, cancelled
+    # Note: "blocked" phase was removed in v2, blocking is now tracked via wok
 
     local ops_dir="$BUILD_DIR/operations"
 
-    # Create one of each phase type
+    # Create one of each phase type (excluding deprecated "blocked" phase)
     local ts_base="2026-01-01T10:00:"
     local counter=0
 
-    for phase in init planned queued executing failed conflict interrupted completed pending_merge merged cancelled blocked; do
+    for phase in init planned queued executing failed conflict interrupted completed pending_merge merged cancelled; do
         counter=$((counter + 1))
         local ts_sec
         ts_sec=$(printf "%02d" "$counter")
         mkdir -p "$ops_dir/test-${phase}"
+        # For completed phase, add merge_status:merged to make it truly completed (priority 2)
+        local extra=""
+        if [[ "$phase" == "completed" ]]; then
+            extra=', "merge_status": "merged"'
+        fi
         cat > "$ops_dir/test-${phase}/state.json" <<EOF
-{"name": "test-${phase}", "type": "feature", "phase": "$phase", "created_at": "${ts_base}${ts_sec}Z"}
+{"name": "test-${phase}", "type": "feature", "phase": "$phase", "created_at": "${ts_base}${ts_sec}Z"$extra}
 EOF
     done
 
-    # Set limit to show 8 operations (should show all open: 7, plus 1 blocked)
+    # Set limit to show 8 operations
+    # Priority 0 (needs attention): init, planned, queued, executing, failed, conflict, interrupted, pending_merge
+    #   - pending_merge is priority 0 because it lacks merge_status:merged
+    # Priority 2 (completed): completed (has merge_status:merged), merged, cancelled
     run "$PROJECT_ROOT/bin/v0-status" --list --no-hints --max-ops 8
 
     assert_success
@@ -1037,11 +1045,11 @@ EOF
     [[ "$output" == *"test-executing:"* ]]
     [[ "$output" == *"test-failed:"* ]]
 
-    # Should show blocked phase
-    [[ "$output" == *"test-blocked:"* ]]
+    # Should show pending_merge (priority 0, needs attention)
+    [[ "$output" == *"test-pending_merge:"* ]]
 
-    # Should prune completed operations
-    [[ "$output" == *"... and 4 more"* ]]
+    # Should prune priority-2 operations (completed, merged, cancelled = 3 more)
+    [[ "$output" == *"... and 3 more"* ]]
 }
 
 # ============================================================================

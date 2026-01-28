@@ -1,0 +1,196 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Alfred Jean LLC
+# v0-wait - Wait for an operation to complete
+set -e
+
+V0_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${V0_DIR}/packages/cli/lib/v0-common.sh"
+v0_load_config
+
+usage() {
+  v0_help <<'EOF'
+Usage: v0 wait <operation> [--timeout <duration>]
+       v0 wait --issue <id> [--timeout <duration>]
+
+Wait for an operation or issue to complete.
+
+Arguments:
+  <operation>        Name of the operation to wait for
+
+Options:
+  --issue, -i <id>   Wait for operation linked to issue ID
+  --timeout, -t <d>  Maximum time to wait (e.g., 30s, 5m, 1h)
+  --quiet, -q        Suppress progress output
+  -h, --help         Show this help
+
+Exit codes:
+  0    Operation completed successfully (merged)
+  1    Operation failed or was cancelled
+  2    Timeout expired
+  3    Operation not found
+
+Duration format:
+  Supports suffixes: s (seconds), m (minutes), h (hours)
+  Examples: 30s, 5m, 1h, 90m
+
+Examples:
+  v0 wait auth                    # Wait for 'auth' to complete
+  v0 wait auth --timeout 30m      # Wait up to 30 minutes
+  v0 wait --issue PROJ-123        # Wait for operation with issue ID
+  v0 wait auth && echo "done"     # Chain commands on success
+EOF
+  exit 0
+}
+
+# Parse duration string to seconds
+# Supports: 30s, 5m, 1h, or plain number (seconds)
+parse_duration() {
+  local duration="$1"
+  local value unit
+
+  # Extract number and optional suffix
+  if [[ "${duration}" =~ ^([0-9]+)([smh])?$ ]]; then
+    value="${BASH_REMATCH[1]}"
+    unit="${BASH_REMATCH[2]:-s}"
+
+    case "${unit}" in
+      s) echo "${value}" ;;
+      m) echo $((value * 60)) ;;
+      h) echo $((value * 3600)) ;;
+    esac
+  else
+    echo "Error: Invalid duration format: ${duration}" >&2
+    echo "Use format like: 30s, 5m, 1h" >&2
+    return 1
+  fi
+}
+
+# Find operation by issue ID
+# Returns operation name on stdout and exit 0 if found, exit 1 if not found
+find_op_by_issue() {
+  local issue_id="$1"
+  local found=""
+
+  if [[ ! -d "${BUILD_DIR}/operations" ]]; then
+    return 1
+  fi
+
+  for state_file in "${BUILD_DIR}"/operations/*/state.json; do
+    [[ -f "${state_file}" ]] || continue
+
+    local epic_id
+    epic_id=$(jq -r '.epic_id // empty' "${state_file}" 2>/dev/null)
+    if [[ "${epic_id}" == "${issue_id}" ]]; then
+      basename "$(dirname "${state_file}")"
+      return 0
+    fi
+  done
+
+  # No matching operation found
+  return 1
+}
+
+# Wait for operation to reach terminal phase
+wait_for_completion() {
+  local op="$1"
+  local timeout_secs="$2"
+  local quiet="$3"
+
+  local start_time elapsed phase
+  start_time=$(date +%s)
+
+  while true; do
+    # Check if operation exists
+    if ! sm_state_exists "${op}"; then
+      echo "Error: Operation '${op}' not found" >&2
+      return 3
+    fi
+
+    # Get current phase
+    phase=$(sm_read_state "${op}" "phase")
+
+    # Check for terminal state
+    if sm_is_terminal_phase "${phase}"; then
+      if [[ "${phase}" == "merged" ]]; then
+        [[ -z "${quiet}" ]] && echo "Operation '${op}' completed successfully"
+        return 0
+      else
+        [[ -z "${quiet}" ]] && echo "Operation '${op}' ended with phase: ${phase}"
+        return 1
+      fi
+    fi
+
+    # Check timeout
+    if [[ -n "${timeout_secs}" ]]; then
+      elapsed=$(( $(date +%s) - start_time ))
+      if [[ ${elapsed} -ge ${timeout_secs} ]]; then
+        [[ -z "${quiet}" ]] && echo "Timeout: Operation '${op}' still in phase '${phase}' after ${elapsed}s"
+        return 2
+      fi
+    fi
+
+    # Show progress (unless quiet)
+    [[ -z "${quiet}" ]] && printf "\rWaiting for '%s' (phase: %s)..." "${op}" "${phase}"
+
+    # Sleep before next check
+    sleep 2
+  done
+}
+
+# Parse arguments
+OP_NAME=""
+ISSUE_ID=""
+TIMEOUT=""
+QUIET=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --issue|-i)
+      ISSUE_ID="$2"
+      shift 2
+      ;;
+    --timeout|-t)
+      TIMEOUT="$2"
+      shift 2
+      ;;
+    --quiet|-q)
+      QUIET=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      echo "Run 'v0 wait --help' for usage" >&2
+      exit 1
+      ;;
+    *)
+      OP_NAME="$1"
+      shift
+      ;;
+  esac
+done
+
+# Resolve operation name
+if [[ -n "${ISSUE_ID}" ]]; then
+  if ! OP_NAME=$(find_op_by_issue "${ISSUE_ID}"); then
+    echo "Error: No operation found for issue '${ISSUE_ID}'" >&2
+    exit 3
+  fi
+  [[ -z "${QUIET}" ]] && echo "Found operation '${OP_NAME}' for issue '${ISSUE_ID}'"
+elif [[ -z "${OP_NAME}" ]]; then
+  echo "Error: Operation name or --issue required" >&2
+  echo "Run 'v0 wait --help' for usage" >&2
+  exit 1
+fi
+
+# Parse timeout if provided
+TIMEOUT_SECS=""
+if [[ -n "${TIMEOUT}" ]]; then
+  TIMEOUT_SECS=$(parse_duration "${TIMEOUT}") || exit 1
+fi
+
+# Wait for completion
+wait_for_completion "${OP_NAME}" "${TIMEOUT_SECS}" "${QUIET}"

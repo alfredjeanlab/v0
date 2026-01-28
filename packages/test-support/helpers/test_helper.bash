@@ -100,6 +100,11 @@ _base_setup() {
     cp -r "$_CACHED_STRUCTURE_TEMPLATE/home" "$TEST_TEMP_DIR/"
     export HOME="$TEST_TEMP_DIR/home"
 
+    # Preserve git config from real home (needed for tests that create commits)
+    if [[ -f "$REAL_HOME/.gitconfig" ]]; then
+        cp "$REAL_HOME/.gitconfig" "$HOME/.gitconfig"
+    fi
+
     # Enable test mode to disable notifications and enable test safeguards
     export V0_TEST_MODE=1
     export V0_NO_NOTIFICATIONS=1  # Additional safety for notification suppression

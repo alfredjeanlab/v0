@@ -135,10 +135,14 @@ v0_grep_extract() {
 v0_grep_count() {
   local pattern="$1"
   shift
+  local count
   if [[ "$_V0_GREP_CMD" == "rg" ]]; then
-    rg -c -- "$pattern" "$@" 2>/dev/null || echo "0"
+    # rg -c outputs nothing on no matches, so we need || echo "0"
+    count=$(rg -c -- "$pattern" "$@" 2>/dev/null) || true
+    echo "${count:-0}"
   else
-    grep -c -- "$pattern" "$@" 2>/dev/null || echo "0"
+    # grep -c always outputs a number, even on no matches (returns exit 1 but outputs "0")
+    grep -c -- "$pattern" "$@" 2>/dev/null || true
   fi
 }
 

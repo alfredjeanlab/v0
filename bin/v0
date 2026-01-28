@@ -16,7 +16,7 @@ done
 V0_DIR="$(cd -P "$(dirname "${SOURCE}")/.." && pwd)"
 
 # Commands that require a project (.v0.rc)
-PROJECT_COMMANDS="plan tree merge mergeq status build feature resume fix attach cancel stop start hold roadmap pull push archive"
+PROJECT_COMMANDS="plan tree merge mergeq status build feature resume fix attach cancel stop start hold roadmap pull push archive wait"
 
 # Commands that work in standalone mode (no .v0.rc needed)
 STANDALONE_COMMANDS="chore"
@@ -88,6 +88,7 @@ Commands:
   cancel        Cancel a running operation
   resume        Resume an existing feature (alias for 'feature --resume')
   hold          Put an operation on hold (pause phase transitions)
+  wait          Wait for an operation to complete
   prune         Remove completed/cancelled operation state
   archive       Move stale archived plans to icebox worktree
 
@@ -217,7 +218,7 @@ case "${CMD}" in
     exec "${V0_DIR}/bin/v0-watch" "$@"
     ;;
   # Project-required commands
-  plan|tree|merge|mergeq|status|build|fix|attach|cancel|stop|start|prune|monitor|hold|roadmap|pull|push|archive|log)
+  plan|tree|merge|mergeq|status|build|fix|attach|cancel|stop|start|prune|monitor|hold|roadmap|pull|push|archive|log|wait)
     # Check if we're in a project - if not, show error
     if ! v0_find_project_root >/dev/null 2>&1; then
         v0_check_standalone_mode "${CMD}"
