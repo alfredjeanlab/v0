@@ -423,3 +423,89 @@ setup() {
     [ "$status" -eq 3 ]
     assert_output --partial "not found"
 }
+
+# ============================================================================
+# Held Operation Tests
+# ============================================================================
+
+@test "v0-wait: held operation returns exit code 4" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "planned", "machine": "testmachine", "held": true}'
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_WAIT}"'" testop
+    '
+    assert_failure
+    [ "$status" -eq 4 ]
+}
+
+@test "v0-wait: held operation shows paused message" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "planned", "machine": "testmachine", "held": true}'
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_WAIT}"'" testop
+    '
+    assert_failure
+    assert_output --partial "paused (held)"
+}
+
+@test "v0-wait: held operation shows resume hint" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "planned", "machine": "testmachine", "held": true}'
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_WAIT}"'" testop
+    '
+    assert_failure
+    assert_output --partial "v0 resume testop"
+}
+
+@test "v0-wait: --quiet suppresses held message but returns 4" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "planned", "machine": "testmachine", "held": true}'
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_WAIT}"'" testop --quiet
+    '
+    assert_failure
+    [ "$status" -eq 4 ]
+    assert_output ""
+}
+
+@test "v0-wait: held operation via issue ID returns exit code 4" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "planned", "machine": "testmachine", "held": true, "epic_id": "test-held123"}'
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_WAIT}"'" test-held123
+    '
+    assert_failure
+    [ "$status" -eq 4 ]
+    assert_output --partial "paused (held)"
+}
+
+@test "v0-wait: non-held planned operation times out" {
+    local project_dir
+    project_dir=$(setup_isolated_project)
+    # Planned but NOT held - should timeout, not return held status
+    create_isolated_operation "${project_dir}" "testop" '{"name": "testop", "phase": "planned", "machine": "testmachine"}'
+
+    run env -u PROJECT -u ISSUE_PREFIX -u V0_ROOT -u BUILD_DIR bash -c '
+        cd "'"${project_dir}"'" || exit 1
+        "'"${V0_WAIT}"'" testop --timeout 1s
+    '
+    assert_failure
+    [ "$status" -eq 2 ]
+    assert_output --partial "Timeout"
+}

@@ -29,6 +29,7 @@ Exit codes:
   1    Failed or was cancelled
   2    Timeout expired
   3    Target not found
+  4    Paused (held)
 
 Target resolution:
   Issue IDs (${ISSUE_PREFIX}-xxx) are auto-detected by pattern.
@@ -167,6 +168,10 @@ check_work_completion() {
       if sm_is_terminal_phase "${phase}"; then
         [[ "${phase}" == "merged" ]] && return 0 || return 2
       fi
+      # Check if held (paused)
+      if sm_is_held "${work_id}"; then
+        return 3
+      fi
       return 1
       ;;
 
@@ -244,6 +249,13 @@ wait_for_work_completion() {
         [[ -z "${quiet}" ]] && echo "'${display_name}' failed or was cancelled"
         return 1
         ;;
+      3) # Held (paused)
+        if [[ -z "${quiet}" ]]; then
+          echo -e "${C_CYAN}Note:${C_RESET} Finished waiting because '${display_name}' is paused (held)"
+          echo -e "  ${C_DIM}Resume with:${C_RESET} v0 resume ${work_id}"
+        fi
+        return 4
+        ;;
     esac
 
     # Check timeout
@@ -315,6 +327,13 @@ wait_for_issue() {
         2) # Failed
           [[ -z "${quiet}" ]] && echo "Issue '${issue_id}' failed"
           return 1
+          ;;
+        3) # Held (paused)
+          if [[ -z "${quiet}" ]]; then
+            echo -e "${C_CYAN}Note:${C_RESET} Finished waiting because issue '${issue_id}' is paused (held)"
+            echo -e "  ${C_DIM}Resume with:${C_RESET} v0 resume ${work_id}"
+          fi
+          return 4
           ;;
       esac
     else
