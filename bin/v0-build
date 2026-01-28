@@ -259,8 +259,8 @@ fi
 v0_check_deps tmux jq claude m4
 
 # Validate name format
-if [[ ! "${NAME}" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
-  echo "Error: Name must start with a letter and contain only alphanumeric characters and hyphens"
+if [[ ! "${NAME}" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*$ ]]; then
+  echo "Error: Name must start with a letter or digit and contain only alphanumeric characters and hyphens"
   exit 1
 fi
 
