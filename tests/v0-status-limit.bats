@@ -104,7 +104,7 @@ EOF
     mkdir -p "$ops_dir/blocked${i}"
     local ts
     ts=$(TZ=UTC date -j -v+$((i+10))S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-         date -u -d "2026-01-01 10:00:00 +$((i+10)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+         date -u -d "2026-01-01 10:00:00 + $((i+10)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
     cat > "$ops_dir/blocked${i}/state.json" <<EOF
 {"name": "blocked${i}", "type": "feature", "phase": "init", "created_at": "$ts", "after": "some-parent"}
 EOF
@@ -115,7 +115,7 @@ EOF
     mkdir -p "$ops_dir/open${i}"
     local ts
     ts=$(TZ=UTC date -j -v+$((i+20))S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-         date -u -d "2026-01-01 10:00:00 +$((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+         date -u -d "2026-01-01 10:00:00 + $((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
     cat > "$ops_dir/open${i}/state.json" <<EOF
 {"name": "open${i}", "type": "feature", "phase": "executing", "created_at": "$ts"}
 EOF
@@ -149,7 +149,7 @@ EOF
     mkdir -p "$ops_dir/blocked${i}"
     local ts
     ts=$(TZ=UTC date -j -v+$((i+20))S -f "%Y-%m-%dT%H:%M:%SZ" "2026-01-01T10:00:00Z" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
-         date -u -d "2026-01-01 10:00:00 +$((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+         date -u -d "2026-01-01 10:00:00 + $((i+20)) seconds" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
     cat > "$ops_dir/blocked${i}/state.json" <<EOF
 {"name": "blocked${i}", "type": "feature", "phase": "queued", "created_at": "$ts", "after": "parent-op"}
 EOF
