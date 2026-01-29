@@ -440,6 +440,76 @@ MOCK_EOF
     assert_output --partial "wk dep"
 }
 
+@test "v0-build: --after verifies dependencies are visible and sets expected_blockers" {
+    # Create blocker operation with epic_id
+    local blocker_dir="${TEST_TEMP_DIR}/project/.v0/build/operations/blocker"
+    mkdir -p "${blocker_dir}"
+    cat > "${blocker_dir}/state.json" <<EOF
+{
+  "name": "blocker",
+  "phase": "merged",
+  "epic_id": "test-blocker123"
+}
+EOF
+
+    # Create a plan file to ensure we get through to the dep-adding code
+    mkdir -p "${TEST_TEMP_DIR}/project/plans"
+    cat > "${TEST_TEMP_DIR}/project/plans/test-op.md" <<EOF
+# Test Plan
+Feature: \`test-feature456\`
+## Tasks
+- Task 1
+EOF
+
+    # Update wk mock to return blockers on show (simulating successful dep add)
+    cat > "${TEST_TEMP_DIR}/mock-v0-bin/wk" <<'MOCK_EOF'
+#!/bin/bash
+echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
+if [[ "$1" == "show" ]]; then
+    # Return blockers array if this is the new feature's epic
+    if [[ "$2" == "test-feature456" ]]; then
+        echo '{"status": "open", "blockers": ["test-blocker123"]}'
+    else
+        echo '{"status": "open", "blockers": []}'
+    fi
+    exit 0
+fi
+if [[ "$1" == "new" ]]; then
+    echo "test-feature456"
+    exit 0
+fi
+if [[ "$1" == "list" ]]; then
+    exit 0
+fi
+if [[ "$1" == "dep" ]]; then
+    exit 0
+fi
+if [[ "$1" == "init" ]]; then
+    exit 0
+fi
+exit 0
+MOCK_EOF
+    chmod +x "${TEST_TEMP_DIR}/mock-v0-bin/wk"
+
+    # Run v0 build with --plan and --after (dry-run)
+    run "${V0_BUILD}" test-op --plan "${TEST_TEMP_DIR}/project/plans/test-op.md" --after blocker --dry-run 2>&1
+
+    # Verify wk dep was called with blocked-by
+    if [[ -f "${MOCK_CALLS_DIR}/wk.calls" ]]; then
+        run cat "${MOCK_CALLS_DIR}/wk.calls"
+        assert_output --partial "dep"
+        assert_output --partial "blocked-by"
+        assert_output --partial "test-blocker123"
+    fi
+
+    # Verify expected_blockers was set in state (when deps are verified)
+    local state_file="${TEST_TEMP_DIR}/project/.v0/build/operations/test-op/state.json"
+    if [[ -f "${state_file}" ]]; then
+        run jq -r '.expected_blockers' "${state_file}"
+        assert_output "1"
+    fi
+}
+
 # ============================================================================
 # Removed Flag Tests
 # ============================================================================

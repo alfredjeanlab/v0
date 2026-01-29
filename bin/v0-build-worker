@@ -282,6 +282,30 @@ check_wok_blockers() {
   # First, repair any stale blockers (merged ops with open wok issues)
   repair_stale_wok_blockers
 
+  # Check if blockers were expected (from --after flag)
+  # If so, retry a few times to handle wok propagation delay
+  local expected_blockers
+  expected_blockers=$(get_state expected_blockers)
+  if [[ -n "${expected_blockers}" ]] && [[ "${expected_blockers}" != "null" ]] && [[ "${expected_blockers}" -gt 0 ]]; then
+    local retry_attempts=0
+    local max_retries=10
+    while [[ ${retry_attempts} -lt ${max_retries} ]]; do
+      if v0_is_blocked "${epic_id}"; then
+        local blocker
+        blocker=$(v0_get_first_open_blocker "${epic_id}")
+        local blocker_name
+        blocker_name=$(v0_blocker_to_op_name "${blocker}")
+        log "Operation is blocked by '${blocker_name}', pausing worker"
+        sm_emit_event "${NAME}" "blocked:paused" "Worker paused waiting for ${blocker_name}"
+        return 1
+      fi
+      retry_attempts=$((retry_attempts + 1))
+      sleep 0.2
+    done
+    log "Warning: Expected ${expected_blockers} blocker(s) but none found after ${max_retries} attempts"
+    sm_emit_event "${NAME}" "blocked:warning" "Expected blockers not found after retries"
+  fi
+
   if v0_is_blocked "${epic_id}"; then
     local blocker
     blocker=$(v0_get_first_open_blocker "${epic_id}")
