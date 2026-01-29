@@ -190,3 +190,28 @@ mq_get_issue_id() {
     local operation="$1"
     jq -r ".entries[] | select(.operation == \"${operation}\") | .issue_id // empty" "${QUEUE_FILE}"
 }
+
+# mq_update_entry_field <operation> <field> <value>
+# Update a custom field on a queue entry
+# Value should be a valid JSON value (e.g., "true", "\"string\"", "123")
+# Returns 0 on success, 1 on failure
+mq_update_entry_field() {
+    local operation="$1"
+    local field="$2"
+    local value="$3"
+
+    if [[ -z "${operation}" ]] || [[ -z "${field}" ]]; then
+        echo "Error: Operation and field required" >&2
+        return 1
+    fi
+
+    # Check if entry exists
+    if ! mq_entry_exists "${operation}"; then
+        echo "Error: Operation '${operation}' not found in queue" >&2
+        return 1
+    fi
+
+    mq_atomic_queue_update "(.entries[] | select(.operation == \"${operation}\")) |= . + {
+        \"${field}\": ${value}
+    }"
+}

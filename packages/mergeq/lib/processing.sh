@@ -569,6 +569,7 @@ mq_process_watch() {
         for op in ${conflict_ops}; do
             local state_file="${BUILD_DIR}/operations/${op}/state.json"
             if [[ -f "${state_file}" ]]; then
+                # Operation merge: check state file for retry flag
                 local conflict_retried
                 conflict_retried=$(jq -r '.conflict_retried // false' "${state_file}" 2>/dev/null)
                 if [[ "${conflict_retried}" != "true" ]]; then
@@ -577,6 +578,18 @@ mq_process_watch() {
                     sm_update_state "${op}" "merge_status" "null"
                     mq_update_entry_status "${op}" "${MQ_STATUS_PENDING}"
                     mq_log_event "conflict:retry: ${op}"
+                fi
+            else
+                # Branch merge (no state file): check queue entry for retry flag
+                local conflict_retried
+                conflict_retried=$(mq_read_entry_field "${op}" "conflict_retried")
+                if [[ "${conflict_retried}" != "true" ]]; then
+                    echo "[$(date +%H:%M:%S)] Auto-retrying branch conflict resolution: ${op}"
+                    mq_acquire_lock
+                    mq_update_entry_field "${op}" "conflict_retried" "true"
+                    mq_update_entry_status "${op}" "${MQ_STATUS_PENDING}"
+                    mq_release_lock
+                    mq_log_event "conflict:retry: ${op} (branch)"
                 fi
             fi
         done

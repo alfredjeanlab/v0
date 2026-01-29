@@ -101,9 +101,11 @@ Merge has conflicts (see [v0-merge conflict resolution](../commands/v0-merge.md#
 ### Conflict → Pending (Auto-Retry)
 
 On next poll cycle in `mq_process_watch`:
-1. Daemon calls `mq_get_all_conflicts()` and checks each entry's `conflict_retried` flag in state.json
-2. If not retried: sets `conflict_retried=true` via `sm_update_state`, clears `merge_status`, resets to `pending`
-3. If already retried: skips (needs manual intervention via `v0 merge <op> --resolve`)
+1. Daemon calls `mq_get_all_conflicts()` to get all conflict entries
+2. For operation merges (have state.json): checks `conflict_retried` flag in state.json
+3. For branch merges (no state.json): checks `conflict_retried` flag in queue entry
+4. If not retried: sets `conflict_retried=true`, resets to `pending`
+5. If already retried: skips (needs manual intervention via `v0 merge <op> --resolve`)
 
 ### Pending → Resumed
 
