@@ -333,6 +333,10 @@ EOF
 # ============================================================================
 
 @test "complete plan workflow has merge_queued: false throughout" {
+    # This test runs both v0-plan and v0-status, so needs more time
+    # Set to 15s for CI safety margin
+    BATS_TEST_TIMEOUT=15
+
     create_v0rc "testproj" "tp"
 
     cat > "$V0_PLAN_EXEC" <<'EOF'
