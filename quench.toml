@@ -4,6 +4,12 @@ version = 1
 source = ["bin/*", "lib/**/*.sh", "packages/*/lib/**/*.sh", "scripts/*"]
 tests = ["*.bats", "packages/test-support/**/*"]
 
+[check.license]
+check = "error"
+license = "MIT"
+copyright = "Alfred Jean LLC"
+exclude = ["packages/test-support/fixtures/**"]
+
 [check.cloc]
 advice_test = """
 Can tests be refactored to reduce duplication?

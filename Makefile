@@ -76,7 +76,7 @@ test-file:
 
 # Add license headers to source files
 license:
-	@scripts/license
+	quench check --ci --fix --license
 
 # Symlink v0 to ~/.local/bin for local development
 install:
