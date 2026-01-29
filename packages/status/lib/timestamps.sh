@@ -4,13 +4,21 @@
 # Timestamp display utilities for v0-status
 # Source this file to get timestamp formatting functions
 
-# Convert ISO 8601 timestamp to epoch (macOS compatible)
+# Convert ISO 8601 timestamp to epoch (cross-platform)
 # Note: Timestamps with Z suffix are UTC, so we parse in UTC timezone
 timestamp_to_epoch() {
   local ts="$1"
   local formatted
   formatted=$(echo "${ts}" | sed 's/T/ /; s/Z$//; s/\.[0-9]*//')
-  TZ=UTC date -j -f "%Y-%m-%d %H:%M:%S" "${formatted}" +%s 2>/dev/null
+
+  # Detect OS and use appropriate date command
+  if [[ "$(uname)" == "Darwin" ]]; then
+    # macOS: use -j flag
+    TZ=UTC date -j -f "%Y-%m-%d %H:%M:%S" "${formatted}" +%s 2>/dev/null
+  else
+    # Linux: use -d flag
+    TZ=UTC date -d "${formatted}" +%s 2>/dev/null
+  fi
 }
 
 # Format elapsed time as human-readable string
