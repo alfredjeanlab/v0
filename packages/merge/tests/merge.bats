@@ -467,6 +467,7 @@ resolve_operation_name() {
     cd "${test_repo}"
     git config user.email "test@example.com"
     git config user.name "Test"
+    git checkout -b main --quiet  # Empty repos don't have a branch yet
 
     # Make initial commit and push
     echo "initial" > file.txt
