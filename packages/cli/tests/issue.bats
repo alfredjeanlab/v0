@@ -126,6 +126,51 @@ setup() {
 }
 
 # ============================================================================
+# file_plan_issue() with prompt tests
+# ============================================================================
+
+@test "file_plan_issue includes prompt in description when provided" {
+    echo "# Test Plan Content" > "${TEST_TEMP_DIR}/plan.md"
+    export MOCK_WK_EDIT_DESC_FILE="${TEST_TEMP_DIR}/edit_desc.txt"
+
+    run file_plan_issue "test-op" "${TEST_TEMP_DIR}/plan.md" "existing-id" "Add JWT authentication"
+    assert_success
+
+    # Verify the description passed to wk edit contains the prompt
+    assert [ -f "${MOCK_WK_EDIT_DESC_FILE}" ]
+    desc=$(cat "${MOCK_WK_EDIT_DESC_FILE}")
+    [[ "${desc}" == *"Prompt: Add JWT authentication"* ]]
+    # Also verify plan content is still present
+    [[ "${desc}" == *"# Test Plan Content"* ]]
+}
+
+@test "file_plan_issue omits prompt header when prompt is empty" {
+    echo "# Test Plan Content" > "${TEST_TEMP_DIR}/plan.md"
+    export MOCK_WK_EDIT_DESC_FILE="${TEST_TEMP_DIR}/edit_desc.txt"
+
+    run file_plan_issue "test-op" "${TEST_TEMP_DIR}/plan.md" "existing-id" ""
+    assert_success
+
+    desc=$(cat "${MOCK_WK_EDIT_DESC_FILE}")
+    # Should NOT contain the prompt header
+    [[ "${desc}" != *"Prompt:"* ]]
+    # Should contain plan content directly
+    [[ "${desc}" == *"# Test Plan Content"* ]]
+}
+
+@test "file_plan_issue omits prompt header when prompt not passed" {
+    echo "# Test Plan Content" > "${TEST_TEMP_DIR}/plan.md"
+    export MOCK_WK_EDIT_DESC_FILE="${TEST_TEMP_DIR}/edit_desc.txt"
+
+    run file_plan_issue "test-op" "${TEST_TEMP_DIR}/plan.md" "existing-id"
+    assert_success
+
+    desc=$(cat "${MOCK_WK_EDIT_DESC_FILE}")
+    [[ "${desc}" != *"Prompt:"* ]]
+    [[ "${desc}" == *"# Test Plan Content"* ]]
+}
+
+# ============================================================================
 # Edge cases
 # ============================================================================
 

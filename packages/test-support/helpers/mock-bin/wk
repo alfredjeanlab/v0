@@ -48,7 +48,10 @@ case "$1" in
         exit 0
         ;;
     "edit")
-        # Silent success for edit commands
+        # Log edit description to file for test verification
+        if [[ -n "${MOCK_WK_EDIT_DESC_FILE:-}" ]] && [[ "$3" == "description" ]]; then
+            printf '%s' "$4" > "${MOCK_WK_EDIT_DESC_FILE}"
+        fi
         exit 0
         ;;
     "start")
