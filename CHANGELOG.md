@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3] - 2026-01-30
+
+### Fixed
+
+- Merge now resets to remote when develop branch has diverged.
+- Feature tracking issues now include the original prompt in their description.
+
 ## [0.3.2] - 2026-01-29
 
 ### Fixed
