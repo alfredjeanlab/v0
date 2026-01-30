@@ -37,18 +37,20 @@ create_feature_issue() {
   echo "${issue_id}"
 }
 
-# file_plan_issue <name> <plan_file> [existing_id]
+# file_plan_issue <name> <plan_file> [existing_id] [prompt]
 # Creates or updates a feature issue with plan content
 # Arguments:
 #   $1 = operation name (basename of plan)
 #   $2 = path to plan file
 #   $3 = (optional) existing issue ID to update instead of creating new
+#   $4 = (optional) original prompt to include in description
 # Returns: issue ID on stdout, or empty string on failure
 # Logs progress to stderr for debugging
 file_plan_issue() {
   local name="$1"
   local plan_file="$2"
   local existing_id="${3:-}"
+  local prompt="${4:-}"
   local title="Plan: ${name}"
   local description
 
@@ -58,6 +60,13 @@ file_plan_issue() {
     return 1
   fi
   description=$(cat "${plan_file}")
+
+  # Prepend original prompt if provided
+  if [[ -n "${prompt}" ]]; then
+    description="Prompt: ${prompt}
+---
+${description}"
+  fi
 
   local issue_id
   if [[ -n "${existing_id}" ]]; then

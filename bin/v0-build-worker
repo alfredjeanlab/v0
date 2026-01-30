@@ -448,12 +448,12 @@ EOF
   FEATURE_ID=$(get_state epic_id)
 
   if [[ -n "${FEATURE_ID}" ]] && [[ "${FEATURE_ID}" != "null" ]]; then
-    # Update existing issue with plan content
-    file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}"
+    # Update existing issue with plan content and original prompt
+    file_plan_issue "${NAME}" "${PLAN_FILE}" "${FEATURE_ID}" "${PROMPT}"
     emit_event "issue:updated" "Updated feature ${FEATURE_ID} with plan"
   else
     # Fallback: create new issue (shouldn't happen normally)
-    FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}")
+    FEATURE_ID=$(file_plan_issue "${NAME}" "${PLAN_FILE}" "" "${PROMPT}")
     if [[ -n "${FEATURE_ID}" ]]; then
       update_state "epic_id" "\"${FEATURE_ID}\""
       emit_event "issue:created" "Created feature ${FEATURE_ID}"
