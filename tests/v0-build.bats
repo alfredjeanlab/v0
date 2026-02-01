@@ -84,7 +84,13 @@ MOCK_EOF
 #!/bin/bash
 echo "wk $*" >> "$MOCK_CALLS_DIR/wk.calls" 2>/dev/null || true
 if [[ "$1" == "show" ]]; then
-    echo '{"status": "open"}'
+    # Return blockers if any deps have been added
+    if [[ -f "$MOCK_CALLS_DIR/wk.blockers" ]]; then
+        blockers=$(cat "$MOCK_CALLS_DIR/wk.blockers")
+        echo "{\"status\": \"open\", \"blockers\": [${blockers}]}"
+    else
+        echo '{"status": "open"}'
+    fi
     exit 0
 fi
 if [[ "$1" == "new" ]]; then
@@ -95,6 +101,15 @@ if [[ "$1" == "list" ]]; then
     exit 0
 fi
 if [[ "$1" == "dep" ]]; then
+    # Track blocked-by deps for show to return
+    if [[ "$3" == "blocked-by" ]] && [[ -n "$4" ]]; then
+        if [[ -f "$MOCK_CALLS_DIR/wk.blockers" ]]; then
+            existing=$(cat "$MOCK_CALLS_DIR/wk.blockers")
+            echo "${existing}, \"$4\"" > "$MOCK_CALLS_DIR/wk.blockers"
+        else
+            echo "\"$4\"" > "$MOCK_CALLS_DIR/wk.blockers"
+        fi
+    fi
     exit 0
 fi
 if [[ "$1" == "init" ]]; then
