@@ -657,7 +657,7 @@ reopen_worker_issues() {
 
   # Find in-progress issues assigned to this worker
   local issues
-  issues=$(wk list --status in_progress --assignee "${worker_assignee}" -o json 2>/dev/null | jq -r '.issues[].id' || true)
+  issues=$(wk list --status in_progress --assignee "${worker_assignee}" -o json 2>/dev/null | jq -r '.[].id' || true)
 
   if [[ -z "${issues}" ]]; then
     return 0

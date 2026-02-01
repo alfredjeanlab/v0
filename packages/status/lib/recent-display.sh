@@ -47,7 +47,7 @@ get_completed_bugs() {
   [[ -z "${json_output}" ]] && return
 
   # wk list --format json doesn't include updated_at, so we fetch from wk show for display
-  echo "${json_output}" | jq -r '.issues[] | .id' 2>/dev/null | while read -r id; do
+  echo "${json_output}" | jq -r '.[] | .id' 2>/dev/null | while read -r id; do
     [[ -z "${id}" ]] && continue
     local issue_json title updated_at _fields
     issue_json=$(wk show "${id}" --output json 2>/dev/null) || continue
@@ -72,7 +72,7 @@ get_completed_chores() {
   [[ -z "${json_output}" ]] && return
 
   # wk list --format json doesn't include updated_at, so we fetch from wk show for display
-  echo "${json_output}" | jq -r '.issues[] | .id' 2>/dev/null | while read -r id; do
+  echo "${json_output}" | jq -r '.[] | .id' 2>/dev/null | while read -r id; do
     [[ -z "${id}" ]] && continue
     local issue_json title updated_at _fields
     issue_json=$(wk show "${id}" --output json 2>/dev/null) || continue
