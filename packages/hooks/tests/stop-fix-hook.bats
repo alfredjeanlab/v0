@@ -21,7 +21,7 @@ setup() {
     cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
 #!/bin/bash
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[]}'
+    echo '[]'
 fi
 exit 0
 EOF
@@ -67,7 +67,7 @@ EOF
     cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
 #!/bin/bash
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[{"id":"testp-1234"}]}'
+    echo '[{"id":"testp-1234"}]'
 fi
 if [[ "$1" == "show" ]]; then
     echo '{"id":"testp-1234","notes":[]}'
@@ -94,7 +94,7 @@ EOF
 #!/bin/bash
 echo "$@" >> "$TEST_TEMP_DIR/wk.log"
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[{"id":"testp-1234"}]}'
+    echo '[{"id":"testp-1234"}]'
 fi
 if [[ "$1" == "show" ]]; then
     echo '{"id":"testp-1234","notes":[{"content":"Cannot reproduce"}]}'
@@ -138,7 +138,7 @@ EOF
     cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
 #!/bin/bash
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[{"id":"testp-1234"}]}'
+    echo '[{"id":"testp-1234"}]'
 fi
 if [[ "$1" == "show" ]]; then
     echo '{"id":"testp-1234","notes":[{"content":"Cannot reproduce"}]}'
@@ -183,7 +183,7 @@ EOF
     cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
 #!/bin/bash
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[{"id":"testp-1234"}]}'
+    echo '[{"id":"testp-1234"}]'
 fi
 if [[ "$1" == "show" ]]; then
     echo '{"id":"testp-1234","notes":[{"content":"Cannot reproduce"}]}'
@@ -213,7 +213,7 @@ EOF
     cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
 #!/bin/bash
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[{"id":"testp-1234"},{"id":"testp-5678"}]}'
+    echo '[{"id":"testp-1234"},{"id":"testp-5678"}]'
 fi
 if [[ "$1" == "show" ]]; then
     echo '{"id":"testp-1234","notes":[]}'

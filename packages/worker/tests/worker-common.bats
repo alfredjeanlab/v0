@@ -287,7 +287,7 @@ EOF
     cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
 #!/bin/bash
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[]}'
+    echo '[]'
 fi
 exit 0
 EOF
@@ -309,7 +309,7 @@ EOF
 #!/bin/bash
 echo "$@" >> "$TEST_TEMP_DIR/wk.log"
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[{"id":"testp-1234"},{"id":"testp-5678"}]}'
+    echo '[{"id":"testp-1234"},{"id":"testp-5678"}]'
 fi
 exit 0
 EOF
@@ -338,7 +338,7 @@ EOF
     cat > "$TEST_TEMP_DIR/bin/wk" <<'EOF'
 #!/bin/bash
 if [[ "$1" == "list" ]]; then
-    echo '{"issues":[{"id":"testp-fail"}]}'
+    echo '[{"id":"testp-fail"}]'
     exit 0
 fi
 # All other commands fail

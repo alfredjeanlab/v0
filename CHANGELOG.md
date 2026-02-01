@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - `wk list` JSON parsing updated for new array response format.
 - Prevent duplicate nudge workers from starting.
 - Test setup creates main branch in empty repo fixtures.
+- Test mocks updated for new `wk list` array response format.
 
 ## [0.3.3] - 2026-01-30
 
